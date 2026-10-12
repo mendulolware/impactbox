@@ -2,12 +2,17 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { getModel } from './models.js';
 import { openWound } from './wounds.js';
+import { Brain } from './brain.js';
 
 // An NPC has two lives:
-//   'anim'    - bodies are kinematic and follow a procedural walk/idle animation (no physics jitter)
-//   'ragdoll' - bodies are dynamic and hang off joints (after any hit, fall, explosion, or death)
+//   'anim'    - bodies are kinematic and follow a procedural animation chosen by its Brain (brain.js)
+//   'ragdoll' - bodies are dynamic and hang off joints (heavy hits, falls, explosions, death)
 //   'getup'   - kinematic blend from wherever the ragdoll ended up back into the animation
 // Parts that have been cut off are always dynamic.
+//
+// The ragdoll is "active": muscles() pulls every joint toward a pose with a strength called tone.
+// A living body braces as it falls and writhes when badly hurt; a dead one loses tone over a
+// second or so and goes limp. Light hits on a standing NPC make it flinch instead of collapse.
 
 const UP = new THREE.Vector3(0, 1, 0);
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -50,6 +55,13 @@ const MODEL_OF = {
   thighL: 'Thigh', thighR: 'Thigh', shinL: 'Shin', shinR: 'Shin',
 };
 
+// Ragdoll muscle targets (rotation about the joint's local X, same convention as the animation):
+// REST is how a body lies when relaxed, BRACE is the protective curl of someone falling.
+const REST = { spine: 0, neck: 0, shoulderL: 0.25, shoulderR: 0.25, elbowL: 0.45, elbowR: 0.45, hipL: 0.2, hipR: 0.2, kneeL: -0.35, kneeR: -0.35 };
+const BRACE = { spine: -0.3, neck: -0.35, shoulderL: 1.35, shoulderR: 1.35, elbowL: 0.6, elbowR: 0.6, hipL: 0.7, hipR: 0.7, kneeL: -1.0, kneeR: -1.0 };
+const TWIST = { spine: 0.5, neck: 0.9, shoulderL: 1.2, shoulderR: 1.2, hipL: 0.7, hipR: 0.7 };
+const FLINCH = 0.45, PUNCH = 0.35, LUNGE = 0.5;
+
 const PARENT = {};
 const JOINT_OF = {};
 for (const j of JOINTS) { PARENT[j.b] = j.a; JOINT_OF[j.b] = j; }
@@ -88,6 +100,10 @@ const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
 const _t = new THREE.Vector3();
 const _fwd = new THREE.Vector3();
+const _c = new THREE.Vector3();
+const _qt = new THREE.Quaternion();
+const _qw = new THREE.Quaternion();
+const _qInv = new THREE.Quaternion();
 
 const KIN = () => RAPIER.RigidBodyType.KinematicPositionBased;
 const DYN = () => RAPIER.RigidBodyType.Dynamic;
@@ -132,9 +148,12 @@ export class Ragdoll {
     this.crippled = false;
     this.removed = false;
     this.bleedRate = 0;
-    this.zombie = !!opts.zombie;
+    this.kind = opts.kind || (opts.zombie ? 'zombie' : 'civilian'); // 'civilian' | 'thug' | 'zombie'
+    this.infected = false;      // bitten: rises as a zombie after dying
+    this.PUNCH = PUNCH;
+    this.LUNGE = LUNGE;
 
-    // animation / AI state
+    // animation state (the Brain writes the "wants", the body follows)
     this.mode = 'ragdoll';
     this.stun = 0;
     this.t = Math.random() * 10;
@@ -143,18 +162,32 @@ export class Ragdoll {
     this.heading = yaw;
     this.targetHeading = yaw;
     this.speed = 0;
+    this.wantSpeed = 0;
     this.phase = Math.random() * 6;
-    this.state = 'idle';
-    this.stateT = rnd(1, 4);
-    this.probeT = 0;
+    this.gesture = 'none';      // 'handsUp' | 'cower' | 'fight'
+    this.gw = { handsUp: 0, cower: 0, fight: 0 };   // eased gesture weights
+    this.look = null;           // world point the head turns toward
+    this.lookYaw = 0;
+    this.lookPitch = 0;
+    this.flinchT = 0;
+    this.flinchSide = 1;
+    this.flinchDir = new THREE.Vector3();
+    this.punchT = 0;
+    this.lungeT = 0;
+    this.hitAccum = 0;          // recent hit force: enough of it knocks a standing NPC down
     this.getupT = 0;
     this.pose = {};
     this.captured = {};
 
-    const skin = this.zombie ? 0x8fbf6a : SKIN[Math.floor(Math.random() * SKIN.length)];
+    // ragdoll muscle state
+    this.tone = 0.3;
+    this.fallT = 9;
+    this.twitch = 0;
+
+    const skin = this.kind === 'zombie' ? 0x8fbf6a : SKIN[Math.floor(Math.random() * SKIN.length)];
     const colors = {
       skin,
-      shirt: SHIRT[Math.floor(Math.random() * SHIRT.length)],
+      shirt: this.kind === 'thug' ? 0x1a1a1c : SHIRT[Math.floor(Math.random() * SHIRT.length)],
       pants: PANTS[Math.floor(Math.random() * PANTS.length)],
     };
     const tint = { Skin: mat(colors.skin), Shirt: mat(colors.shirt), Pants: mat(colors.pants) };
@@ -167,8 +200,8 @@ export class Ragdoll {
         RAPIER.RigidBodyDesc.dynamic()
           .setTranslation(pos.x + off.x, pos.y + off.y, pos.z + off.z)
           .setRotation({ x: qYaw.x, y: qYaw.y, z: qYaw.z, w: qYaw.w })
-          .setLinearDamping(0.2)
-          .setAngularDamping(2.0)
+          .setLinearDamping(0.05)
+          .setAngularDamping(0.7)   // joint friction in muscles() does the real damping
       );
       let cd, g, len;
       if (d.shape === 'box') {
@@ -206,7 +239,7 @@ export class Ragdoll {
       // the meshes bullets can punch holes in; "body" ones (skin, shirt, trousers) have flesh behind them
       const bodyMats = new Set(Object.values(tint));
       const skin = [];
-      mesh.traverse((o) => { if (o.isMesh) skin.push({ mesh: o, body: bodyMats.has(o.material) || o === mesh }); });
+      mesh.traverse((o) => { if (o.isMesh) skin.push({ mesh: o, body: bodyMats.has(o.material) || o === mesh, isSkin: o.material === tint.Skin }); });
       // local box around the part, used to work out where a bullet comes out the other side
       const ext = d.shape === 'box' ? d.half : d.shape === 'ball' ? [d.r, d.r, d.r] : [d.r, d.h + d.r, d.r];
       this.parts[name] = { name, def: d, body, collider, mesh, skin, ext, hp: d.hp, gone: false, inertia: body.mass() * len * len / 12 };
@@ -229,8 +262,12 @@ export class Ragdoll {
       this.joints[j.name] = { joint, a1, a2, def: j, local: new THREE.Quaternion() };
     }
 
+    this.brain = new Brain(this, this.kind);
+
     if (opts.limp) {
       this.stun = opts.limp; // start as a falling ragdoll
+      this.fallT = 0;
+      this.tone = 0.9;
     } else {
       const gy = this.groundBelow(pos.x, pos.y + 0.8, pos.z, 3);
       if (gy !== null) this.root.y = gy;
@@ -245,6 +282,15 @@ export class Ragdoll {
   }
 
   get alive() { return !this.dead && !this.removed; }
+
+  /** Where this NPC is, standing or sprawled. */
+  center(out) {
+    if (this.mode === 'ragdoll' && !this.parts.pelvis.gone) {
+      const t = this.parts.pelvis.body.translation();
+      return out.set(t.x, t.y, t.z);
+    }
+    return out.set(this.root.x, this.root.y + 1, this.root.z);
+  }
 
   // is this part cut off from the pelvis?
   isFree(name) {
@@ -274,7 +320,12 @@ export class Ragdoll {
   /** Drop into physics for at least `seconds`. Safe to call repeatedly. */
   goLimp(seconds = 1.5) {
     this.stun = Math.max(this.stun, seconds);
-    if (this.mode !== 'ragdoll') { this.setMode('ragdoll'); this.speed = 0; }
+    if (this.mode !== 'ragdoll') {
+      this.setMode('ragdoll');
+      this.speed = 0;
+      this.fallT = 0;     // muscles tense: brace for the fall
+      this.tone = 0.9;
+    }
   }
 
   // ------------------------------------------------------------ damage
@@ -288,7 +339,9 @@ export class Ragdoll {
     if (this.dead) return;
     this.dead = true;
     this.goLimp(1e9);
+    this.twitch = cause === 'headshot' ? 1.3 : 0.6;   // nerves fire for a moment after death
     this.ctx.onKill(this, cause);
+    this.ctx.alert('death', this.center(_c), 16);
   }
 
   /** Apply a hit to a single part. opts: { blade, explosion, normal } */
@@ -297,9 +350,25 @@ export class Ragdoll {
     if (!p || p.gone) return;
     const { gore, sfx } = this.ctx;
 
-    this.goLimp(0.9 + Math.min(2.6, impulse / 110 + dmg / 60));
+    // Light hits stagger a standing NPC; legs, heads, blades, blasts, repeated hits and low
+    // health put them on the ground. Zombies shrug off far more.
+    const zombie = this.kind === 'zombie';
+    this.hitAccum += impulse;
+    const standing = this.mode !== 'ragdoll';
+    const heavy = opts.blade || opts.explosion || name === 'head' || LEGS.has(name)
+      || this.hitAccum > (zombie ? 480 : 250) || (!zombie && this.health - dmg < 40);
+    if (standing && !heavy && !this.dead) {
+      this.flinchT = FLINCH;
+      this.flinchDir.set(dir.x, 0, dir.z).normalize();
+      const pt = p.body.translation();
+      // which side was hit, relative to where the NPC faces: the torso twists away from it
+      this.flinchSide = ((point.x - pt.x) * Math.cos(this.heading) - (point.z - pt.z) * Math.sin(this.heading)) > 0 ? 1 : -1;
+    } else {
+      this.goLimp(0.9 + Math.min(2.6, impulse / 110 + dmg / 60));
+    }
+    this.brain.notice('hurt', opts.from || this.ctx.player.pos);
 
-    if (impulse > 0) {
+    if (impulse > 0 && this.mode === 'ragdoll') {
       _v.copy(dir).multiplyScalar(impulse);
       p.body.applyImpulseAtPoint({ x: _v.x, y: _v.y, z: _v.z }, point, true);
     }
@@ -317,6 +386,8 @@ export class Ragdoll {
       if (opts.blade) {
         gore.wound(p.mesh, lp, ln, { size: 0.07, slash: true });   // a slash mark, with a gash cut into it
         openWound(p, lp, 0.03, maxR);
+      } else if (opts.bite) {
+        openWound(p, lp, 0.024, maxR);                             // a chunk torn out, no exit wound
       } else {
         // entry hole, and a bigger one where the bullet leaves
         openWound(p, lp, opts.hole || 0.026, maxR);
@@ -341,7 +412,8 @@ export class Ragdoll {
       sfx.squish();
     }
 
-    const mult = name === 'head' ? 2.2 : LIMBS.has(name) ? 0.55 : 1;
+    // zombies only really go down to head trauma
+    const mult = name === 'head' ? 2.2 : (LIMBS.has(name) ? 0.55 : 1) * (zombie ? 0.3 : 1);
     p.hp -= dmg;
 
     // resolve what happens to the part first so the kill gets the right label
@@ -358,12 +430,45 @@ export class Ragdoll {
         this.sever(name, dir);
       } else if (name === 'torso') {
         if (opts.blade || opts.explosion) this.sever('torso', dir);
-        this.die('torso');
+        if (!zombie || this.severed.has('torso')) this.die('torso');
       } else if (name === 'pelvis') {
-        this.die('pelvis');
+        if (!zombie) this.die('pelvis');
       }
     }
     this.damage(dmg * mult);
+  }
+
+  /** A zombie got hold of this NPC. */
+  bitten(by) {
+    if (this.dead || this.removed) return;
+    const part = this.parts.torso.gone ? this.parts.pelvis : this.parts.torso;
+    const t = part.body.translation();
+    const from = by.center(_c);
+    const dir = new THREE.Vector3(t.x - from.x, 0, t.z - from.z).normalize();
+    const point = new THREE.Vector3(t.x - dir.x * 0.1, t.y + 0.12, t.z - dir.z * 0.1);
+    this.infected = true;
+    this.hit(part.name, 20, point, dir, 90, { bite: true, from: by.root });
+  }
+
+  /** The infected do not stay dead. */
+  reanimate() {
+    this.dead = false;
+    this.kind = 'zombie';
+    this.infected = false;
+    this.brain = new Brain(this, 'zombie');
+    this.health = 70;
+    this.bleedRate = 0;
+    this.stun = 0.6;
+    this.twitch = 1;
+    const green = mat(0x8fbf6a);
+    for (const n in this.parts) {
+      for (const s of this.parts[n].skin) {
+        if (!s.isSkin) continue;
+        if (s.mesh.material.onBeforeCompile && this.parts[n].wounds) s.mesh.material.color.set(0x8fbf6a); // wounded: private copy
+        else s.mesh.material = green;
+      }
+    }
+    this.ctx.toast('IT GETS BACK UP');
   }
 
   /** Cut a part (and anything hanging off it) free of its parent. */
@@ -444,35 +549,95 @@ export class Ragdoll {
 
   // ------------------------------------------------------------ animation
   /** Fill this.pose with the animated world transform of every part. */
-  computePose() {
-    const z = this.zombie;
-    const stride = z ? 0.38 : 0.55;
-    const w = clamp(this.speed / (z ? 0.7 : 1.3), 0, 1); // 0 = standing, 1 = full walk
+  computePose(dt = 0) {
+    const z = this.kind === 'zombie';
+    const mix = THREE.MathUtils.lerp;
+    const w = clamp(this.speed / (z ? 0.8 : 1.3), 0, 1);     // 0 = standing, 1 = walking
+    const run = clamp((this.speed - 1.7) / 2.0, 0, 1);        // 0 = walk, 1 = flat-out run
     const s = Math.sin(this.phase), c = Math.cos(this.phase);
     const t = this.t;
-    const L = (name, x, y = 0, zr = 0) => this.joints[name].local.setFromEuler(_e.set(x, y, zr, 'YXZ'));
-
-    // +x rotation swings a limb forward; knees only bend backward (negative)
-    L('hipL', stride * s * w, 0, 0.02);
-    L('hipR', -stride * s * w, 0, -0.02);
-    L('kneeL', -(0.06 + 0.95 * Math.max(0, c)) * w - 0.03);
-    L('kneeR', -(0.06 + 0.95 * Math.max(0, -c)) * w - 0.03);
     const breathe = Math.sin(t * 1.6 + this.seed);
+
+    // gestures ease in and out; one-shot moves follow a half-sine
+    const G = this.gw;
+    for (const k in G) G[k] += ((this.gesture === k ? 1 : 0) - G[k]) * Math.min(1, dt * 7);
+    const up = G.handsUp, cw = G.cower, ft = G.fight;
+    const fl = this.flinchT > 0 ? Math.sin(Math.PI * (1 - this.flinchT / FLINCH)) : 0;
+    const pn = this.punchT > 0 ? Math.sin(Math.PI * (1 - this.punchT / PUNCH)) : 0;
+    const lg = this.lungeT > 0 ? Math.sin(Math.PI * (1 - this.lungeT / LUNGE)) : 0;
+
+    // ---- legs. +x swings a limb forward; knees only bend backward (negative)
+    const stride = mix(z ? 0.38 : 0.55, 0.95, run);
+    const lift = mix(0.95, 1.55, run);
+    let hipL = stride * s * w, hipR = -stride * s * w;
+    let kneeL = -(0.06 + lift * Math.max(0, c)) * w - 0.03;
+    let kneeR = -(0.06 + lift * Math.max(0, -c)) * w - 0.03;
+    hipL = mix(hipL, 1.9, cw); hipR = mix(hipR, 1.9, cw);                 // squat right down
+    kneeL = mix(kneeL, -2.3, cw); kneeR = mix(kneeR, -2.3, cw);
+    hipL += 0.12 * ft; kneeL -= 0.25 * ft + 0.3 * fl;                    // fighting crouch / buckling
+    hipR += 0.12 * ft; kneeR -= 0.25 * ft + 0.3 * fl;
+
+    // ---- upper body
+    let spX, spY, spZ = 0, nkX, nkY, nkZ = 0, shLx, shRx, shLz = 0.07, shRz = -0.07, elL, elR;
     if (z) {
-      L('spine', -0.22 + 0.03 * breathe, 0.1 * s * w, 0.08 * Math.sin(t * 0.9 + this.seed));
-      L('neck', 0.2, 0.25 * Math.sin(t * 0.5 + this.seed), 0.25);
-      L('shoulderL', 1.35 + 0.08 * Math.sin(t * 2.1 + this.seed), 0, 0.1);
-      L('shoulderR', 1.25 + 0.08 * Math.sin(t * 1.7 + this.seed), 0, -0.1);
-      L('elbowL', 0.15);
-      L('elbowR', 0.3);
+      spX = -0.22 + 0.03 * breathe; spY = 0.1 * s * w; spZ = 0.08 * Math.sin(t * 0.9 + this.seed);
+      nkX = 0.2; nkY = 0.25 * Math.sin(t * 0.5 + this.seed); nkZ = 0.25;
+      shLx = 1.35 + 0.08 * Math.sin(t * 2.1 + this.seed); shRx = 1.25 + 0.08 * Math.sin(t * 1.7 + this.seed);
+      shLz = 0.1; shRz = -0.1;
+      elL = 0.15; elR = 0.3;
     } else {
-      L('spine', -0.05 * w + 0.012 * breathe, -0.12 * s * w, 0);
-      L('neck', 0.04 * w, 0.3 * Math.sin(t * 0.45 + this.seed) * (1 - w), 0);
-      L('shoulderL', -0.5 * s * w + 0.03 * breathe, 0, 0.07);
-      L('shoulderR', 0.5 * s * w - 0.03 * breathe, 0, -0.07);
-      L('elbowL', 0.18 + 0.3 * w + 0.25 * Math.max(0, -s) * w);
-      L('elbowR', 0.18 + 0.3 * w + 0.25 * Math.max(0, s) * w);
+      const arm = mix(0.5, 0.95, run);
+      spX = -0.05 * w - 0.26 * run + 0.012 * breathe; spY = -0.12 * s * w;
+      nkX = 0.04 * w + 0.16 * run; nkY = 0.3 * Math.sin(t * 0.45 + this.seed) * (1 - w);
+      shLx = -arm * s * w + 0.03 * breathe; shRx = arm * s * w - 0.03 * breathe;
+      elL = 0.18 + 0.3 * w + 0.25 * Math.max(0, -s) * w + 1.1 * run;
+      elR = 0.18 + 0.3 * w + 0.25 * Math.max(0, s) * w + 1.1 * run;
     }
+    // hands up: arms overhead in a V
+    shLx = mix(shLx, 2.85, up); shRx = mix(shRx, 2.85, up);
+    shLz = mix(shLz, 0.4, up); shRz = mix(shRz, -0.4, up);
+    elL = mix(elL, 0.5, up); elR = mix(elR, 0.5, up);
+    // cower: folded over, hands on head
+    spX = mix(spX, -0.95, cw); nkX = mix(nkX, -0.45, cw);
+    shLx = mix(shLx, 2.5, cw); shRx = mix(shRx, 2.5, cw);
+    shLz = mix(shLz, -0.25, cw); shRz = mix(shRz, 0.25, cw);
+    elL = mix(elL, 2.2, cw); elR = mix(elR, 2.2, cw);
+    // fight: guard up, right arm fires out on a punch
+    shLx = mix(shLx, 1.0, ft); elL = mix(elL, 1.9, ft);
+    shRx = mix(shRx, mix(0.95, 1.55, pn), ft); elR = mix(elR, mix(1.9, 0.12, pn), ft);
+    spY += (0.2 - 0.6 * pn) * ft;
+    // zombie lunge, and recoiling from a hit
+    spX += -0.4 * lg + 0.32 * fl;
+    shLx += 0.3 * lg; shRx += 0.3 * lg;
+    spY += this.flinchSide * 0.45 * fl;
+    nkX += 0.25 * fl;
+
+    // ---- head follows whatever the brain is looking at
+    let wantYaw = 0, wantPitch = 0;
+    if (this.look) {
+      const dx = this.look.x - this.root.x, dz = this.look.z - this.root.z;
+      let a = Math.atan2(-dx, -dz) - this.heading - spY;
+      a = Math.atan2(Math.sin(a), Math.cos(a));
+      wantYaw = clamp(a, -1.1, 1.1);
+      wantPitch = clamp(Math.atan2(this.look.y - (this.root.y + 1.65), Math.hypot(dx, dz)), -0.6, 0.6);
+    }
+    const lk = Math.min(1, dt * 8);
+    this.lookYaw += (wantYaw - this.lookYaw) * lk;
+    this.lookPitch += (wantPitch - this.lookPitch) * lk;
+    if (this.look) nkY = this.lookYaw; else nkY += this.lookYaw;
+    nkX += this.lookPitch;
+
+    const L = (name, x, y = 0, zr = 0) => this.joints[name].local.setFromEuler(_e.set(x, y, zr, 'YXZ'));
+    L('hipL', hipL, 0, 0.02 + 0.05 * ft);
+    L('hipR', hipR, 0, -0.02 - 0.05 * ft);
+    L('kneeL', kneeL);
+    L('kneeR', kneeR);
+    L('spine', spX, spY, spZ);
+    L('neck', nkX, nkY, nkZ);
+    L('shoulderL', shLx, 0, shLz);
+    L('shoulderR', shRx, 0, shRz);
+    L('elbowL', elL);
+    L('elbowR', elR);
 
     // forward kinematics from the pelvis, placed at the origin first
     const pel = this.pose.pelvis;
@@ -484,7 +649,7 @@ export class Ragdoll {
       B.q.copy(A.q).multiply(jd.local);
       B.p.copy(jd.a1).applyQuaternion(A.q).add(A.p).sub(_v.copy(jd.a2).applyQuaternion(B.q));
     }
-    // drop the body so the lower foot rests on the ground
+    // drop the body so the lower foot rests on the ground (this is what makes a squat a squat)
     let low = Infinity;
     for (const n of ['shinL', 'shinR']) {
       const y = _v.set(0, -0.245, 0).applyQuaternion(this.pose[n].q).y + this.pose[n].p.y;
@@ -518,57 +683,48 @@ export class Ragdoll {
     return hit ? y - hit.timeOfImpact : null;
   }
 
-  /** Wander around: walk, stop, turn at obstacles, fall off ledges. */
-  think(dt) {
-    this.stateT -= dt;
-    if (this.stateT <= 0) {
-      if (this.state === 'idle') {
-        this.state = 'walk';
-        this.stateT = rnd(3, 7);
-        this.targetHeading = this.heading + rnd(-2.2, 2.2);
-      } else {
-        this.state = 'idle';
-        this.stateT = rnd(1.5, 4);
-      }
-    }
-    const want = this.state === 'walk' ? (this.zombie ? 0.7 : 1.3) : 0;
-    this.speed += (want - this.speed) * Math.min(1, dt * 4);
+  /** Carry out what the brain asked for: turn, accelerate, walk the root over the ground. */
+  move(dt) {
+    this.flinchT = Math.max(0, this.flinchT - dt);
+    this.punchT = Math.max(0, this.punchT - dt);
+    this.lungeT = Math.max(0, this.lungeT - dt);
+    this.hitAccum = Math.max(0, this.hitAccum - dt * 320);
 
-    if (Math.abs(this.root.x) > 37 || Math.abs(this.root.z) > 37) {
-      this.targetHeading = Math.atan2(this.root.x, this.root.z); // forward is (-sin, -cos): face the origin
-    }
+    const want = this.flinchT > 0 ? 0 : this.wantSpeed;       // a hit stops you in your tracks
+    this.speed += (want - this.speed) * Math.min(1, dt * 5);
     let dh = this.targetHeading - this.heading;
     dh = Math.atan2(Math.sin(dh), Math.cos(dh));
-    this.heading += clamp(dh, -2.6 * dt, 2.6 * dt);
+    const turn = this.speed > 2 ? 6 : 3.4;
+    this.heading += clamp(dh, -turn * dt, turn * dt);
     _fwd.set(-Math.sin(this.heading), 0, -Math.cos(this.heading));
 
-    if (this.speed > 0.05) {
-      // something in the way? (walls, props, other NPCs, the player)
-      this.probeT -= dt;
-      if (this.probeT <= 0) {
-        this.probeT = 0.12;
-        const own = this.colHandles;
-        const ray = new RAPIER.Ray({ x: this.root.x, y: this.root.y + 0.75, z: this.root.z }, { x: _fwd.x, y: 0, z: _fwd.z });
-        const hit = this.ctx.world.castRay(ray, 0.95, true, undefined, undefined, undefined, undefined, (c) => !own.has(c.handle));
-        if (hit) this.targetHeading = this.heading + rnd(1.2, 2.6) * (Math.random() < 0.5 ? -1 : 1);
-      }
+    // staggering back from a hit
+    let vx = _fwd.x * this.speed, vz = _fwd.z * this.speed;
+    if (this.flinchT > 0) {
+      const k = 1.5 * Math.sin(Math.PI * (1 - this.flinchT / FLINCH));
+      vx += this.flinchDir.x * k; vz += this.flinchDir.z * k;
+    }
+    if (Math.abs(vx) + Math.abs(vz) < 0.02) return;
 
-      const nx = this.root.x + _fwd.x * this.speed * dt, nz = this.root.z + _fwd.z * this.speed * dt;
-      const gy = this.groundBelow(nx, this.root.y + 0.8, nz, 2.2);
-      if (gy === null || gy < this.root.y - 0.7) {
-        // stepped off a ledge: let physics take over
+    const nx = this.root.x + vx * dt, nz = this.root.z + vz * dt;
+    const gy = this.groundBelow(nx, this.root.y + 0.8, nz, 2.2);
+    if (gy === null || gy < this.root.y - 0.7) {
+      // a drop ahead: zombies and anyone knocked backward go over it, everyone else turns away
+      if (this.kind === 'zombie' || this.flinchT > 0) {
         this.root.x = nx; this.root.z = nz;
         this.goLimp(1.6);
-        return;
-      }
-      if (gy > this.root.y + 0.45) {
-        this.targetHeading = this.heading + rnd(1.5, 3); // too tall to step on
       } else {
-        this.root.x = nx; this.root.z = nz;
-        this.root.y += (gy - this.root.y) * Math.min(1, dt * 12);
-        this.phase += this.speed * dt * (Math.PI * 2) / (this.zombie ? 1.3 : 1.9);
+        this.brain.bump();
+        this.speed = 0;
       }
+      return;
     }
+    if (gy > this.root.y + 0.45) { this.brain.bump(); return; }   // too tall to step on
+    this.root.x = nx; this.root.z = nz;
+    this.root.y += (gy - this.root.y) * Math.min(1, dt * 12);
+    const run = clamp((this.speed - 1.7) / 2.0, 0, 1);
+    const cycle = THREE.MathUtils.lerp(this.kind === 'zombie' ? 1.3 : 1.9, 3.3, run); // metres per two steps
+    this.phase += this.speed * dt * (Math.PI * 2) / cycle;
   }
 
   /** Something heavy and fast touching an animated NPC knocks it over. */
@@ -603,30 +759,101 @@ export class Ragdoll {
     }
   }
 
-  /** Stops ragdoll limbs folding through the body, without the jitter of hard self-collision. */
-  softLimits(dt) {
+  /**
+   * Active ragdoll. Every joint is pulled toward a target angle with strength `tone`, and always
+   * has some friction, so limbs behave like limbs rather than rope. Joint limits (swing cone and
+   * twist) stop arms and legs folding through the body.
+   */
+  muscles(dt) {
+    this.fallT += dt;
+    const brace = !this.dead && this.fallT < 0.55;
+    const hurt = !this.dead && !brace && (this.crippled || this.health <= 20 || this.bleedRate > 0);
+    // the dead keep a trace of tone for a few seconds, then only joint friction is left
+    const want = this.dead ? (this.deadT > 3 ? 0 : 0.05) : brace ? 0.9 : hurt ? 0.42 : 0.3;
+    this.tone += (want - this.tone) * Math.min(1, dt * (this.dead ? 1.5 : 6));
+    const tone = this.tone;
+    const kp = tone * 81, kd = tone * 14 + 2.2;
+    const wake = hurt || brace;     // the living keep moving; the dead are allowed to settle and sleep
+    // a corpse that has come to rest is left alone: limit forces on a limb pinned against the
+    // floor would otherwise keep nudging it forever
+    const settled = this.dead && this.deadT > 4;
+
     for (const j of JOINTS) {
-      if (!j.cone || this.severed.has(j.b)) continue;
+      if (this.severed.has(j.b)) continue;
       const A = this.parts[j.a], B = this.parts[j.b];
-      if (A.gone || B.gone || B.body.isSleeping()) continue;
+      if (A.gone || B.gone) continue;
+      if (!wake && B.body.isSleeping()) continue;
       const ra = A.body.rotation(), rb = B.body.rotation();
-      _a.set(0, 1, 0).applyQuaternion(_q.set(ra.x, ra.y, ra.z, ra.w));
-      _b.set(0, 1, 0).applyQuaternion(_q2.set(rb.x, rb.y, rb.z, rb.w));
-      const ang = Math.acos(clamp(_a.dot(_b), -1, 1));
-      if (ang <= j.cone) continue;
-      _v.crossVectors(_b, _a); // turning B about this axis brings it back toward A
-      const l = _v.length();
-      if (l < 1e-4) continue;
-      _v.multiplyScalar(1 / l);
+      _q.set(ra.x, ra.y, ra.z, ra.w);
+      _q2.set(rb.x, rb.y, rb.z, rb.w);
+      _a.set(0, 1, 0).applyQuaternion(_q);    // parent's long axis
+      _b.set(0, 1, 0).applyQuaternion(_q2);   // child's long axis
+      // inertia is stored about the part's centre; a limb swings about its end, which is ~4x more.
+      // Without that factor the muscles are too weak to lift a limb against gravity.
+      const I = Math.min(A.inertia, B.inertia) * 4;
       const wa = A.body.angvel(), wb = B.body.angvel();
-      const wrel = (wb.x - wa.x) * _v.x + (wb.y - wa.y) * _v.y + (wb.z - wa.z) * _v.z;
-      // Sized by the lighter of the two bodies, or the reaction torque spins it up and the
-      // corpse never settles. Never wakes a body: a limb resting past its limit can still sleep.
-      const wn = 11;
-      const I = Math.min(A.inertia, B.inertia);
-      const tau = clamp(I * (wn * wn * (ang - j.cone) - 2 * wn * wrel), -I * 300, I * 300) * dt;
-      B.body.applyTorqueImpulse({ x: _v.x * tau, y: _v.y * tau, z: _v.z * tau }, false);
-      A.body.applyTorqueImpulse({ x: -_v.x * tau, y: -_v.y * tau, z: -_v.z * tau }, false);
+      const wx = wb.x - wa.x, wy = wb.y - wa.y, wz = wb.z - wa.z;
+
+      // --- pose: rotation that would take the child to its target, as an axis * angle
+      let x = brace ? BRACE[j.name] : REST[j.name];
+      if (hurt && j.name !== 'spine' && j.name !== 'neck') {
+        // writhing: slow, uneven pulls on each limb
+        const sgn = j.name.startsWith('knee') ? -1 : 1;
+        x += sgn * 0.55 * (0.5 + 0.5 * Math.sin(this.t * (1.3 + (j.anchor[0] > 0 ? 0.4 : 0)) + j.anchor[1] * 9 + this.seed));
+      }
+      _qt.setFromEuler(_e.set(x, 0, 0, 'YXZ'));
+      _qw.copy(_q).multiply(_qt).multiply(_qInv.copy(_q2).invert());
+      if (_qw.w < 0) { _qw.x = -_qw.x; _qw.y = -_qw.y; _qw.z = -_qw.z; _qw.w = -_qw.w; }
+      const half = Math.acos(clamp(_qw.w, -1, 1));
+      const sh = Math.sin(half);
+      const ang = half * 2;
+      let tx = 0, ty = 0, tz = 0;
+      if (sh > 1e-4) { const k = kp * ang / sh; tx = _qw.x * k; ty = _qw.y * k; tz = _qw.z * k; }
+      tx -= wx * kd; ty -= wy * kd; tz -= wz * kd;
+      // a limb has almost no inertia about its own long axis: use far less torque that way
+      const along = (tx * _b.x + ty * _b.y + tz * _b.z) * 0.93;
+      tx -= _b.x * along; ty -= _b.y * along; tz -= _b.z * along;
+
+      // --- swing limit: child may only bend so far from the parent
+      if (j.cone && !(settled && Math.hypot(wx, wy, wz) < 1.5)) {
+        const sw = Math.acos(clamp(_a.dot(_b), -1, 1));
+        if (sw > j.cone) {
+          _v.crossVectors(_b, _a);
+          const l = _v.length();
+          if (l > 1e-4) {
+            const k = 121 * (sw - j.cone) / l;
+            tx += _v.x * k; ty += _v.y * k; tz += _v.z * k;
+          }
+        }
+        // --- twist limit: and may only rotate so far about its own axis
+        _qw.copy(_q).invert().multiply(_q2);           // child relative to parent
+        let tw = 2 * Math.atan2(_qw.y, _qw.w);
+        tw = Math.atan2(Math.sin(tw), Math.cos(tw));
+        const lim = TWIST[j.name] || 0.9;
+        if (Math.abs(tw) > lim) {
+          const k = -Math.sign(tw) * (Math.abs(tw) - lim) * 121 * 0.07;
+          tx += _b.x * k; ty += _b.y * k; tz += _b.z * k;
+        }
+      }
+
+      const mag = Math.hypot(tx, ty, tz);
+      if (mag < 1e-5) continue;
+      const s = I * Math.min(1, 320 / mag) * dt;
+      B.body.applyTorqueImpulse({ x: tx * s, y: ty * s, z: tz * s }, wake);
+      A.body.applyTorqueImpulse({ x: -tx * s, y: -ty * s, z: -tz * s }, wake);
+    }
+
+    // death throes: a few fading jerks
+    if (this.twitch > 0) {
+      this.twitch -= dt;
+      if (Math.random() < dt * 14 * this.twitch) {
+        const names = ['farmL', 'farmR', 'shinL', 'shinR', 'head'];
+        const p = this.parts[names[(Math.random() * names.length) | 0]];
+        if (!p.gone && !this.isFree(p.name)) {
+          const k = p.inertia * 14 * Math.min(1, this.twitch);
+          p.body.applyTorqueImpulse({ x: rnd(-1, 1) * k, y: rnd(-0.3, 0.3) * k, z: rnd(-1, 1) * k }, true);
+        }
+      }
     }
   }
 
@@ -645,8 +872,8 @@ export class Ragdoll {
     if (Math.hypot(_v.x, _v.z) > 0.4) this.heading = Math.atan2(-_v.x, -_v.z);
     this.targetHeading = this.heading;
     this.speed = 0;
-    this.state = 'idle';
-    this.stateT = rnd(1, 2.5);
+    this.wantSpeed = 0;
+    this.gw.handsUp = this.gw.cower = this.gw.fight = 0;
     for (const n in this.parts) {
       const p = this.parts[n];
       if (p.gone) continue;
@@ -691,6 +918,11 @@ export class Ragdoll {
 
     if (this.dead) {
       this.deadT += dt;
+      // bitten and still in one piece: it gets back up
+      if (this.infected && this.deadT > 6 && !this.crippled && !this.parts.head.gone && !this.parts.torso.gone
+        && !this.severed.has('head') && !this.severed.has('torso')) {
+        this.reanimate();
+      }
       // blood slowly pools under a body once it has come to rest
       if (!this.pooled && this.deadT > 1.2) {
         const tor = this.parts.torso.gone ? this.parts.pelvis : this.parts.torso;
@@ -705,22 +937,24 @@ export class Ragdoll {
     }
 
     if (this.mode === 'anim') {
-      this.think(dt);
-      if (this.mode !== 'anim') return; // walked off a ledge
-      this.computePose();
+      this.brain.update(dt);
+      this.move(dt);
+      if (this.mode !== 'anim') return; // went over a ledge
+      this.computePose(dt);
       this.applyPose();
       this.checkKnocks();
     } else if (this.mode === 'getup') {
       this.getupT += dt;
       const k = Math.min(1, this.getupT / 1.1);
-      this.computePose();
+      this.computePose(dt);
       this.applyPose(k * k * (3 - 2 * k));
       this.checkKnocks();
       if (k >= 1 && this.mode === 'getup') this.mode = 'anim';
     } else {
-      this.softLimits(dt);
+      this.muscles(dt);
+      this.hitAccum = Math.max(0, this.hitAccum - dt * 320);
       if (this.stun > 0) this.stun -= dt;
-      else if (!this.dead && !this.crippled && this.health > 20) this.tryGetUp();
+      else if (!this.dead && !this.crippled && (this.health > 20 || this.kind === 'zombie')) this.tryGetUp();
     }
   }
 

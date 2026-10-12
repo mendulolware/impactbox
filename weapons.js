@@ -230,6 +230,7 @@ export class Weapons {
       if (i < 3 || w.pellets === 1) this.tracer(muzzle, end);
     }
     sfx[w.sound]();
+    ctx.alert('shot', ctx.player.pos, 40);
     this.kick = w.kick;
     this.muzzle.position.copy(muzzle);
     this.muzzle.intensity = 30;
@@ -265,7 +266,7 @@ export class Weapons {
       ctx.applyHit(hit, pt, d, w.dmg, w.impulse, { blade: true });
       hitSomething = true;
     }
-    if (hitSomething) { sfx.chop(); ctx.player.recoil(0.02); }
+    if (hitSomething) { sfx.chop(); ctx.player.recoil(0.02); ctx.alert('violence', ctx.player.pos, 12); }
   }
 
   throwGrenade() {

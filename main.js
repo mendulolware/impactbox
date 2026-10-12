@@ -101,6 +101,11 @@ ctx.weapons = new Weapons(ctx);
 
 ctx.later = (sec, fn) => ctx.timers.push({ t: sec, fn });
 
+// Tell every living NPC that something happened; each brain decides whether it noticed and cares.
+ctx.alert = (type, pos, radius) => {
+  for (const r of ctx.ragdolls) if (!r.removed && !r.dead) r.brain.notice(type, pos, radius);
+};
+
 ctx.raycast = (origin, dir, maxT = 200) => {
   const ray = new RAPIER.Ray({ x: origin.x, y: origin.y, z: origin.z }, { x: dir.x, y: dir.y, z: dir.z });
   return world.castRayAndGetNormal(ray, maxT, true, undefined, undefined, ctx.player.collider);
@@ -147,6 +152,7 @@ const _d = new THREE.Vector3();
 ctx.explode = (p, radius = 7, power = 1) => {
   ctx.gore.explosion(p, radius);
   sfx.explosion();
+  ctx.alert('explosion', p, 45);
   const center = new THREE.Vector3(p.x, p.y, p.z);
 
   for (const r of ctx.ragdolls) {
@@ -196,6 +202,7 @@ ctx.explode = (p, radius = 7, power = 1) => {
     _d.normalize();
     pl.vel.addScaledVector(_d, 16 * f);
     pl.grounded = false;
+    pl.hurt(70 * f * power, null);
   }
 };
 
@@ -205,6 +212,7 @@ ctx.onKill = (rag, cause) => {
   toast(KILL_TEXT[cause] || 'KILLED');
 };
 
+ctx.toast = (msg) => toast(msg);
 let toastT = 0;
 function toast(msg) {
   const el = $('toast');
@@ -261,8 +269,9 @@ function deleteTarget() {
 }
 
 const SPAWN_ITEMS = [
-  { cat: 'NPCs', label: 'Human', icon: '🧍', small: 'wanders around', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER()) },
-  { cat: 'NPCs', label: 'Zombie', icon: '🧟', small: 'slow, arms out', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER(), { zombie: true }) },
+  { cat: 'NPCs', label: 'Civilian', icon: '🧍', small: 'flees, surrenders', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER()) },
+  { cat: 'NPCs', label: 'Thug', icon: '🥊', small: 'fights back', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER(), { kind: 'thug' }) },
+  { cat: 'NPCs', label: 'Zombie', icon: '🧟', small: 'hunts and infects', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER(), { kind: 'zombie' }) },
   {
     cat: 'NPCs', label: 'Crowd x8', icon: '👥', small: 'ring of humans', run: () => {
       const c = spawnPoint();
@@ -333,6 +342,9 @@ function buildMenu() {
 buildMenu();
 
 const crosshairEl = $('crosshair');
+const healthEl = $('health-fill');
+const hurtEl = $('hurt');
+let wasDead = false;
 const camTimeEl = $('cam-time');
 let camClock = 0;
 ctx.helmet = false;
@@ -432,7 +444,7 @@ function populate() {
   for (let i = 0; i < 5; i++) {
     ctx.spawnRagdoll({ x: -8 + i * 4, y: 0.05, z: -4 - (i % 2) * 3 }, Math.random() * 6);
   }
-  ctx.spawnRagdoll({ x: 3, y: 0.05, z: -14 }, 0, { zombie: true });
+  ctx.spawnRagdoll({ x: 3, y: 0.05, z: -14 }, 0, { kind: 'thug' });
   for (let i = 0; i < 4; i++) ctx.spawnProp('crate', { x: 9 + (i % 2) * 0.65, y: 0.32 + Math.floor(i / 2) * 0.62, z: 4 }, 0);
   ctx.spawnProp('explosive', { x: -4, y: 0.5, z: 1 });
   ctx.spawnProp('explosive', { x: 10, y: 0.5, z: -3 });
@@ -471,7 +483,7 @@ function tick(now) {
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.5) { fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
 
-  const active = gameActive();
+  const active = gameActive() && !ctx.player.dead;
   ctx.player.update(sdt, input, active, dt);
   if (active) ctx.weapons.update(dt, input);
 
@@ -517,6 +529,13 @@ function tick(now) {
   input.wheel = 0;
   input.mx = 0;
   input.my = 0;
+
+  // health bar, red flash when hurt, and the death notice
+  const pl = ctx.player;
+  healthEl.style.width = pl.health + '%';
+  healthEl.parentElement.classList.toggle('low', pl.health < 35);
+  hurtEl.style.opacity = Math.min(0.85, pl.hurtFlash * 0.55 + (1 - pl.health / 100) * 0.4 + (pl.dead ? 0.5 : 0));
+  if (pl.dead !== wasDead) { wasDead = pl.dead; if (pl.dead) { toast('YOU DIED'); toastT = 3; ctx.weapons.releaseGrab(); } }
 
   // crosshair is hidden while looking down the sights, and always in helmet cam
   crosshairEl.classList.toggle('hide', ctx.helmet || ctx.weapons.ads > 0.4);

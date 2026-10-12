@@ -30,7 +30,8 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | File | What it does |
 | --- | --- |
 | `main.js` | renderer, game loop, input, spawn menu, explosions, hit routing |
-| `ragdoll.js` | 11-part jointed ragdoll, balance/wander controller, damage, severing, gibbing, bleeding |
+| `ragdoll.js` | 11-part body: procedural animation, active ragdoll, damage, severing, gibbing, bleeding |
+| `brain.js` | NPC AI: senses, civilian / thug / zombie behaviour, steering |
 | `weapons.js` | weapon definitions, firing, melee, grenades, grab gun, viewmodels |
 | `props.js` | crates, barrels, explosive barrels, balls, grenades |
 | `gore.js` | instanced blood/gib/fire particles and surface decals |
@@ -43,11 +44,24 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 
 An NPC is in one of three modes (`ragdoll.js`):
 
-- `anim` - its bodies are kinematic and follow a procedural walk/idle pose. No physics forces, so no jitter.
-- `ragdoll` - any hit, blast, fall, grab or death makes the bodies dynamic and joints take over.
+- `anim` - its bodies are kinematic and follow a procedural pose (walk, run, hands up, cower, fight). No physics forces, so no jitter.
+- `ragdoll` - heavy hits, blasts, falls, grabs and death make the bodies dynamic and joints take over.
 - `getup` - if it survived, it blends from where it landed back into the animation.
 
-Parts of the same NPC never collide with each other (contact hook in `main.js`); soft joint limits stop limbs folding through the body.
+**AI (`brain.js`).** Each NPC has a Brain that senses (line of sight, hearing, whether a gun is aimed at it) and tells the body
+what it wants: a heading, a speed, a gesture and something to look at. Steering uses three feeler rays to go around obstacles, and NPCs turn away from ledges.
+
+| Kind | Behaviour |
+| --- | --- |
+| Civilian | wanders; freezes then runs from gunfire, explosions, deaths it sees and zombies; puts its hands up while you aim a gun at it; cowers when cornered |
+| Thug | calm until shot at or hit, then runs you down and punches (you have health now); flees when badly hurt |
+| Zombie | hunts the nearest living thing, lunges and bites; only head damage really stops it; anyone it bites rises as a zombie 6 seconds after dying |
+
+**Active ragdoll (`muscles()` in `ragdoll.js`).** Every joint is pulled toward a target angle with a strength called tone, plus joint friction and
+swing/twist limits. A living NPC braces as it falls and writhes when badly hurt; a dead one loses tone and goes limp, with a few twitches.
+Light hits make a standing NPC flinch and stagger instead of dropping; legs, heads, blades, blasts, repeated hits and low health put it down.
+
+Parts of the same NPC never collide with each other (contact hook in `main.js`).
 Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted after one of its joints was cut.
 
 ## First person

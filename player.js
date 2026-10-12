@@ -41,6 +41,26 @@ export class Player {
     this.grounded = false;
     this.bob = 0;
     this.spawn = pos;
+    this.eye = new THREE.Vector3(pos.x, pos.y + EYE, pos.z);   // what NPCs look at
+    this.health = 100;
+    this.dead = false;
+    this.deadT = 0;
+    this.sinceHurt = 99;
+    this.hurtFlash = 0;
+  }
+
+  /** Something hit the player. `from` is where it came from. */
+  hurt(amount, from) {
+    if (this.dead) return;
+    this.health -= amount;
+    this.sinceHurt = 0;
+    this.hurtFlash = 1;
+    this.shake = Math.min(1, this.shake + 0.7);
+    if (from) { // shoved away from the attacker
+      const dx = this.pos.x - from.x, dz = this.pos.z - from.z, l = Math.hypot(dx, dz) || 1;
+      this.vel.x += (dx / l) * 3; this.vel.z += (dz / l) * 3;
+    }
+    if (this.health <= 0) { this.health = 0; this.dead = true; this.deadT = 0; }
   }
 
   look(dx, dy) {
@@ -57,6 +77,22 @@ export class Player {
   /** dt is game time (slow-mo scaled); rdt is real time, used for camera smoothing. */
   update(dt, input, enabled, rdt = dt) {
     const k = input.keys;
+    // health: recovers after a few quiet seconds; death is a short lie-down, then back to the start
+    this.sinceHurt += rdt;
+    this.hurtFlash = Math.max(0, this.hurtFlash - rdt * 2.5);
+    if (this.dead) {
+      enabled = false;
+      this.deadT += rdt;
+      if (this.deadT > 3.5) {
+        this.dead = false;
+        this.health = 100;
+        this.pos.set(this.spawn.x, this.spawn.y, this.spawn.z);
+        this.body.setTranslation(this.spawn, true);
+        this.vel.set(0, 0, 0);
+      }
+    } else if (this.sinceHurt > 5) {
+      this.health = Math.min(100, this.health + 9 * rdt);
+    }
     const helmet = !!this.ctx.helmet;
     const ads = this.ctx.weapons ? this.ctx.weapons.ads : 0;
     this.sens = 1 - 0.45 * ads;
@@ -125,18 +161,23 @@ export class Player {
     const roll = helmet ? Math.sin(this.bob) * 0.014 * steady * (moving ? 1 : 0) - 0.05 * ads : 0;
     const sh = helmet ? this.shake * 0.02 : this.shake * 0.004;
 
+    // dead: the view slumps to the floor and tips over
+    const slump = this.dead ? Math.min(1, this.deadT / 0.7) : 0;
+    const fall = slump * slump * (3 - 2 * slump);
+
     const cam = this.ctx.camera;
     cam.position.set(
       this.pos.x,
-      this.pos.y + EYE + (helmet ? HELMET_UP : 0) + Math.sin(this.bob * 2) * bobAmp,
+      this.pos.y + (EYE + (helmet ? HELMET_UP : 0)) * (1 - fall) - 0.6 * fall + Math.sin(this.bob * 2) * bobAmp,
       this.pos.z
     );
     cam.rotation.set(
-      this.camPitch + (Math.random() - 0.5) * sh,
+      this.camPitch * (1 - fall) + 0.25 * fall + (Math.random() - 0.5) * sh,
       this.camYaw + (Math.random() - 0.5) * sh,
-      roll + (Math.random() - 0.5) * sh,
+      roll + 1.25 * fall + (Math.random() - 0.5) * sh,
       'YXZ'
     );
+    this.eye.set(this.pos.x, this.pos.y + EYE, this.pos.z);
 
     // eyes narrow in on the sights; a helmet camera has a fixed lens, so it barely changes
     const fov = (helmet ? FOV_HELMET : FOV) * (1 - (helmet ? 0.05 : 0.3) * ads);
