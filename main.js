@@ -8,6 +8,7 @@ import { Player } from './player.js';
 import { Weapons, WEAPONS } from './weapons.js';
 import { buildWorld } from './world.js';
 import { loadModels } from './models.js';
+import { Post } from './post.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_RAGDOLLS = 36;
@@ -21,43 +22,20 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.95;
+renderer.toneMappingExposure = 0.82;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 400);
 scene.add(camera);
 
-// ---- helmet-cam look: the scene is drawn to a texture, then graded (no distortion, no grain)
-const lens = {
-  target: new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, samples: 4 }),
-  scene: new THREE.Scene(),
-  camera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1),
-  material: new THREE.ShaderMaterial({
-    depthTest: false,
-    depthWrite: false,
-    uniforms: { tScene: { value: null } },
-    vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
-    fragmentShader: `
-      uniform sampler2D tScene; varying vec2 vUv;
-      void main() {
-        vec3 col = texture2D(tScene, vUv).rgb;
-        vec2 v = vUv * 2.0 - 1.0;
-        col *= mix(0.55, 1.0, smoothstep(1.55, 0.6, length(v)));          // soft darkening toward the corners
-        float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
-        col = mix(vec3(l), col, 0.85) * vec3(0.98, 1.0, 1.02) * 1.06;      // slightly flat, cool camera colour
-        gl_FragColor = vec4(col, 1.0);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }`,
-  }),
-};
-lens.scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), lens.material));
+// ---- picture pipeline: ambient occlusion, bloom and grading (post.js)
+const post = new Post(renderer);
 
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h, false);
   const pr = renderer.getPixelRatio();
-  lens.target.setSize(Math.max(2, Math.floor(w * pr)), Math.max(2, Math.floor(h * pr)));
+  post.setSize(Math.max(2, Math.floor(w * pr)), Math.max(2, Math.floor(h * pr)));
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
@@ -325,6 +303,7 @@ const SPAWN_ITEMS = [
   { cat: 'World', label: 'Clear All', icon: '🗑️', small: 'wipe the sandbox', run: clearAll },
   { cat: 'World', label: 'Slow-mo', icon: '⏳', small: 'toggle (T)', run: () => toggleSlowmo() },
   { cat: 'World', label: 'Helmet Cam', icon: '📹', small: 'toggle (V)', run: () => toggleHelmet() },
+  { cat: 'World', label: 'Graphics', icon: '✨', small: 'high / fast (G)', run: () => toggleGraphics() },
 ];
 
 function buildMenu() {
@@ -360,6 +339,12 @@ function toggleHelmet() {
   document.body.classList.toggle('helmet', ctx.helmet);
   camClock = 0;
   sfx.tick();
+}
+
+// G: switch the effects pipeline off on slow machines (plain rendering, no occlusion or bloom)
+function toggleGraphics() {
+  post.enabled = !post.enabled;
+  toast(post.enabled ? 'GRAPHICS: HIGH' : 'GRAPHICS: FAST');
 }
 
 function toggleSlowmo() {
@@ -444,6 +429,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Minus' && WEAPONS.length > 10) ctx.weapons.select(10);
   if (e.code === 'KeyT') toggleSlowmo();
   if (e.code === 'KeyV') toggleHelmet();
+  if (e.code === 'KeyG') toggleGraphics();
   if (e.code === 'KeyX') deleteTarget();
   if (e.code === 'KeyC') { clearAll(); toast('CLEARED'); }
 });
@@ -461,6 +447,27 @@ function populate() {
   ctx.spawnProp('explosive', { x: 10, y: 0.5, z: -3 });
   ctx.spawnProp('barrel', { x: -5.2, y: 0.5, z: 1.2 });
   ctx.spawnProp('ball', { x: 2, y: 1.0, z: 8 });
+
+  // the yard: parked cars, bins, lamps, a sandbag position, pallets and cones
+  const at = (type, x, z, yaw = 0, lift = 0) => {
+    const d = PROP_TYPES[type];
+    return ctx.spawnProp(type, { x, y: (d.half ? d.half[1] : d.h || d.r) + 0.03 + lift, z }, yaw);
+  };
+  at('car', -27.3, 31, 0.04);
+  at('car', -19.2, 31, Math.PI - 0.06);
+  at('car', 24.7, 20, 0.02);
+  at('dumpster', -38.6, 14, Math.PI / 2);
+  at('dumpster', -38.6, 10.6, Math.PI / 2 + 0.08);
+  at('dumpster', 30, -38.9, 0);
+  for (const [x, z] of [[-39.5, 30], [-39.5, -2], [39.5, 30], [39.5, -2], [-12, -40], [18, -40]]) at('lamp', x, z, Math.atan2(-x, -z));
+  for (let i = 0; i < 3; i++) at('sandbags', -22 + i * 1.95, 2, 0);
+  for (let i = 0; i < 2; i++) at('sandbags', -21 + i * 1.95, 2, 0, 0.55);
+  at('pallet', 15, 8, 0.3); at('pallet', 15, 8, 0.25, 0.16); at('pallet', 16.6, 9.2, 1.2);
+  at('crate', 15, 8, 0.4, 0.34);
+  at('propane', 17.6, 7.4); at('propane', 18.1, 7.8);
+  for (const [x, z] of [[-3, 12], [-1.4, 12.6], [0.3, 12.2], [5, -6], [6.2, -7.4]]) at('cone', x, z);
+  at('table', -12, 14, 0.2); at('chair', -12.9, 14.3, 1.4); at('chair', -11.2, 13.4, -1.9);
+  at('toilet', 37.5, 39.5, Math.PI);
 }
 populate();
 
@@ -524,7 +531,7 @@ function tick(now) {
   // shadow camera follows the player
   const sun = ctx.sun;
   sun.target.position.set(Math.round(ctx.player.pos.x), 0, Math.round(ctx.player.pos.z));
-  sun.position.copy(sun.target.position).add(_v.set(30, 50, 20));
+  sun.position.copy(sun.target.position).add(ctx.sunOffset);
 
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').classList.remove('show'); }
 
@@ -559,14 +566,9 @@ function tick(now) {
       const p2 = (n) => String(n).padStart(2, '0');
       camTimeEl.textContent = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}  ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
     }
-    renderer.setRenderTarget(lens.target);
-    renderer.render(scene, camera);
-    renderer.setRenderTarget(null);
-    lens.material.uniforms.tScene.value = lens.target.texture;
-    renderer.render(lens.scene, lens.camera);
-  } else {
-    renderer.render(scene, camera);
   }
+  ctx.sky.material.uniforms.uTime.value = now / 1000;   // clouds drift
+  post.render(scene, camera, ctx.helmet);
 }
 
 $('loading').remove();

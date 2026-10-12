@@ -19,6 +19,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | LMB | fire / swing / throw / grab |
 | RMB | aim down the sights (guns); throw the held object (Grab Gun) |
 | V | helmet cam on/off |
+| G | graphics: high / fast (turns the effects off on slow machines) |
 | 1-9, 0, - or wheel | Pistol, Revolver, SMG, Shotgun, Rifle, Sniper, Rocket, Machete, Knife, Grenade, Grab Gun |
 | Q (or Tab) | spawn menu |
 | T | slow-mo |
@@ -37,7 +38,9 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | `gore.js` | instanced blood/gib/fire particles and surface decals |
 | `wounds.js` | holes cut into body parts, and what is visible inside them |
 | `player.js` | first-person character controller |
-| `world.js` | arena, lighting, ground |
+| `world.js` | arena, sky with clouds, sun, fog, painted lines |
+| `textures.js` | asphalt, concrete and timber generated in code, each with colour, normal and roughness maps |
+| `post.js` | picture pipeline: ambient occlusion, bloom, colour grade |
 | `audio.js` | procedural sound effects |
 
 ## How NPCs work
@@ -69,6 +72,13 @@ Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted aft
 - **Hands:** `HandR` (grip) and `HandL` (support) models are attached per weapon. Placements live in the `VIEW` table in `weapons.js`.
 - **Aiming:** right mouse moves the weapon so its sight line (`sight` in `VIEW`) sits on the screen centre, narrows the field of view, tightens spread and slows you down. Guns have real rear notches and front posts.
 - **Helmet cam (V):** wide field of view with a light colour grade and corner darkening in `main.js` (no fisheye, no grain), a camera that lags slightly behind your aim, heavier head bob and a REC overlay. Aiming in this view shoulders the weapon below the camera instead of putting the sights on screen, as in real helmet footage; shots leave from eye level along the weapon.
+
+## Graphics
+
+Nothing is loaded from image files. `textures.js` bakes tileable surface materials at startup, `world.js` draws the sky in a shader and bakes
+it into the environment map that lights everything, and `post.js` renders the scene to an HDR image and applies ambient occlusion
+(soft shadow in creases and where things touch), bloom (glow from the sun, fire and muzzle flashes) and a colour grade. Press G to switch
+the pipeline off.
 
 ## Weapons
 
