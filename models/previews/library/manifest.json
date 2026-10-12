@@ -1,0 +1,227 @@
+{
+  "Axe": {
+    "group": "melee",
+    "triangles": 584,
+    "dimensions": [
+      0.048,
+      0.89,
+      0.33
+    ]
+  },
+  "BaseballBat": {
+    "group": "melee",
+    "triangles": 876,
+    "dimensions": [
+      0.066,
+      0.851,
+      0.064
+    ]
+  },
+  "Crowbar": {
+    "group": "melee",
+    "triangles": 328,
+    "dimensions": [
+      0.024,
+      0.809,
+      0.12
+    ]
+  },
+  "Katana": {
+    "group": "melee",
+    "triangles": 484,
+    "dimensions": [
+      0.09,
+      1.023,
+      0.107
+    ]
+  },
+  "Chainsaw": {
+    "group": "melee",
+    "triangles": 1024,
+    "dimensions": [
+      0.252,
+      0.964,
+      0.261
+    ]
+  },
+  "SledgeHammer": {
+    "group": "melee",
+    "triangles": 736,
+    "dimensions": [
+      0.079,
+      0.926,
+      0.26
+    ]
+  },
+  "DoubleBarrel": {
+    "group": "guns",
+    "triangles": 636,
+    "dimensions": [
+      0.073,
+      0.538,
+      0.188
+    ]
+  },
+  "Uzi": {
+    "group": "guns",
+    "triangles": 684,
+    "dimensions": [
+      0.063,
+      0.508,
+      0.346
+    ]
+  },
+  "Minigun": {
+    "group": "guns",
+    "triangles": 1312,
+    "dimensions": [
+      0.327,
+      0.93,
+      0.299
+    ]
+  },
+  "Crossbow": {
+    "group": "guns",
+    "triangles": 728,
+    "dimensions": [
+      0.71,
+      0.836,
+      0.205
+    ]
+  },
+  "Flamethrower": {
+    "group": "guns",
+    "triangles": 1252,
+    "dimensions": [
+      0.226,
+      0.851,
+      0.306
+    ]
+  },
+  "Chair": {
+    "group": "props",
+    "triangles": 512,
+    "dimensions": [
+      0.46,
+      0.44,
+      0.9
+    ]
+  },
+  "Table": {
+    "group": "props",
+    "triangles": 504,
+    "dimensions": [
+      1.2,
+      0.8,
+      0.761
+    ]
+  },
+  "TrafficCone": {
+    "group": "props",
+    "triangles": 460,
+    "dimensions": [
+      0.38,
+      0.38,
+      0.7
+    ]
+  },
+  "PropaneTank": {
+    "group": "props",
+    "triangles": 992,
+    "dimensions": [
+      0.316,
+      0.316,
+      0.517
+    ]
+  },
+  "WoodenPallet": {
+    "group": "props",
+    "triangles": 684,
+    "dimensions": [
+      1.2,
+      0.8,
+      0.145
+    ]
+  },
+  "Dumpster": {
+    "group": "props",
+    "triangles": 768,
+    "dimensions": [
+      1.821,
+      1.057,
+      1.481
+    ]
+  },
+  "StreetLamp": {
+    "group": "props",
+    "triangles": 536,
+    "dimensions": [
+      0.34,
+      1.15,
+      4.2
+    ]
+  },
+  "SandbagWall": {
+    "group": "props",
+    "triangles": 1520,
+    "dimensions": [
+      1.82,
+      0.363,
+      0.535
+    ]
+  },
+  "Toilet": {
+    "group": "props",
+    "triangles": 1116,
+    "dimensions": [
+      0.426,
+      0.6,
+      0.8
+    ]
+  },
+  "Car": {
+    "group": "props",
+    "triangles": 2044,
+    "dimensions": [
+      1.872,
+      4.322,
+      1.28
+    ]
+  },
+  "PoliceCap": {
+    "group": "accessories",
+    "triangles": 844,
+    "dimensions": [
+      0.22,
+      0.285,
+      0.088
+    ]
+  },
+  "HardHat": {
+    "group": "accessories",
+    "triangles": 1420,
+    "dimensions": [
+      0.284,
+      0.284,
+      0.117
+    ]
+  },
+  "CombatHelmet": {
+    "group": "accessories",
+    "triangles": 1104,
+    "dimensions": [
+      0.237,
+      0.262,
+      0.265
+    ]
+  },
+  "Balaclava": {
+    "group": "accessories",
+    "triangles": 1656,
+    "dimensions": [
+      0.181,
+      0.226,
+      0.311
+    ]
+  }
+}
