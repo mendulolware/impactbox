@@ -27,7 +27,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 400);
 scene.add(camera);
 
-// ---- helmet-cam lens: the scene is drawn to a texture, then through a wide-angle "lens" shader
+// ---- helmet-cam look: the scene is drawn to a texture, then graded (no distortion, no grain)
 const lens = {
   target: new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, samples: 4 }),
   scene: new THREE.Scene(),
@@ -35,30 +35,16 @@ const lens = {
   material: new THREE.ShaderMaterial({
     depthTest: false,
     depthWrite: false,
-    uniforms: { tScene: { value: null }, uTime: { value: 0 }, uAspect: { value: 1 } },
+    uniforms: { tScene: { value: null } },
     vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
     fragmentShader: `
-      uniform sampler2D tScene; uniform float uTime; uniform float uAspect; varying vec2 vUv;
-      float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
-      // barrel distortion: the further from the centre, the further out we sample
-      vec2 bend(vec2 uv, float k) {
-        vec2 c = uv * 2.0 - 1.0;
-        float r2 = c.x * c.x + (c.y * c.y) / (uAspect * uAspect);
-        c *= (1.0 + k * r2 + k * 0.4 * r2 * r2) / (1.0 + k * 1.4);
-        return c;
-      }
+      uniform sampler2D tScene; varying vec2 vUv;
       void main() {
-        float k = 0.26;
-        vec2 cr = bend(vUv, k * 1.035), cg = bend(vUv, k), cb = bend(vUv, k * 0.965);   // colour fringing
-        vec3 col = vec3(texture2D(tScene, cr * 0.5 + 0.5).r, texture2D(tScene, cg * 0.5 + 0.5).g, texture2D(tScene, cb * 0.5 + 0.5).b);
-        vec2 edge = smoothstep(vec2(1.0), vec2(0.985), abs(cg));
-        col *= edge.x * edge.y;                                          // black outside the lens image
+        vec3 col = texture2D(tScene, vUv).rgb;
         vec2 v = vUv * 2.0 - 1.0;
-        col *= mix(0.12, 1.0, smoothstep(1.5, 0.5, length(v)));            // vignette
+        col *= mix(0.55, 1.0, smoothstep(1.55, 0.6, length(v)));          // soft darkening toward the corners
         float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
-        col = mix(vec3(l), col, 0.8) * vec3(0.97, 1.0, 1.03) * 1.12;       // washed-out, slightly cold sensor
-        col += (hash(gl_FragCoord.xy + fract(uTime) * 311.0) - 0.5) * 0.05 * (1.1 - min(l, 1.0));   // grain
-        col *= 0.985 + 0.015 * sin(gl_FragCoord.y * 1.6);                 // faint scanlines
+        col = mix(vec3(l), col, 0.85) * vec3(0.98, 1.0, 1.02) * 1.06;      // slightly flat, cool camera colour
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -72,7 +58,6 @@ function resize() {
   renderer.setSize(w, h, false);
   const pr = renderer.getPixelRatio();
   lens.target.setSize(Math.max(2, Math.floor(w * pr)), Math.max(2, Math.floor(h * pr)));
-  lens.material.uniforms.uAspect.value = w / h;
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
@@ -548,7 +533,6 @@ function tick(now) {
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);
     lens.material.uniforms.tScene.value = lens.target.texture;
-    lens.material.uniforms.uTime.value = now / 1000;
     renderer.render(lens.scene, lens.camera);
   } else {
     renderer.render(scene, camera);

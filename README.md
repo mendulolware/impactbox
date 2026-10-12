@@ -34,6 +34,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | `weapons.js` | weapon definitions, firing, melee, grenades, grab gun, viewmodels |
 | `props.js` | crates, barrels, explosive barrels, balls, grenades |
 | `gore.js` | instanced blood/gib/fire particles and surface decals |
+| `wounds.js` | holes cut into body parts, and what is visible inside them |
 | `player.js` | first-person character controller |
 | `world.js` | arena, lighting, ground |
 | `audio.js` | procedural sound effects |
@@ -53,13 +54,19 @@ Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted aft
 
 - **Hands:** `HandR` (grip) and `HandL` (support) models are attached per weapon. Placements live in the `VIEW` table in `weapons.js`.
 - **Aiming:** right mouse moves the weapon so its sight line (`sight` in `VIEW`) sits on the screen centre, narrows the field of view, tightens spread and slows you down. Guns have real rear notches and front posts.
-- **Helmet cam (V):** wide field of view drawn through a lens shader in `main.js` (barrel distortion, colour fringing, vignette, grain), a camera that lags slightly behind your aim, heavier head bob and a REC overlay. Aiming in this view shoulders the weapon below the camera instead of putting the sights on screen, as in real helmet footage; shots leave from eye level along the weapon.
+- **Helmet cam (V):** wide field of view with a light colour grade and corner darkening in `main.js` (no fisheye, no grain), a camera that lags slightly behind your aim, heavier head bob and a REC overlay. Aiming in this view shoulders the weapon below the camera instead of putting the sights on screen, as in real helmet footage; shots leave from eye level along the weapon.
 
 ## Gore
 
 `gore.js`: stretched blood droplets that stick where they land (floors, walls, ramps), procedural splatter decals that drip on walls,
 pools that spread under bodies and stumps, wounds stuck onto the body part that was hit, and physical meat/bone chunks.
 `ragdoll.js` adds bone-and-flesh stumps and pulsing arterial spray when a limb comes off.
+
+`wounds.js` opens real holes in bodies. Each wound is a sphere in the body part's local space, and the part's
+materials get a shader that discards every pixel inside it. Behind the skin there is an inside-out flesh wall,
+a shrunken meat core with narrower holes (so the wound has depth), and innards: ribs, spine, lungs, heart, gut,
+brain and limb bones. Bullets cut an entry hole and a larger exit hole; hits near an existing wound widen it.
+Hole size per weapon is `hole` in the `WEAPONS` table; a part holds up to 12 wounds.
 
 ## Models
 

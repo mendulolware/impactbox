@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { getModel } from './models.js';
+import { openWound } from './wounds.js';
 
 // An NPC has two lives:
 //   'anim'    - bodies are kinematic and follow a procedural walk/idle animation (no physics jitter)
@@ -202,7 +203,13 @@ export class Ragdoll {
         }
       }
       scene.add(mesh);
-      this.parts[name] = { name, def: d, body, collider, mesh, hp: d.hp, gone: false, inertia: body.mass() * len * len / 12 };
+      // the meshes bullets can punch holes in; "body" ones (skin, shirt, trousers) have flesh behind them
+      const bodyMats = new Set(Object.values(tint));
+      const skin = [];
+      mesh.traverse((o) => { if (o.isMesh) skin.push({ mesh: o, body: bodyMats.has(o.material) || o === mesh }); });
+      // local box around the part, used to work out where a bullet comes out the other side
+      const ext = d.shape === 'box' ? d.half : d.shape === 'ball' ? [d.r, d.r, d.r] : [d.r, d.h + d.r, d.r];
+      this.parts[name] = { name, def: d, body, collider, mesh, skin, ext, hp: d.hp, gone: false, inertia: body.mass() * len * len / 12 };
       this.pose[name] = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
       this.captured[name] = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
       this.colHandles.add(collider.handle);
@@ -304,7 +311,22 @@ export class Ragdoll {
       const lp = new THREE.Vector3(point.x - t.x, point.y - t.y, point.z - t.z).applyQuaternion(_q);
       const ln = opts.normal ? new THREE.Vector3(opts.normal.x, opts.normal.y, opts.normal.z) : _a.copy(dir).negate().clone();
       ln.applyQuaternion(_q);
-      gore.wound(p.mesh, lp, ln, { size: opts.blade ? 0.07 : rnd(0.07, 0.11), slash: !!opts.blade });
+      const ld = new THREE.Vector3(dir.x, dir.y, dir.z).applyQuaternion(_q).normalize();
+      const big = name === 'torso' || name === 'pelvis';
+      const maxR = big ? 0.11 : name === 'head' ? 0.07 : p.def.r * 0.95;
+      if (opts.blade) {
+        gore.wound(p.mesh, lp, ln, { size: 0.07, slash: true });   // a slash mark, with a gash cut into it
+        openWound(p, lp, 0.03, maxR);
+      } else {
+        // entry hole, and a bigger one where the bullet leaves
+        openWound(p, lp, opts.hole || 0.026, maxR);
+        let t = 0.6;
+        for (let i = 0; i < 3; i++) {
+          const c = ld.getComponent(i);
+          if (Math.abs(c) > 1e-4) t = Math.min(t, (Math.sign(c) * p.ext[i] - lp.getComponent(i)) / c);
+        }
+        if (t > 0.03) openWound(p, lp.clone().addScaledVector(ld, t), (opts.hole || 0.026) * 1.5, maxR);
+      }
 
       if (opts.blade) {
         _t.copy(dir).multiplyScalar(0.5); _t.y += 0.5;

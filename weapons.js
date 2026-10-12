@@ -3,9 +3,9 @@ import { sfx } from './audio.js';
 import { getModel } from './models.js';
 
 export const WEAPONS = [
-  { name: 'Pistol',   type: 'gun',     auto: false, rate: 0.20,  dmg: 34, impulse: 140, pellets: 1,  spread: 0.003, sound: 'pistol',  kick: 0.07 },
-  { name: 'Shotgun',  type: 'gun',     auto: false, rate: 0.85,  dmg: 15, impulse: 110, pellets: 10, spread: 0.055, sound: 'shotgun', kick: 0.16 },
-  { name: 'Rifle',    type: 'gun',     auto: true,  rate: 0.075, dmg: 17, impulse: 95,  pellets: 1,  spread: 0.010, sound: 'rifle',   kick: 0.035 },
+  { name: 'Pistol',   type: 'gun',     auto: false, rate: 0.20,  dmg: 34, impulse: 140, pellets: 1,  spread: 0.003, sound: 'pistol',  kick: 0.07,  hole: 0.034 },
+  { name: 'Shotgun',  type: 'gun',     auto: false, rate: 0.85,  dmg: 15, impulse: 110, pellets: 10, spread: 0.055, sound: 'shotgun', kick: 0.16,  hole: 0.027 },
+  { name: 'Rifle',    type: 'gun',     auto: true,  rate: 0.075, dmg: 17, impulse: 95,  pellets: 1,  spread: 0.010, sound: 'rifle',   kick: 0.035, hole: 0.03 },
   { name: 'Machete',  type: 'melee',   auto: true,  rate: 0.40,  dmg: 48, impulse: 220, range: 2.7 },
   { name: 'Grenade',  type: 'grenade', auto: false, rate: 0.7 },
   { name: 'Grab Gun', type: 'grab' },
@@ -223,7 +223,7 @@ export class Weapons {
       let end;
       if (hit) {
         end = origin.clone().addScaledVector(d, hit.timeOfImpact);
-        ctx.applyHit(hit, end, d, w.dmg, w.impulse, {});
+        ctx.applyHit(hit, end, d, w.dmg, w.impulse, { hole: w.hole });
       } else {
         end = origin.clone().addScaledVector(d, 120);
       }
