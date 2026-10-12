@@ -693,6 +693,472 @@ for sx in (-1, 1):
     m.box((0.004, 0.28, 0.101), (sx * 0.55, 0, 0), CrateFrame)                                  # grain lines
 m.finish(props, (1.5, 1.5, 0.05))
 
+# ================================================================== LIBRARY: MELEE
+# Additional models are assets only. Continue the weapon row in half-metre slots.
+m = Model('Axe')
+m.loft([(-0.43, 0.019, 0.015), (-0.34, 0.017, 0.014), (-0.1, 0.016, 0.012),
+        (0.20, 0.019, 0.013), (0.38, 0.022, 0.015)], (0, 0, 0), Wood, rot=AXIS_Y, seg=10)
+m.cyl(0.021, 0.20, (0, 0, 0), Polymer, rot=AXIS_Y, seg=10)                      # grip at origin
+for y in (-0.075, -0.025, 0.025, 0.075):
+    m.torus(0.021, 0.002, (0, y, 0), Polymer, rot=AXIS_Y, seg=10, sub=4)
+m.prism([(0.34, 0.035), (0.35, -0.055), (0.30, -0.135), (0.49, -0.135),
+         (0.465, -0.045), (0.46, 0.035), (0.40, 0.15), (0.385, 0.15)],
+        0.046, (0, 0, 0), BarrelRed, bevel=0.003)                                # painted head / pick
+m.prism([(0.30, -0.135), (0.49, -0.135), (0.51, -0.18), (0.285, -0.18)],
+        0.008, (0, 0, 0), Steel)                                                # exposed cutting edge
+m.cyl(0.011, 0.048, (0, 0.402, 0.008), Steel, rot=AXIS_X, seg=8)
+m.finish(weapons, (6.0, -1.5, WZ))
+
+m = Model('BaseballBat')
+m.loft([(-0.70, 0.023, 0.023), (-0.68, 0.032, 0.032), (-0.52, 0.033, 0.033),
+        (-0.38, 0.028, 0.028), (-0.20, 0.018, 0.018), (-0.08, 0.014, 0.014),
+        (0.12, 0.014, 0.014), (0.14, 0.020, 0.020)], (0, 0, 0), CrateWood, rot=AXIS_Y, seg=14)
+m.cyl(0.022, 0.012, (0, -0.145, 0), Wood, rot=AXIS_Y, seg=14)
+m.cyl(0.015, 0.21, (0, 0, 0), Glove, rot=AXIS_Y, seg=12)                         # wrapped handle
+for i in range(7):
+    m.torus(0.015, 0.0015, (0, -0.09 + i * 0.03, 0), GlovePad, rot=AXIS_Y, seg=10, sub=4)
+m.finish(weapons, (6.5, -1.5, WZ))
+
+m = Model('Crowbar')
+m.cyl(0.012, 0.63, (0, 0, 0), BarrelRed, rot=AXIS_Y, seg=10)
+m.chain([(0, 0.31, 0), (0, 0.365, -0.004), (0, 0.401, -0.034),
+         (0, 0.402, -0.07), (0, 0.38, -0.093)], 0.012, BarrelRed, seg=8)
+for sx in (-1, 1):
+    m.prism([(0.385, -0.08), (0.385, -0.101), (0.337, -0.108), (0.34, -0.099)],
+            0.009, (sx * 0.007, 0, 0), Steel)                                  # split nail-pulling claw
+m.prism([(-0.307, 0.012), (-0.307, -0.012), (-0.389, -0.035), (-0.395, -0.029)],
+        0.024, (0, 0, 0), Steel)                                               # flattened pry end
+m.finish(weapons, (7.0, -1.5, WZ))
+
+m = Model('Katana')
+m.box((0.025, 0.265, 0.034), (0, 0, 0), Glove, bevel=0.005, seg=1)
+for i in range(9):
+    for sx in (-1, 1):
+        m.box((0.002, 0.026, 0.009), (sx * 0.013, -0.11 + i * 0.027, 0), GlovePad,
+              rot=(sx * 0.68, 0, 0))                                          # crossed handle wrap
+for y in (-0.136, 0.137):
+    m.box((0.028, 0.014, 0.037), (0, y, 0), Brass, bevel=0.003, seg=1)
+m.cyl(0.045, 0.007, (0, 0.151, 0), Gunmetal, rot=AXIS_Y, seg=16)                  # tsuba
+m.box((0.011, 0.025, 0.034), (0, 0.168, 0), Brass)
+m.prism([(0.18, -0.016), (0.40, -0.013), (0.64, 0.003), (0.80, 0.024),
+         (0.88, 0.062), (0.79, 0.055), (0.63, 0.034), (0.40, 0.018), (0.18, 0.017)],
+        0.005, (0, 0, 0), Steel)
+m.prism([(0.18, 0.011), (0.40, 0.012), (0.63, 0.028), (0.79, 0.049),
+         (0.88, 0.062), (0.79, 0.055), (0.63, 0.034), (0.40, 0.018), (0.18, 0.017)],
+        0.0058, (0, 0, 0), Gunmetal)                                           # dark spine, bright edge
+m.finish(weapons, (7.5, -1.5, WZ))
+
+m = Model('Chainsaw')
+m.box((0.19, 0.28, 0.17), (0, 0.255, 0.025), BarrelRed, bevel=0.018, seg=1)       # engine housing
+m.box((0.035, 0.19, 0.125), (0.102, 0.26, 0.015), Gunmetal, bevel=0.009, seg=1)   # clutch cover
+m.cyl(0.066, 0.02, (-0.101, 0.235, 0.025), Polymer, rot=AXIS_X, seg=16)
+for z in (-0.025, -0.005, 0.015, 0.035, 0.055):
+    m.box((0.005, 0.08, 0.007), (-0.113, 0.24, z), Bore)                        # starter vents
+m.cyl(0.021, 0.025, (0.042, 0.205, 0.112), Polymer, seg=10)                     # fuel cap
+m.cyl(0.019, 0.16, (0, 0, 0), Polymer, rot=AXIS_Y, seg=10)                      # rear grip at origin
+m.box((0.026, 0.19, 0.018), (0, 0.004, -0.079), Polymer, bevel=0.006, seg=1)
+for y in (-0.083, 0.085):
+    m.box((0.027, 0.027, 0.096), (0, y, -0.035), Polymer, bevel=0.006, seg=1)
+m.box((0.013, 0.03, 0.012), (0, 0.03, -0.024), Hazard)                          # throttle
+m.chain([(-0.105, 0.19, 0.015), (-0.12, 0.16, 0.16), (0.10, 0.16, 0.16),
+         (0.10, 0.22, 0.015)], 0.013, Polymer, seg=8)                           # front handle
+m.box((0.17, 0.014, 0.07), (0, 0.29, 0.125), Polymer, rot=(0.16, 0, 0))         # chain brake
+m.prism([(0.35, -0.055), (0.80, -0.055), (0.846, -0.035), (0.86, 0),
+         (0.846, 0.035), (0.80, 0.055), (0.35, 0.055)], 0.024, (0, 0, 0), Gunmetal)
+m.prism([(0.35, -0.041), (0.80, -0.041), (0.831, -0.026), (0.843, 0),
+         (0.831, 0.026), (0.80, 0.041), (0.35, 0.041)], 0.027, (0, 0, 0), Steel)
+for i in range(13):
+    for sz in (-1, 1):
+        m.box((0.031, 0.014, 0.009), (0, 0.397 + i * 0.033, sz * 0.058), Steel,
+              rot=(sz * 0.3, 0, 0))                                           # individual chain teeth
+for a in (-pi / 3, 0, pi / 3):
+    m.box((0.031, 0.009, 0.014), (0, 0.802 + 0.061 * cos(a), 0.061 * sin(a)), Steel,
+          rot=(a, 0, 0))
+m.finish(weapons, (8.0, -1.5, WZ))
+
+m = Model('SledgeHammer')
+m.loft([(-0.61, 0.017, 0.022), (-0.35, 0.015, 0.019), (0.12, 0.016, 0.018),
+        (0.27, 0.018, 0.02)], (0, 0, 0), Wood, rot=AXIS_Y, seg=10)
+m.cyl(0.022, 0.25, (0, 0, 0), Polymer, rot=AXIS_Y, seg=10)
+for i in range(6):
+    m.torus(0.022, 0.002, (0, -0.10 + i * 0.04, 0), GlovePad, rot=AXIS_Y, seg=10, sub=4)
+m.box((0.075, 0.09, 0.225), (0, 0.60, 0), Gunmetal, bevel=0.012, seg=1)
+for sz in (-1, 1):
+    m.box((0.079, 0.094, 0.026), (0, 0.60, sz * 0.117), Steel, bevel=0.006, seg=1)
+m.box((0.022, 0.012, 0.04), (0, 0.65, 0), Wood)                                 # wedged handle end
+m.finish(weapons, (8.5, -1.5, WZ))
+
+# ================================================================== LIBRARY: GUNS
+# Grips start at (0, 0, 0). Each sight line has an open rear notch at x = 0.
+m = Model('DoubleBarrel')
+m.box((0.063, 0.13, 0.056), (0, 0.08, 0.035), Gunmetal, bevel=0.006, seg=1)
+for sx in (-1, 1):
+    m.cyl(0.016, 0.32, (sx * 0.018, 0.29, 0.04), Gunmetal, rot=AXIS_Y, seg=14)
+    m.cyl(0.0115, 0.008, (sx * 0.018, 0.449, 0.04), Bore, rot=AXIS_Y, seg=12)
+    m.cyl(0.005, 0.007, (sx * 0.033, 0.095, 0.034), Steel, rot=AXIS_X, seg=8)      # hinge pins
+    m.box((0.004, 0.012, 0.012), (sx * 0.006, 0.031, 0.073), Gunmetal)           # rear notch
+    m.box((0.006, 0.012, 0.022), (sx * 0.022, 0.003, 0.063), Steel, rot=(0.4, 0, 0))
+m.box((0.012, 0.32, 0.007), (0, 0.29, 0.056), Gunmetal)                         # joining / sight rib
+m.box((0.003, 0.008, 0.012), (0, 0.427, 0.073), Brass)                          # front post
+m.box((0.055, 0.14, 0.035), (0, 0.23, 0.01), Wood, bevel=0.01, seg=1)
+m.prism([(-0.026, 0), (0.025, 0), (0.018, -0.035), (-0.035, -0.11),
+         (-0.088, -0.101), (-0.054, -0.055)], 0.038, (0, 0, 0), Wood, bevel=0.005)
+m.box((0.01, 0.07, 0.008), (0, 0.064, -0.034), Gunmetal, bevel=0.002, seg=1)
+m.box((0.01, 0.008, 0.056), (0, 0.095, -0.005), Gunmetal, bevel=0.002, seg=1)
+for y in (0.042, 0.064):
+    m.box((0.006, 0.007, 0.025), (0, y, -0.014), Steel, rot=(0.3, 0, 0))          # twin triggers
+m.box((0.01, 0.04, 0.007), (0.011, 0.035, 0.067), Steel, rot=(0, 0, -0.3))       # opening lever
+m.finish(weapons, (9.0, -1.5, WZ))
+
+m = Model('Uzi')
+m.box((0.05, 0.255, 0.069), (0, 0.055, 0.036), Gunmetal, bevel=0.006, seg=1)
+m.box((0.043, 0.22, 0.012), (0, 0.051, 0.077), Gunmetal, bevel=0.003, seg=1)
+m.box((0.038, 0.047, 0.10), (0, 0, -0.05), Polymer, bevel=0.006, seg=1)          # grip / magazine well
+m.box((0.028, 0.036, 0.17), (0, 0, -0.143), Gunmetal, bevel=0.003, seg=1)
+m.box((0.034, 0.041, 0.009), (0, 0, -0.23), Polymer)
+m.box((0.012, 0.005, 0.07), (0, -0.025, -0.05), GlovePad)                      # grip safety
+m.box((0.053, 0.085, 0.04), (0, 0.137, -0.005), Polymer, bevel=0.007, seg=1)
+for i in range(5):
+    m.box((0.055, 0.004, 0.032), (0, 0.105 + i * 0.015, -0.008), GlovePad)
+m.cyl(0.015, 0.028, (0, 0.193, 0.033), Gunmetal, rot=AXIS_Y, seg=12)              # barrel nut
+m.cyl(0.009, 0.076, (0, 0.24, 0.033), Steel, rot=AXIS_Y, seg=12)
+m.cyl(0.005, 0.008, (0, 0.278, 0.033), Bore, rot=AXIS_Y, seg=10)
+m.box((0.009, 0.077, 0.008), (0, 0.064, -0.041), Gunmetal)
+m.box((0.009, 0.009, 0.058), (0, 0.099, -0.015), Gunmetal)
+m.box((0.006, 0.008, 0.025), (0, 0.043, -0.017), Steel, rot=(0.3, 0, 0))
+m.box((0.026, 0.037, 0.013), (0, 0.03, 0.086), Polymer, bevel=0.003, seg=1)       # top cocking knob
+for sx in (-1, 1):
+    m.box((0.004, 0.012, 0.015), (sx * 0.007, -0.054, 0.104), Gunmetal)
+    m.box((0.004, 0.02, 0.024), (sx * 0.02, 0.157, 0.096), Gunmetal)             # front sight guards
+    m.box((0.005, 0.155, 0.018), (sx * 0.029, -0.132, 0.0), Steel)               # folded stock arms
+m.box((0.003, 0.006, 0.015), (0, 0.157, 0.104), Gunmetal)
+m.box((0.061, 0.018, 0.085), (0, -0.217, -0.03), Gunmetal, bevel=0.004, seg=1)
+m.box((0.005, 0.052, 0.023), (0.026, 0.083, 0.047), Bore)                       # ejection port
+m.finish(weapons, (9.5, -1.5, WZ))
+
+m = Model('Minigun')
+m.cyl(0.075, 0.235, (0, 0.20, 0.056), Gunmetal, rot=AXIS_Y, seg=16)              # receiver
+m.cyl(0.081, 0.022, (0, 0.086, 0.056), Steel, rot=AXIS_Y, seg=16)
+m.cyl(0.055, 0.20, (0.092, 0.205, 0.022), Gunmetal, rot=AXIS_Y, seg=12)          # drive motor
+m.cyl(0.047, 0.025, (0.092, 0.10, 0.022), Polymer, rot=AXIS_Y, seg=12)
+for k in range(6):
+    a = k * pi / 3
+    x, z = 0.05 * cos(a), 0.056 + 0.05 * sin(a)
+    m.cyl(0.012, 0.59, (x, 0.602, z), Gunmetal, rot=AXIS_Y, seg=10)
+    m.cyl(0.007, 0.008, (x, 0.9, z), Bore, rot=AXIS_Y, seg=8)
+for y in (0.35, 0.69, 0.863):
+    m.cyl(0.07, 0.022, (0, y, 0.056), Steel, rot=AXIS_Y, seg=16)                 # barrel cluster clamps
+m.box((0.035, 0.052, 0.115), (0, 0, -0.0575), Polymer, bevel=0.007, seg=1)
+m.box((0.05, 0.10, 0.028), (0, 0.027, 0.013), Gunmetal, bevel=0.004, seg=1)      # grip attaches receiver
+m.box((0.01, 0.084, 0.009), (0, 0.061, -0.046), Gunmetal)
+m.box((0.01, 0.01, 0.057), (0, 0.10, -0.019), Gunmetal)
+m.box((0.007, 0.008, 0.027), (0, 0.043, -0.016), Steel, rot=(0.3, 0, 0))
+m.chain([(-0.053, 0.17, 0.10), (-0.115, 0.17, 0.17), (-0.115, 0.32, 0.17),
+         (-0.053, 0.32, 0.10)], 0.014, Polymer, seg=8)                           # offset carrying handle
+m.box((0.055, 0.082, 0.054), (-0.071, 0.245, 0.006), Gunmetal)                  # ammunition inlet
+for i in range(5):
+    m.cyl(0.008, 0.057, (-0.10 - i * 0.018, 0.235, -0.003 - i * 0.004), Brass,
+          rot=AXIS_Y, seg=8)
+m.box((0.03, 0.055, 0.019), (-0.13, 0.224, -0.019), Gunmetal)                   # feed belt backing
+for y in (0.115, 0.842):
+    m.box((0.025, 0.016, 0.02), (0, y, 0.128), Gunmetal)
+for sx in (-1, 1):
+    m.box((0.004, 0.01, 0.015), (sx * 0.007, 0.115, 0.1455), Gunmetal)
+m.box((0.003, 0.008, 0.015), (0, 0.842, 0.1455), Gunmetal)
+m.finish(weapons, (10.0, -1.5, WZ))
+
+m = Model('Crossbow')
+m.box((0.052, 0.49, 0.037), (0, 0.145, 0.041), Gunmetal, bevel=0.004, seg=1)      # bolt track
+m.prism([(-0.035, 0.025), (-0.32, 0.018), (-0.35, -0.075), (-0.26, -0.079),
+         (-0.15, -0.013), (-0.035, -0.012)], 0.047, (0, 0, 0), Olive, bevel=0.004)
+m.box((0.047, 0.018, 0.11), (0, -0.35, -0.027), Polymer, bevel=0.004, seg=1)
+m.box((0.035, 0.05, 0.10), (0, 0, -0.05), Polymer, bevel=0.006, seg=1)
+m.box((0.052, 0.125, 0.058), (0, 0.20, -0.004), Olive, bevel=0.009, seg=1)
+m.box((0.008, 0.07, 0.008), (0, 0.054, -0.048), Gunmetal)
+m.box((0.008, 0.01, 0.07), (0, 0.085, -0.013), Gunmetal)
+m.box((0.006, 0.007, 0.025), (0, 0.045, -0.019), Steel, rot=(0.3, 0, 0))
+for sx in (-1, 1):
+    m.prism([(0.0, 0.36), (0.14, 0.385), (0.28, 0.355), (0.355, 0.26),
+             (0.343, 0.251), (0.265, 0.328), (0.135, 0.344), (0.0, 0.32)],
+            0.027, (0, 0, 0.043), Olive, rot=(0, -sx * pi / 2, -sx * pi / 2))    # swept limbs in XY
+    m.limb((sx * 0.35, 0.26, 0.061), (0, -0.052, 0.061), 0.0017, Glove, seg=6)  # cocked string
+    m.box((0.004, 0.009, 0.015), (sx * 0.007, -0.06, 0.097), Gunmetal)
+m.cyl(0.003, 0.43, (0, 0.165, 0.068), Wood, rot=AXIS_Y, seg=8)                  # bolt shaft
+m.cyl(0.0005, 0.045, (0, 0.4025, 0.068), Steel, rot=AXIS_Y, r2=0.008, seg=8)     # point forward
+for sx in (-1, 1):
+    m.box((0.018, 0.045, 0.0015), (sx * 0.009, -0.031, 0.069), BarrelRed)
+m.box((0.024, 0.015, 0.022), (0, 0.31, 0.072), Gunmetal)
+m.box((0.003, 0.006, 0.015), (0, 0.31, 0.097), Gunmetal)
+m.chain([(-0.055, 0.34, 0.025), (-0.067, 0.47, 0.025), (0.067, 0.47, 0.025),
+         (0.055, 0.34, 0.025)], 0.007, Steel, seg=6)                             # stirrup
+m.finish(weapons, (11.0, -1.5, WZ))                                              # wider bow needs the 10.5 slot too
+
+m = Model('Flamethrower')
+m.box((0.06, 0.20, 0.065), (0, 0.09, 0.039), Olive, bevel=0.007, seg=1)
+m.cyl(0.017, 0.48, (0, 0.39, 0.048), Gunmetal, rot=AXIS_Y, seg=12)
+m.cyl(0.027, 0.24, (0, 0.32, 0.048), Olive, rot=AXIS_Y, seg=12)                  # heat shield
+for i in range(5):
+    for sx in (-1, 1):
+        m.box((0.003, 0.025, 0.009), (sx * 0.027, 0.23 + i * 0.044, 0.048), Bore)
+m.cyl(0.04, 0.085, (0, 0.645, 0.048), Gunmetal, rot=AXIS_Y, r2=0.017, seg=14)     # nozzle flares forward
+m.cyl(0.034, 0.008, (0, 0.688, 0.048), Bore, rot=AXIS_Y, seg=14)
+m.cyl(0.006, 0.11, (0, 0.617, 0.005), Brass, rot=AXIS_Y, seg=8)                  # pilot tube
+m.box((0.012, 0.014, 0.05), (0, 0.61, 0.019), Gunmetal)
+m.box((0.035, 0.05, 0.105), (0, 0, -0.0525), Polymer, bevel=0.007, seg=1)
+m.box((0.032, 0.04, 0.09), (0, 0.235, -0.033), Polymer, bevel=0.006, seg=1)
+m.box((0.009, 0.075, 0.008), (0, 0.06, -0.04), Gunmetal)
+m.box((0.009, 0.01, 0.059), (0, 0.092, -0.014), Gunmetal)
+m.box((0.006, 0.008, 0.025), (0, 0.043, -0.015), Brass, rot=(0.3, 0, 0))
+m.capsule(0.066, 0.13, (0.115, 0.13, -0.08), Olive, rot=AXIS_Y, seg=12, rings=7)  # self-contained fuel canister
+for y in (0.04, 0.22):
+    m.torus(0.067, 0.005, (0.115, y, -0.08), Gunmetal, rot=AXIS_Y, seg=12, sub=4)
+    m.box((0.06, 0.018, 0.045), (0.05, y, -0.056), Gunmetal)                    # tank brackets
+m.cyl(0.014, 0.035, (0.115, -0.084, -0.08), Brass, rot=AXIS_Y, seg=8)
+m.torus(0.019, 0.004, (0.115, -0.107, -0.08), BarrelRed, rot=AXIS_Y, seg=10, sub=4)
+m.chain([(0.115, -0.096, -0.08), (0.13, -0.15, -0.18), (0.015, -0.12, -0.19),
+         (0, -0.045, -0.093)], 0.009, Polymer, seg=8)                            # connected fuel hose
+for y in (0.025, 0.57):
+    m.box((0.024, 0.014, 0.025), (0, y, 0.081), Gunmetal)
+for sx in (-1, 1):
+    m.box((0.004, 0.01, 0.014), (sx * 0.007, 0.025, 0.1), Gunmetal)
+m.box((0.003, 0.008, 0.014), (0, 0.57, 0.1), Gunmetal)
+m.finish(weapons, (11.5, -1.5, WZ))
+
+# ================================================================== LIBRARY: PROPS
+TrafficOrange = material('TrafficOrange', (0.95, 0.19, 0.025), 0.65)
+Ceramic = material('Ceramic', (0.86, 0.87, 0.84), 0.22)
+SandCanvas = material('SandCanvas', (0.43, 0.36, 0.22), 0.95)
+
+m = Model('Chair')
+m.box((0.46, 0.44, 0.045), (0, 0, 0.005), Wood, bevel=0.009, seg=1)               # seat 0.45 m above feet
+for sx in (-1, 1):
+    for sy in (-1, 1):
+        m.box((0.037, 0.037, 0.43), (sx * 0.195, sy * 0.18, -0.235), CrateFrame,
+              bevel=0.003, seg=1)
+    m.box((0.037, 0.04, 0.475), (sx * 0.195, -0.18, 0.2125), CrateFrame, bevel=0.003, seg=1)
+    m.box((0.026, 0.36, 0.028), (sx * 0.195, 0, -0.22), Wood)
+for z in (0.20, 0.37):
+    m.box((0.36, 0.035, 0.105), (0, -0.18, z), Wood, bevel=0.007, seg=1)           # back slats
+m.box((0.39, 0.025, 0.03), (0, 0.18, -0.10), CrateFrame)
+for sx in (-1, 1):
+    for z in (0.20, 0.37):
+        m.cyl(0.005, 0.005, (sx * 0.155, -0.159, z), Brass, rot=AXIS_Y, seg=6)
+m.finish(props, (0.0, 3.5, 0.45))
+
+m = Model('Table')
+m.box((1.2, 0.8, 0.05), (0, 0, 0.355), Wood, bevel=0.012, seg=1)
+for sx in (-1, 1):
+    for sy in (-1, 1):
+        m.box((0.055, 0.055, 0.71), (sx * 0.52, sy * 0.32, -0.025), CrateFrame, bevel=0.004, seg=1)
+        m.box((0.065, 0.065, 0.022), (sx * 0.52, sy * 0.32, -0.369), Polymer, bevel=0.003, seg=1)
+    m.box((0.03, 0.68, 0.10), (sx * 0.52, 0, 0.27), Wood)
+    m.box((1.065, 0.03, 0.10), (0, sx * 0.32, 0.27), Wood)
+for x in (-0.4, -0.2, 0, 0.2, 0.4):
+    m.box((0.0015, 0.775, 0.001), (x, 0, 0.3805), CrateFrame)                    # joined top boards
+m.finish(props, (1.6, 3.5, 0.38))
+
+m = Model('TrafficCone')
+m.box((0.38, 0.38, 0.055), (0, 0, -0.3225), Polymer, bevel=0.014, seg=1)
+m.cyl(0.15, 0.64, (0, 0, 0.02), TrafficOrange, r2=0.029, seg=20)
+for lo, hi in ((-0.11, -0.035), (0.09, 0.165)):
+    rlo = 0.15 - (lo + 0.30) / 0.64 * 0.121
+    rhi = 0.15 - (hi + 0.30) / 0.64 * 0.121
+    m.cyl(rlo + 0.001, hi - lo, (0, 0, (lo + hi) / 2), Ceramic, r2=rhi + 0.001, seg=20)
+m.torus(0.023, 0.006, (0, 0, 0.344), TrafficOrange, seg=16, sub=4)
+m.cyl(0.019, 0.002, (0, 0, 0.341), Bore, seg=16)                                 # opening at cone tip
+m.finish(props, (2.7, 3.5, 0.35))
+
+m = Model('PropaneTank')
+m.loft([(-0.225, 0.085, 0.085), (-0.20, 0.135, 0.135), (-0.15, 0.154, 0.154),
+        (0.11, 0.154, 0.154), (0.16, 0.13, 0.13), (0.19, 0.058, 0.058)], (0, 0, 0), Ceramic, seg=20)
+m.torus(0.154, 0.004, (0, 0, -0.01), BarrelRim, seg=20, sub=4)                    # welded seam
+m.torus(0.10, 0.012, (0, 0, -0.248), Gunmetal, seg=16, sub=6)                     # foot ring
+for a in (0, 2 * pi / 3, 4 * pi / 3):
+    m.box((0.016, 0.04, 0.04), (0.095 * cos(a), 0.095 * sin(a), -0.229), Gunmetal,
+          rot=(0, 0, a))
+    m.box((0.014, 0.035, 0.067), (0.095 * cos(a), 0.095 * sin(a), 0.22), Ceramic,
+          rot=(0, 0, a))
+m.torus(0.095, 0.007, (0, 0, 0.253), Ceramic, seg=16, sub=6)                      # open valve protection ring
+m.cyl(0.018, 0.049, (0, 0, 0.211), Brass, seg=10)
+m.cyl(0.014, 0.04, (0, 0.022, 0.214), Brass, rot=AXIS_Y, seg=10)
+m.cyl(0.008, 0.003, (0, 0.044, 0.214), Bore, rot=AXIS_Y, seg=8)
+m.cyl(0.025, 0.012, (0, 0, 0.242), BarrelRed, seg=8)
+m.box((0.08, 0.002, 0.07), (0, 0.154, 0.04), Hazard)                            # plain warning plate
+m.finish(props, (3.6, 3.5, 0.26))
+
+m = Model('WoodenPallet')
+for y in (-0.28, 0, 0.28):
+    m.box((1.2, 0.12, 0.022), (0, y, -0.061), CrateWood)
+    for x in (-0.49, 0, 0.49):
+        m.box((0.14, 0.12, 0.078), (x, y, -0.011), CrateFrame)
+for x in (-0.49, 0, 0.49):
+    m.box((0.14, 0.8, 0.022), (x, 0, 0.039), CrateWood)
+for i in range(7):
+    y = -0.35 + i * 0.1166667
+    m.box((1.2, 0.10, 0.022), (0, y, 0.061), CrateWood)
+    for x in (-0.49, 0, 0.49):
+        m.cyl(0.004, 0.002, (x, y, 0.072), BarrelRim, seg=6)                     # countersunk nails
+m.finish(props, (5.0, 3.5, 0.072))
+
+m = Model('Dumpster')
+m.box((1.63, 0.85, 1.13), (0, 0, 0.08), Olive, taper=(1.1, 1.16), bevel=0.012, seg=1)
+for sx in (-1, 1):
+    m.box((0.035, 1.015, 0.055), (sx * 0.893, 0, 0.63), Gunmetal)
+    m.box((0.884, 1.055, 0.06), (sx * 0.452, 0, 0.687), Polymer, bevel=0.01, seg=1)
+    m.cyl(0.025, 0.78, (sx * 0.452, -0.505, 0.665), Steel, rot=AXIS_X, seg=8)    # lid hinge
+    m.box((0.24, 0.05, 0.025), (sx * 0.45, 0.42, 0.728), Polymer, bevel=0.006, seg=1)
+    for sy in (-1, 1):
+        m.box((0.10, 0.08, 0.12), (sx * 0.70, sy * 0.33, -0.52), Gunmetal)
+        m.cyl(0.10, 0.072, (sx * 0.70, sy * 0.33, -0.6405), Polymer, rot=AXIS_X, seg=12)
+        m.cyl(0.035, 0.077, (sx * 0.70, sy * 0.33, -0.6405), Steel, rot=AXIS_X, seg=8)
+        m.box((0.09, 0.94, 0.065), (sx * 0.84, 0, -0.07), Gunmetal)              # fork pockets
+for x in (-0.6, 0, 0.6):
+    for sy in (-1, 1):
+        m.box((0.036, 0.028, 0.84), (x, sy * 0.473, 0.065), Olive, rot=(sy * -0.063, 0, 0))
+m.box((0.22, 0.015, 0.15), (0, 0.49, 0.30), Hazard)
+m.finish(props, (7.1, 3.5, 0.7405))
+
+m = Model('StreetLamp')
+m.box((0.34, 0.34, 0.05), (0, -0.38, -2.075), Gunmetal, bevel=0.008, seg=1)
+m.cyl(0.092, 0.36, (0, -0.38, -1.87), Gunmetal, r2=0.06, seg=12)
+m.cyl(0.057, 3.58, (0, -0.38, 0.08), Gunmetal, r2=0.035, seg=12)
+m.chain([(0, -0.38, 1.84), (0, -0.35, 1.98), (0, -0.18, 2.044),
+         (0, 0.27, 2.044)], 0.027, Gunmetal, seg=8)
+m.box((0.29, 0.56, 0.075), (0, 0.32, 2.0625), Gunmetal, bevel=0.022, seg=1)
+m.box((0.23, 0.46, 0.017), (0, 0.32, 2.017), EyeWhite, bevel=0.006, seg=1)        # light diffuser
+m.box((0.05, 0.012, 0.18), (0, -0.322, -1.5), BarrelRim, bevel=0.005, seg=1)      # access panel
+for sx in (-1, 1):
+    for sy in (-1, 1):
+        m.cyl(0.013, 0.017, (sx * 0.125, -0.38 + sy * 0.125, -2.044), Steel, seg=6)
+m.finish(props, (9.0, 4.5, 2.1))
+
+m = Model('SandbagWall')
+for row in range(3):
+    # The half-length end bags keep the staggered courses centred on the origin.
+    bags = [(-0.81, 0.25), (-0.375, 0.56), (0.245, 0.56), (0.785, 0.37)] if row == 1 else [(-0.62, 0.58), (0, 0.58), (0.62, 0.58)]
+    for x, length in bags:
+        m.box((length, 0.36, 0.175), (x, 0, -0.18 + row * 0.18), SandCanvas,
+              bevel=0.053, seg=2)                                             # soft squared bags
+        m.box((length - 0.08, 0.003, 0.009), (x, 0.181, -0.18 + row * 0.18), CrateFrame,
+              bevel=0.002, seg=1)                                             # stitched front seam
+m.finish(props, (10.8, 3.5, 0.2675))
+
+m = Model('Toilet')
+m.loft([(-0.4, 0.15, 0.205, 0, 0.005), (-0.36, 0.14, 0.19), (-0.18, 0.09, 0.105, 0, -0.035),
+        (-0.06, 0.13, 0.15)], (0, 0, 0), Ceramic, seg=16)                        # pedestal
+m.sphere(0.20, (0, 0.03, 0.005), Ceramic, scale=(1, 1.36, 0.95), seg=20, rings=12,
+         keep=lambda c: c.z <= 0)                                              # open bowl, no cap across mouth
+m.torus(0.159, 0.028, (0, 0.04, 0.007), Ceramic, seg=20, sub=6)                 # round seat / visible opening
+m.cyl(0.13, 0.008, (0, 0.04, -0.038), Bore, seg=20)                             # shadow inside bowl
+m.cyl(0.072, 0.008, (0, 0.04, -0.031), Lens, seg=16)                            # water surface
+m.box((0.36, 0.19, 0.39), (0, -0.214, 0.185), Ceramic, bevel=0.025, seg=2)       # cistern
+m.box((0.38, 0.215, 0.033), (0, -0.214, 0.3835), Ceramic, bevel=0.01, seg=1)
+m.box((0.045, 0.018, 0.014), (-0.124, -0.107, 0.315), Steel, bevel=0.004, seg=1)  # flush lever
+for sx in (-1, 1):
+    m.cyl(0.011, 0.012, (sx * 0.105, -0.07, -0.375), Steel, seg=8)               # floor fixing caps
+m.finish(props, (0.0, 5.5, 0.4))
+
+m = Model('Car')
+# Sedan: length 4.3 m on Y, tyres on X axles, +Y is the bonnet/front.
+m.box((1.65, 3.99, 0.44), (0, 0, -0.20), BarrelBlue, bevel=0.07, seg=1)
+m.box((1.59, 1.27, 0.16), (0, 1.305, 0.075), BarrelBlue, bevel=0.035, seg=1)      # bonnet
+m.box((1.59, 0.66, 0.14), (0, -1.61, 0.065), BarrelBlue, bevel=0.035, seg=1)     # boot
+m.prism([(-1.28, 0.11), (-0.80, 0.64), (0.38, 0.64), (0.92, 0.13)],
+        1.42, (0, 0, 0), BarrelBlue, bevel=0.025)                                # cabin silhouette
+for sx in (-1, 1):
+    m.prism([(-1.15, 0.17), (-0.765, 0.575), (-0.29, 0.575), (-0.29, 0.17)],
+            0.006, (sx * 0.713, 0, 0), Lens)                                   # rear side glass
+    m.prism([(-0.22, 0.17), (-0.22, 0.575), (0.35, 0.575), (0.79, 0.17)],
+            0.006, (sx * 0.713, 0, 0), Lens)                                   # front side glass
+    for y in (-0.78, 0.22):
+        m.box((0.016, 0.14, 0.027), (sx * 0.826, y, -0.004), Steel, bevel=0.005, seg=1)
+    m.box((0.11, 0.15, 0.09), (sx * 0.865, 0.75, 0.14), BarrelBlue, bevel=0.025, seg=1)
+    m.box((0.075, 0.008, 0.057), (sx * 0.876, 0.673, 0.14), Lens)                # mirrors
+    m.box((0.018, 3.75, 0.032), (sx * 0.829, 0, -0.22), Polymer)                # side rub strip
+    for y in (-1.31, 1.30):
+        m.cyl(0.30, 0.20, (sx * 0.81, y, -0.34), Polymer, rot=AXIS_X, seg=20)    # four separate tyre cylinders
+        m.cyl(0.18, 0.012, (sx * 0.918, y, -0.34), Steel, rot=AXIS_X, seg=16)
+        m.cyl(0.067, 0.018, (sx * 0.927, y, -0.34), Gunmetal, rot=AXIS_X, seg=10)
+        for k in range(5):
+            a = k * 2 * pi / 5
+            m.cyl(0.031, 0.014, (sx * 0.929, y + cos(a) * 0.122, -0.34 + sin(a) * 0.122),
+                  Bore, rot=AXIS_X, seg=6)                                    # wheel vents
+m.prism([(0.395, 0.611), (0.866, 0.165), (0.853, 0.156), (0.382, 0.602)],
+        1.28, (0, 0, 0), Lens)                                                 # windshield
+m.prism([(-1.228, 0.156), (-0.815, 0.609), (-0.80, 0.599), (-1.213, 0.145)],
+        1.28, (0, 0, 0), Lens)                                                 # rear screen
+for sy in (-1, 1):
+    m.box((1.69, 0.16, 0.145), (0, sy * 2.07, -0.22), Polymer, bevel=0.025, seg=1)
+    m.box((0.37, 0.012, 0.12), (0, sy * 2.155, -0.20), Ceramic)                  # blank plate
+    for sx in (-1, 1):
+        m.box((0.36, 0.025, 0.12), (sx * 0.59, sy * 1.998, -0.045),
+              EyeWhite if sy == 1 else BarrelRed, bevel=0.012, seg=1)
+m.box((0.66, 0.026, 0.16), (0, 2.002, -0.038), Bore)
+for x in (-0.27, -0.135, 0, 0.135, 0.27):
+    m.box((0.016, 0.029, 0.13), (x, 2.006, -0.038), Steel)
+m.cyl(0.026, 0.14, (-0.59, -2.03, -0.37), Gunmetal, rot=AXIS_Y, seg=10)
+m.finish(props, (4.0, 7.3, 0.64))
+
+# ================================================================== LIBRARY: HEAD ACCESSORIES
+# All four meshes are authored about the Head origin, facing +Y. Open shells keep
+# the head cavity clear; no solid cylinder or loft cap passes through the face.
+accessories = collection('Accessories')
+PoliceNavy = material('PoliceNavy', (0.025, 0.045, 0.09), 0.85)
+
+m = Model('PoliceCap')
+m.sphere(0.12, (0, 0, 0.076), PoliceNavy, scale=(0.91, 1.04, 0.60), seg=20, rings=12,
+         keep=lambda c: c.z >= -0.001)
+m.torus(0.101, 0.009, (0, 0, 0.068), Polymer, seg=20, sub=6)                     # head band
+m.sphere(0.115, (0, 0.045, 0.064), Polymer, scale=(0.94, 1.0, 0.045), seg=20, rings=8,
+         keep=lambda c: c.y >= 0.045)                                          # visor only outside head cavity
+m.chain([(-0.088, 0.071, 0.078), (-0.057, 0.104, 0.077), (0, 0.117, 0.076),
+         (0.057, 0.104, 0.077), (0.088, 0.071, 0.078)], 0.003, Brass, seg=6)      # chin cord above visor
+for sx in (-1, 1):
+    m.sphere(0.006, (sx * 0.098, 0.04, 0.082), Brass, scale=(0.3, 1, 1), seg=8, rings=5)
+m.prism([(-0.012, 0.014), (0.012, 0.014), (0.013, -0.005), (0, -0.019), (-0.013, -0.005)],
+        0.004, (0, 0.122, 0.105), Brass, rot=(0, 0, -pi / 2))                   # shield badge faces forward
+m.finish(accessories, (0, -3.8, 1.0))
+
+m = Model('HardHat')
+m.sphere(0.125, (0, 0, 0.031), Hazard, scale=(1, 1, 0.90), seg=20, rings=12,
+         keep=lambda c: c.z >= -0.001)
+m.torus(0.132, 0.010, (0, 0, 0.035), Hazard, seg=20, sub=6)                      # brim with open centre
+for sx in (-1, 1):
+    m.chain([(sx * 0.049, -0.098, 0.09), (sx * 0.048, -0.055, 0.128),
+             (sx * 0.044, 0.016, 0.142), (sx * 0.045, 0.074, 0.116)], 0.005, Hazard, seg=6)
+    for y in (-0.034, 0, 0.034):
+        m.box((0.003, 0.017, 0.006), (sx * 0.112, y, 0.08), Bore)               # ventilation slots
+m.sphere(0.105, (0, 0.039, 0.033), Hazard, scale=(1.12, 1, 0.04), seg=16, rings=8,
+         keep=lambda c: c.y >= 0.075)                                          # short forward peak
+m.finish(accessories, (0.5, -3.8, 1.0))
+
+m = Model('CombatHelmet')
+m.sphere(0.13, (0, -0.008, 0.024), Olive, scale=(0.91, 1, 0.9), seg=24, rings=16,
+         keep=lambda c: c.z >= (-0.055 if c.y < 0.05 else 0.015))                # brow opening, lower sides / rear
+m.chain([(-0.087, 0.063, 0.066), (-0.057, 0.1, 0.063), (0, 0.12, 0.061),
+         (0.057, 0.1, 0.063), (0.087, 0.063, 0.066)], 0.0045, GrenadeDark, seg=6)
+for sx in (-1, 1):
+    m.chain([(sx * 0.106, 0.011, 0.012), (sx * 0.079, 0.049, -0.054),
+             (sx * 0.035, 0.025, -0.107), (0, 0.024, -0.119)], 0.006, Glove, seg=6)
+    m.box((0.011, 0.014, 0.017), (sx * 0.077, 0.047, -0.055), Gunmetal)          # strap buckles
+    m.sphere(0.008, (sx * 0.113, 0.014, 0.031), Gunmetal, scale=(0.4, 1, 1), seg=8, rings=6)
+m.box((0.031, 0.011, 0.035), (0, 0.119, 0.073), Gunmetal, bevel=0.004, seg=1)    # front mounting plate
+m.finish(accessories, (1.0, -3.8, 1.0))
+
+m = Model('Balaclava')
+# The same skull warp as Head, expanded enough to cover its existing hair.
+# Remove front vertices in the eye band: this is an actual opening, not black paint.
+m.sphere(0.1, (0, -0.002, 0.002), Glove, seg=32, rings=24,
+         warp=lambda c: head_shape(c, 1.13),
+         keep=lambda c: not (c.y > 0.042 and 0.004 < c.z < 0.040))
+m.chain([(-0.063, 0.073, 0.05), (-0.032, 0.087, 0.051), (0, 0.090, 0.050),
+         (0.032, 0.087, 0.051), (0.063, 0.073, 0.05)], 0.003, GlovePad, seg=6)     # sewn eye opening
+m.chain([(-0.063, 0.073, 0.003), (-0.032, 0.087, 0.003), (0, 0.09, 0.004),
+         (0.032, 0.087, 0.003), (0.063, 0.073, 0.003)], 0.003, GlovePad, seg=6)
+m.sphere(0.033, (0, 0.086, -0.032), Glove, scale=(0.85, 0.77, 1.08), seg=12, rings=8)  # nose fabric clears Head nose
+m.torus(0.052, 0.009, (0, -0.009, -0.131), GlovePad, seg=16, sub=5)              # lower hem
+m.finish(accessories, (1.5, -3.8, 1.0))
+
 # ================================================================== STAGE (not exported)
 stage = collection('Stage')
 sun = bpy.data.objects.new('Sun', bpy.data.lights.new('Sun', 'SUN'))
@@ -715,7 +1181,7 @@ if bg:
     bg.inputs[1].default_value = 0.6
 
 # ================================================================== EXPORT
-EXPORT = [o for c in (char, weapons, hands, props) for o in c.objects]
+EXPORT = [o for c in (char, weapons, hands, props, accessories) for o in c.objects]
 for o in bpy.data.objects:
     o.select_set(o in EXPORT)
 bpy.context.view_layer.objects.active = EXPORT[0]
@@ -730,3 +1196,4 @@ result = {
     'models': {o.name: {'tris': sum(len(p.vertices) - 2 for p in o.data.polygons),
                         'size': [round(d, 3) for d in o.dimensions]} for o in EXPORT},
 }
+print(result)

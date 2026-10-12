@@ -289,9 +289,16 @@ const SPAWN_ITEMS = [
       }
     },
   },
-  ...['crate', 'barrel', 'explosive', 'ball', 'block', 'plank'].map((t) => ({
-    cat: 'Props', label: PROP_TYPES[t].label, icon: PROP_TYPES[t].icon, small: t === 'explosive' ? 'boom' : '',
-    run: () => { const p = spawnPoint(); p.y += 0.6; ctx.spawnProp(t, p, Math.random() * 6); },
+  ...['crate', 'barrel', 'explosive', 'propane', 'ball', 'block', 'plank', 'pallet', 'chair', 'table', 'toilet',
+    'cone', 'sandbags', 'dumpster', 'lamp', 'car'].map((t) => ({
+    cat: 'Props', label: PROP_TYPES[t].label, icon: PROP_TYPES[t].icon, small: PROP_TYPES[t].explosive ? 'explodes' : '',
+    run: () => {
+      // set it down on its base, facing the way the player faces
+      const d = PROP_TYPES[t];
+      const p = spawnPoint();
+      p.y += (d.half ? d.half[1] : d.h || d.r) + 0.08;
+      ctx.spawnProp(t, p, d.shape === 'box' ? ctx.player.yaw : Math.random() * 6);
+    },
   })),
   {
     cat: 'Props', label: 'Crate Wall', icon: '🧱', small: 'knock it down', run: () => {

@@ -7,6 +7,17 @@ const TYPES = {
   barrel:    { label: 'Barrel',           icon: '🛢️', shape: 'cyl', r: 0.3, h: 0.45, color: 0x3d6ea8, density: 250, hp: 140, rest: 0.1, debris: 0x3d6ea8 },
   explosive: { label: 'Explosive Barrel', icon: '💥', shape: 'cyl', r: 0.3, h: 0.45, color: 0xc62828, density: 250, hp: 45, rest: 0.1, explosive: true, debris: 0xc62828 },
   ball:      { label: 'Ball',             icon: '🏀', shape: 'ball', r: 0.38, color: 0xf08a24, density: 80, hp: Infinity, rest: 0.85 },
+  // half extents are (x, up, forward); models come from assets/models.glb
+  chair:     { label: 'Chair',            icon: '🪑', shape: 'box', half: [0.23, 0.45, 0.22], color: 0x7a4a22, density: 60, hp: 60, rest: 0.1, debris: 0x7a4a22 },
+  table:     { label: 'Table',            icon: '🍽️', shape: 'box', half: [0.6, 0.38, 0.4], color: 0x7a4a22, density: 40, hp: 120, rest: 0.1, debris: 0x7a4a22 },
+  cone:      { label: 'Traffic Cone',     icon: '🚧', shape: 'cyl', r: 0.17, h: 0.35, color: 0xf2441a, density: 30, hp: Infinity, rest: 0.3 },
+  propane:   { label: 'Propane Tank',     icon: '🔥', shape: 'cyl', r: 0.155, h: 0.26, color: 0xdddddd, density: 300, hp: 30, rest: 0.1, explosive: true, blast: [6, 0.9] },
+  pallet:    { label: 'Pallet',           icon: '🟫', shape: 'box', half: [0.6, 0.072, 0.4], color: 0xc9a066, density: 200, hp: Infinity, rest: 0.1 },
+  dumpster:  { label: 'Dumpster',         icon: '🗑️', shape: 'box', half: [0.9, 0.74, 0.52], color: 0x55663c, density: 120, hp: Infinity, rest: 0.05 },
+  lamp:      { label: 'Street Lamp',      icon: '💡', shape: 'box', half: [0.12, 2.1, 0.12], color: 0x333a42, density: 600, hp: Infinity, rest: 0.05 },
+  sandbags:  { label: 'Sandbags',         icon: '🧱', shape: 'box', half: [0.95, 0.267, 0.18], color: 0x8a744a, density: 900, hp: Infinity, rest: 0.0 },
+  toilet:    { label: 'Toilet',           icon: '🚽', shape: 'box', half: [0.2, 0.4, 0.31], color: 0xe6e6e0, density: 250, hp: 60, rest: 0.05, debris: 0xe6e6e0 },
+  car:       { label: 'Car',              icon: '🚗', shape: 'box', half: [0.92, 0.6, 2.14], color: 0x2a5a9a, density: 160, hp: 380, rest: 0.05, explosive: true, blast: [9, 1.5] },
   block:     { label: 'Heavy Block',      icon: '🧱', shape: 'box', half: [0.5, 0.5, 0.5], color: 0x6f7378, density: 1600, hp: Infinity, rest: 0.05 },
   plank:     { label: 'Plank',            icon: '🪵', shape: 'box', half: [1.1, 0.05, 0.14], color: 0xc9a066, density: 300, hp: Infinity, rest: 0.1 },
   rocket:    { label: 'Rocket',           icon: '🚀', shape: 'ball', r: 0.06, color: 0x4a5a3a, density: 400, hp: Infinity, rest: 0 },
@@ -19,6 +30,8 @@ export const PROP_TYPES = TYPES;
 const MODEL_OF = {
   crate: 'Crate', barrel: 'Barrel', explosive: 'ExplosiveBarrel',
   block: 'Block', plank: 'Plank', grenade: 'Grenade', rocket: 'Rocket',
+  chair: 'Chair', table: 'Table', cone: 'TrafficCone', propane: 'PropaneTank', pallet: 'WoodenPallet',
+  dumpster: 'Dumpster', lamp: 'StreetLamp', sandbags: 'SandbagWall', toilet: 'Toilet', car: 'Car',
 };
 
 const geoCache = new Map();
@@ -144,7 +157,8 @@ export class Prop {
     if (this.def.explosive) {
       // slight delay so chain reactions ripple instead of recursing
       this.removeSoon = true;
-      this.ctx.later(0.08, () => { this.ctx.explode(p, 7, 1); this.remove(); });
+      const [radius, power] = this.def.blast || [7, 1];
+      this.ctx.later(0.08, () => { this.ctx.explode(p, radius, power); this.remove(); });
       this.hp = Infinity;
       return;
     }

@@ -108,6 +108,15 @@ const _qInv = new THREE.Quaternion();
 const KIN = () => RAPIER.RigidBodyType.KinematicPositionBased;
 const DYN = () => RAPIER.RigidBodyType.Dynamic;
 
+/** Some NPCs wear something on their head (models by Codex, origin at the head centre). */
+function pickHat(kind) {
+  const r = Math.random();
+  const name = kind === 'thug' ? (r < 0.55 ? 'Balaclava' : r < 0.75 ? 'CombatHelmet' : null)
+    : kind === 'civilian' ? (r < 0.16 ? 'HardHat' : r < 0.26 ? 'PoliceCap' : null)
+    : null;
+  return name ? getModel(name) : null;
+}
+
 /** Cross-section left where a limb was removed: flesh, a ring of fat, and a bone end. */
 function makeStump(radius) {
   const g = new THREE.Group(); // +Y points out of the wound
@@ -236,6 +245,7 @@ export class Ragdoll {
         }
       }
       scene.add(mesh);
+      const hat = name === 'head' && pickHat(this.kind);
       // the meshes bullets can punch holes in; "body" ones (skin, shirt, trousers) have flesh behind them
       const bodyMats = new Set(Object.values(tint));
       const skin = [];
@@ -243,6 +253,7 @@ export class Ragdoll {
       // local box around the part, used to work out where a bullet comes out the other side
       const ext = d.shape === 'box' ? d.half : d.shape === 'ball' ? [d.r, d.r, d.r] : [d.r, d.h + d.r, d.r];
       this.parts[name] = { name, def: d, body, collider, mesh, skin, ext, hp: d.hp, gone: false, inertia: body.mass() * len * len / 12 };
+      if (hat) mesh.add(hat); // added after `skin` was collected, so headwear is not cut by wounds
       this.pose[name] = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
       this.captured[name] = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
       this.colHandles.add(collider.handle);

@@ -101,6 +101,11 @@ If the file is missing the game falls back to primitive shapes.
 - `models/build_models.py` - regenerates every model and re-exports the GLB. Open the .blend, then run it from the Scripting tab.
 - `models/previews/` - renders.
 
+The library also holds models that are built and exported but not used by the game yet: melee weapons (Axe, BaseballBat, Crowbar,
+Katana, Chainsaw, SledgeHammer) and guns (DoubleBarrel, Uzi, Minigun, Crossbow, Flamethrower). The props (chair, table, toilet, traffic cone,
+propane tank, pallet, sandbags, dumpster, street lamp, car) are in the spawn menu, and the headwear (PoliceCap, HardHat, CombatHelmet, Balaclava)
+is worn by some NPCs.
+
 Rules the game relies on: one object per model, named as in `MODEL_OF` (`ragdoll.js`, `props.js`) and `VIEWMODELS` (`weapons.js`);
 +Y is forward in Blender; character part origins sit at the collider centre; materials named `Skin`, `Shirt` and `Pants` are re-coloured per NPC.
 Hand-edit the models in Blender if you like, but re-running the script overwrites them, so export with File > Export > glTF (selection only) instead.
