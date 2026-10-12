@@ -27,9 +27,53 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 400);
 scene.add(camera);
 
+// ---- helmet-cam lens: the scene is drawn to a texture, then through a wide-angle "lens" shader
+const lens = {
+  target: new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, samples: 4 }),
+  scene: new THREE.Scene(),
+  camera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1),
+  material: new THREE.ShaderMaterial({
+    depthTest: false,
+    depthWrite: false,
+    uniforms: { tScene: { value: null }, uTime: { value: 0 }, uAspect: { value: 1 } },
+    vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
+    fragmentShader: `
+      uniform sampler2D tScene; uniform float uTime; uniform float uAspect; varying vec2 vUv;
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+      // barrel distortion: the further from the centre, the further out we sample
+      vec2 bend(vec2 uv, float k) {
+        vec2 c = uv * 2.0 - 1.0;
+        float r2 = c.x * c.x + (c.y * c.y) / (uAspect * uAspect);
+        c *= (1.0 + k * r2 + k * 0.4 * r2 * r2) / (1.0 + k * 1.4);
+        return c;
+      }
+      void main() {
+        float k = 0.26;
+        vec2 cr = bend(vUv, k * 1.035), cg = bend(vUv, k), cb = bend(vUv, k * 0.965);   // colour fringing
+        vec3 col = vec3(texture2D(tScene, cr * 0.5 + 0.5).r, texture2D(tScene, cg * 0.5 + 0.5).g, texture2D(tScene, cb * 0.5 + 0.5).b);
+        vec2 edge = smoothstep(vec2(1.0), vec2(0.985), abs(cg));
+        col *= edge.x * edge.y;                                          // black outside the lens image
+        vec2 v = vUv * 2.0 - 1.0;
+        col *= mix(0.12, 1.0, smoothstep(1.5, 0.5, length(v)));            // vignette
+        float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+        col = mix(vec3(l), col, 0.8) * vec3(0.97, 1.0, 1.03) * 1.12;       // washed-out, slightly cold sensor
+        col += (hash(gl_FragCoord.xy + fract(uTime) * 311.0) - 0.5) * 0.05 * (1.1 - min(l, 1.0));   // grain
+        col *= 0.985 + 0.015 * sin(gl_FragCoord.y * 1.6);                 // faint scanlines
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  }),
+};
+lens.scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), lens.material));
+
 function resize() {
-  renderer.setSize(window.innerWidth, window.innerHeight, false);
-  camera.aspect = window.innerWidth / window.innerHeight;
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  const pr = renderer.getPixelRatio();
+  lens.target.setSize(Math.max(2, Math.floor(w * pr)), Math.max(2, Math.floor(h * pr)));
+  lens.material.uniforms.uAspect.value = w / h;
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
@@ -51,7 +95,7 @@ const physicsHooks = {
   filterIntersectionPair() { return true; },
 };
 
-const input = { keys: new Set(), left: false, right: false, leftDown: false, rightDown: false, wheel: 0 };
+const input = { keys: new Set(), left: false, right: false, leftDown: false, rightDown: false, wheel: 0, mx: 0, my: 0 };
 
 const ctx = {
   scene, camera, renderer, world, input, sfx,
@@ -279,6 +323,7 @@ const SPAWN_ITEMS = [
   { cat: 'World', label: 'Clean Blood', icon: '🧽', small: 'decals + particles', run: () => ctx.gore.clear() },
   { cat: 'World', label: 'Clear All', icon: '🗑️', small: 'wipe the sandbox', run: clearAll },
   { cat: 'World', label: 'Slow-mo', icon: '⏳', small: 'toggle (T)', run: () => toggleSlowmo() },
+  { cat: 'World', label: 'Helmet Cam', icon: '📹', small: 'toggle (V)', run: () => toggleHelmet() },
 ];
 
 function buildMenu() {
@@ -301,6 +346,17 @@ function buildMenu() {
   }
 }
 buildMenu();
+
+const crosshairEl = $('crosshair');
+const camTimeEl = $('cam-time');
+let camClock = 0;
+ctx.helmet = false;
+function toggleHelmet() {
+  ctx.helmet = !ctx.helmet;
+  document.body.classList.toggle('helmet', ctx.helmet);
+  camClock = 0;
+  sfx.tick();
+}
 
 function toggleSlowmo() {
   ctx.timeScale = ctx.timeScale === 1 ? 0.2 : 1;
@@ -346,7 +402,11 @@ document.addEventListener('pointerlockerror', () => { lockFallback = true; });
 
 document.addEventListener('mousemove', (e) => {
   if (!gameActive()) return;
-  if (document.pointerLockElement === canvas || lockFallback) ctx.player.look(e.movementX, e.movementY);
+  if (document.pointerLockElement === canvas || lockFallback) {
+    ctx.player.look(e.movementX, e.movementY);
+    input.mx += e.movementX;
+    input.my += e.movementY;
+  }
 });
 
 document.addEventListener('mousedown', (e) => {
@@ -375,6 +435,7 @@ document.addEventListener('keydown', (e) => {
     if (n >= 1 && n <= WEAPONS.length) ctx.weapons.select(n - 1);
   }
   if (e.code === 'KeyT') toggleSlowmo();
+  if (e.code === 'KeyV') toggleHelmet();
   if (e.code === 'KeyX') deleteTarget();
   if (e.code === 'KeyC') { clearAll(); toast('CLEARED'); }
 });
@@ -426,7 +487,7 @@ function tick(now) {
   if (fpsAcc > 0.5) { fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
 
   const active = gameActive();
-  ctx.player.update(sdt, input, active);
+  ctx.player.update(sdt, input, active, dt);
   if (active) ctx.weapons.update(dt, input);
 
   // timers (run in sim time so slow-mo stretches fuses and chain reactions)
@@ -469,8 +530,29 @@ function tick(now) {
   input.leftDown = false;
   input.rightDown = false;
   input.wheel = 0;
+  input.mx = 0;
+  input.my = 0;
 
-  renderer.render(scene, camera);
+  // crosshair is hidden while looking down the sights, and always in helmet cam
+  crosshairEl.classList.toggle('hide', ctx.helmet || ctx.weapons.ads > 0.4);
+
+  if (ctx.helmet) {
+    camClock -= dt;
+    if (camClock <= 0) {
+      camClock = 0.5;
+      const d = new Date();
+      const p2 = (n) => String(n).padStart(2, '0');
+      camTimeEl.textContent = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}  ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+    }
+    renderer.setRenderTarget(lens.target);
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(null);
+    lens.material.uniforms.tScene.value = lens.target.texture;
+    lens.material.uniforms.uTime.value = now / 1000;
+    renderer.render(lens.scene, lens.camera);
+  } else {
+    renderer.render(scene, camera);
+  }
 }
 
 $('loading').remove();

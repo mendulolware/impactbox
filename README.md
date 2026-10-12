@@ -17,7 +17,8 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | --- | --- |
 | WASD / Shift / Space | move / sprint / jump |
 | LMB | fire / swing / throw / grab |
-| RMB | throw the object you're holding (Grab Gun) |
+| RMB | aim down the sights (guns); throw the held object (Grab Gun) |
+| V | helmet cam on/off |
 | 1-6 or wheel | Pistol, Shotgun, Rifle, Machete, Grenade, Grab Gun |
 | Q (or Tab) | spawn menu |
 | T | slow-mo |
@@ -48,6 +49,12 @@ An NPC is in one of three modes (`ragdoll.js`):
 Parts of the same NPC never collide with each other (contact hook in `main.js`); soft joint limits stop limbs folding through the body.
 Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted after one of its joints was cut.
 
+## First person
+
+- **Hands:** `HandR` (grip) and `HandL` (support) models are attached per weapon. Placements live in the `VIEW` table in `weapons.js`.
+- **Aiming:** right mouse moves the weapon so its sight line (`sight` in `VIEW`) sits on the screen centre, narrows the field of view, tightens spread and slows you down. Guns have real rear notches and front posts.
+- **Helmet cam (V):** wide field of view drawn through a lens shader in `main.js` (barrel distortion, colour fringing, vignette, grain), a camera that lags slightly behind your aim, heavier head bob and a REC overlay. Aiming in this view shoulders the weapon below the camera instead of putting the sights on screen, as in real helmet footage; shots leave from eye level along the weapon.
+
 ## Gore
 
 `gore.js`: stretched blood droplets that stick where they land (floors, walls, ramps), procedural splatter decals that drip on walls,
@@ -59,7 +66,7 @@ pools that spread under bodies and stumps, wounds stuck onto the body part that 
 All models are made in Blender and exported to `assets/models.glb`, which `models.js` loads at startup.
 If the file is missing the game falls back to primitive shapes.
 
-- `models/impactbox-models.blend` - the Blender scene (character parts, weapons, props).
+- `models/impactbox-models.blend` - the Blender scene (character parts, weapons, first-person hands, props).
 - `models/build_models.py` - regenerates every model and re-exports the GLB. Open the .blend, then run it from the Scripting tab.
 - `models/previews/` - renders.
 

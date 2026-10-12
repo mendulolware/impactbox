@@ -25,10 +25,43 @@ function groundTexture() {
 export function buildWorld(ctx) {
   const { scene, world } = ctx;
 
-  scene.background = new THREE.Color(0x8fb8e0);
-  scene.fog = new THREE.Fog(0x8fb8e0, 50, 170);
+  // Sky: a gradient dome with a sun. A small copy of it is baked into an environment map, which
+  // is what lets metal on the weapons and barrels reflect something instead of rendering black.
+  const sunDir = new THREE.Vector3(30, 50, 20).normalize();
+  const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: { sunDir: { value: sunDir } },
+    vertexShader: `varying vec3 vDir; void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `
+      uniform vec3 sunDir; varying vec3 vDir;
+      void main() {
+        vec3 d = normalize(vDir);
+        vec3 zenith = vec3(0.13, 0.30, 0.66), horizon = vec3(0.60, 0.72, 0.84), ground = vec3(0.20, 0.19, 0.18);
+        vec3 col = mix(horizon, zenith, pow(clamp(d.y, 0.0, 1.0), 0.55));
+        col = mix(col, ground, smoothstep(0.0, -0.08, d.y));
+        float s = max(dot(d, sunDir), 0.0);
+        col += vec3(1.0, 0.9, 0.72) * (pow(s, 400.0) * 8.0 + pow(s, 14.0) * 0.22);
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(360, 32, 16), skyMat);
+  sky.frustumCulled = false;
+  scene.add(sky);
+  ctx.sky = sky;
 
-  scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x4d4a45, 1.0));
+  const envScene = new THREE.Scene();
+  envScene.add(new THREE.Mesh(new THREE.SphereGeometry(20, 32, 16), skyMat));
+  const pmrem = new THREE.PMREMGenerator(ctx.renderer);
+  scene.environment = pmrem.fromScene(envScene, 0, 0.1, 100).texture;
+  pmrem.dispose();
+
+  const horizon = new THREE.Color().setRGB(0.60, 0.72, 0.84);
+  scene.background = horizon;
+  scene.fog = new THREE.Fog(horizon, 60, 220);
+
+  scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x4d4a45, 0.45)); // the environment map supplies the rest
   const sun = new THREE.DirectionalLight(0xfff1dc, 2.4);
   sun.position.set(30, 50, 20);
   sun.castShadow = true;

@@ -1,7 +1,11 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 
-const EYE = 0.7; // eye offset above capsule centre
+const EYE = 0.7;          // eye offset above capsule centre
+const HELMET_UP = 0.1;    // the helmet camera sits a little above the eyes
+const FOV = 75, FOV_HELMET = 98;
+
+const _e = new THREE.Euler();
 
 export class Player {
   constructor(ctx, pos) {
@@ -24,32 +28,48 @@ export class Player {
 
     this.pos = new THREE.Vector3(pos.x, pos.y, pos.z);
     this.vel = new THREE.Vector3();
-    this.yaw = 0;
+    this.yaw = 0;             // where the player is aiming
     this.pitch = 0;
+    this.camYaw = 0;          // where the camera is looking (lags behind in helmet cam)
+    this.camPitch = 0;
+    this.aimOff = { yaw: 0, pitch: 0 };       // aim minus camera: the weapon rig turns by this
+    this.aimQuat = new THREE.Quaternion();    // true aim direction, used for shooting
     this.kickPitch = 0;
+    this.shake = 0;
+    this.sens = 1;
+    this.fov = FOV;
     this.grounded = false;
     this.bob = 0;
     this.spawn = pos;
   }
 
   look(dx, dy) {
-    this.yaw -= dx * 0.0022;
-    this.pitch = THREE.MathUtils.clamp(this.pitch - dy * 0.0022, -1.5, 1.5);
+    const s = 0.0022 * this.sens;
+    this.yaw -= dx * s;
+    this.pitch = THREE.MathUtils.clamp(this.pitch - dy * s, -1.5, 1.5);
   }
 
-  recoil(k) { this.kickPitch += k; }
+  recoil(k) {
+    this.kickPitch += k;
+    this.shake = Math.min(1, this.shake + k * 4);
+  }
 
-  update(dt, input, enabled) {
+  /** dt is game time (slow-mo scaled); rdt is real time, used for camera smoothing. */
+  update(dt, input, enabled, rdt = dt) {
     const k = input.keys;
+    const helmet = !!this.ctx.helmet;
+    const ads = this.ctx.weapons ? this.ctx.weapons.ads : 0;
+    this.sens = 1 - 0.45 * ads;
+
     const f = enabled ? (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0) : 0;
     const s = enabled ? (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0) : 0;
-    const sprint = enabled && (k.has('ShiftLeft') || k.has('ShiftRight'));
+    const sprint = enabled && ads < 0.3 && (k.has('ShiftLeft') || k.has('ShiftRight'));
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
     let wx = -sin * f + cos * s;
     let wz = -cos * f - sin * s;
     const l = Math.hypot(wx, wz);
     if (l > 0) { wx /= l; wz /= l; }
-    const speed = sprint ? 9 : 5.2;
+    const speed = (sprint ? 9 : 5.2) * (1 - 0.45 * ads);
     const accel = this.grounded ? 14 : 3.5;
     const a = Math.min(1, accel * dt);
     this.vel.x += (wx * speed - this.vel.x) * a;
@@ -74,11 +94,56 @@ export class Player {
       this.vel.set(0, 0, 0);
     }
 
-    if (this.grounded && l > 0) this.bob += dt * speed * 1.6;
+    const moving = this.grounded && l > 0;
+    if (moving) this.bob += dt * speed * 1.6;
     this.kickPitch *= Math.max(0, 1 - dt * 9);
+    this.shake *= Math.max(0, 1 - rdt * 7);
+
+    // ---- camera
+    const aimPitch = this.pitch + this.kickPitch;
+    if (helmet) {
+      // a head-mounted camera follows the aim with a slight delay; the weapon leads it
+      const c = 1 - Math.exp(-rdt * 15);
+      let dy = this.yaw - this.camYaw;
+      dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      this.camYaw += dy * c;
+      this.camPitch += (aimPitch - this.camPitch) * c;
+      let off = this.yaw - this.camYaw;
+      this.aimOff.yaw = Math.atan2(Math.sin(off), Math.cos(off));
+      this.aimOff.pitch = aimPitch - this.camPitch;
+    } else {
+      this.camYaw = this.yaw;
+      this.camPitch = aimPitch;
+      this.aimOff.yaw = 0;
+      this.aimOff.pitch = 0;
+    }
+    this.aimQuat.setFromEuler(_e.set(aimPitch, this.yaw, 0, 'YXZ'));
+
+    const steady = 1 - 0.7 * ads;
+    const bobAmp = (helmet ? 0.05 : 0.025) * steady * (this.grounded ? 1 : 0);
+    // helmet cam: head sways with each step, and tips toward the stock when the weapon is shouldered
+    const roll = helmet ? Math.sin(this.bob) * 0.014 * steady * (moving ? 1 : 0) - 0.05 * ads : 0;
+    const sh = helmet ? this.shake * 0.02 : this.shake * 0.004;
 
     const cam = this.ctx.camera;
-    cam.position.set(this.pos.x, this.pos.y + EYE + Math.sin(this.bob * 2) * 0.025 * (this.grounded ? 1 : 0), this.pos.z);
-    cam.rotation.set(this.pitch + this.kickPitch, this.yaw, 0, 'YXZ');
+    cam.position.set(
+      this.pos.x,
+      this.pos.y + EYE + (helmet ? HELMET_UP : 0) + Math.sin(this.bob * 2) * bobAmp,
+      this.pos.z
+    );
+    cam.rotation.set(
+      this.camPitch + (Math.random() - 0.5) * sh,
+      this.camYaw + (Math.random() - 0.5) * sh,
+      roll + (Math.random() - 0.5) * sh,
+      'YXZ'
+    );
+
+    // eyes narrow in on the sights; a helmet camera has a fixed lens, so it barely changes
+    const fov = (helmet ? FOV_HELMET : FOV) * (1 - (helmet ? 0.05 : 0.3) * ads);
+    this.fov += (fov - this.fov) * Math.min(1, rdt * 14);
+    if (Math.abs(cam.fov - this.fov) > 0.01) {
+      cam.fov = this.fov;
+      cam.updateProjectionMatrix();
+    }
   }
 }

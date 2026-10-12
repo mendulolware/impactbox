@@ -7,13 +7,14 @@ Each model is one object whose origin is the point the game attaches it by:
   - weapons: roughly the grip
   - props: centre of the collider
 Material names are part of the contract: the game re-tints Skin / Shirt / Pants per NPC.
+The game has an environment map, so metals can be properly metallic.
 """
 import bpy
 import bmesh
 import math
 import os
 from math import pi, sin, cos, radians
-from mathutils import Matrix, Euler
+from mathutils import Matrix, Euler, Vector
 
 assert bpy.data.filepath.endswith("impactbox-models.blend"), "open models/impactbox-models.blend first"
 ROOT = os.path.dirname(os.path.dirname(bpy.data.filepath))
@@ -49,36 +50,40 @@ def material(name, color, rough=0.6, metal=0.0, emit=0.0):
     return m
 
 
-# metal is kept low on purpose: the game has no environment map, so true metals render black
-Skin = material('Skin', (0.80, 0.56, 0.42), 0.65)
-Shirt = material('Shirt', (0.62, 0.10, 0.08), 0.8)
-Pants = material('Pants', (0.10, 0.13, 0.22), 0.85)
-Hair = material('Hair', (0.10, 0.06, 0.04), 0.7)
-Shoe = material('Shoe', (0.07, 0.07, 0.08), 0.6)
-Sole = material('Sole', (0.75, 0.75, 0.72), 0.8)
-Belt = material('Belt', (0.09, 0.06, 0.04), 0.6)
-EyeWhite = material('EyeWhite', (0.92, 0.92, 0.90), 0.3)
-EyeDark = material('EyeDark', (0.02, 0.02, 0.02), 0.3)
-Mouth = material('Mouth', (0.30, 0.07, 0.07), 0.6)
+Skin = material('Skin', (0.78, 0.55, 0.42), 0.55)
+Shirt = material('Shirt', (0.42, 0.10, 0.09), 0.85)
+Pants = material('Pants', (0.09, 0.11, 0.17), 0.9)
+Hair = material('Hair', (0.05, 0.035, 0.025), 0.85)
+Shoe = material('Shoe', (0.05, 0.045, 0.04), 0.55)
+Sole = material('Sole', (0.2, 0.2, 0.19), 0.9)
+Belt = material('Belt', (0.07, 0.045, 0.03), 0.5)
+EyeWhite = material('EyeWhite', (0.85, 0.84, 0.80), 0.25)
+EyeDark = material('EyeDark', (0.06, 0.035, 0.02), 0.15)
+Lip = material('Lip', (0.52, 0.27, 0.24), 0.5)
 
-Gunmetal = material('Gunmetal', (0.16, 0.17, 0.19), 0.4, 0.3)
-Polymer = material('Polymer', (0.05, 0.05, 0.06), 0.75)
-Steel = material('Steel', (0.68, 0.70, 0.74), 0.3, 0.35)
-Brass = material('Brass', (0.78, 0.55, 0.18), 0.4, 0.3)
-Wood = material('Wood', (0.36, 0.20, 0.09), 0.7)
-GrenadeBody = material('GrenadeBody', (0.15, 0.24, 0.12), 0.7)
-GrenadeDark = material('GrenadeDark', (0.07, 0.11, 0.06), 0.8)
-GrabBody = material('GrabBody', (0.16, 0.22, 0.36), 0.5, 0.2)
+Gunmetal = material('Gunmetal', (0.13, 0.135, 0.15), 0.42, 0.85)
+Polymer = material('Polymer', (0.035, 0.035, 0.04), 0.7)
+Steel = material('Steel', (0.62, 0.64, 0.67), 0.28, 0.95)
+Bore = material('Bore', (0.01, 0.01, 0.01), 0.9)
+Brass = material('Brass', (0.72, 0.52, 0.2), 0.35, 0.9)
+Wood = material('Wood', (0.30, 0.15, 0.06), 0.55)
+GrenadeBody = material('GrenadeBody', (0.13, 0.19, 0.10), 0.65, 0.2)
+GrenadeDark = material('GrenadeDark', (0.06, 0.09, 0.05), 0.8)
+GrabBody = material('GrabBody', (0.14, 0.19, 0.30), 0.45, 0.5)
 GlowCyan = material('GlowCyan', (0.25, 0.80, 1.0), 0.3, 0.0, emit=3.0)
 
-CrateWood = material('CrateWood', (0.60, 0.40, 0.19), 0.85)
-CrateFrame = material('CrateFrame', (0.38, 0.23, 0.10), 0.85)
-BarrelBlue = material('BarrelBlue', (0.10, 0.26, 0.52), 0.5, 0.25)
-BarrelRed = material('BarrelRed', (0.66, 0.08, 0.06), 0.5, 0.25)
-BarrelRim = material('BarrelRim', (0.22, 0.24, 0.27), 0.5, 0.3)
-Hazard = material('Hazard', (0.95, 0.72, 0.04), 0.6)
-Concrete = material('Concrete', (0.44, 0.45, 0.47), 0.95)
-ConcreteDark = material('ConcreteDark', (0.33, 0.34, 0.36), 0.95)
+Glove = material('Glove', (0.045, 0.045, 0.05), 0.8)
+GlovePad = material('GlovePad', (0.10, 0.10, 0.105), 0.6)
+Sleeve = material('Sleeve', (0.17, 0.20, 0.13), 0.9)
+
+CrateWood = material('CrateWood', (0.50, 0.33, 0.16), 0.85)
+CrateFrame = material('CrateFrame', (0.30, 0.18, 0.08), 0.85)
+BarrelBlue = material('BarrelBlue', (0.08, 0.20, 0.42), 0.45, 0.6)
+BarrelRed = material('BarrelRed', (0.52, 0.06, 0.05), 0.45, 0.6)
+BarrelRim = material('BarrelRim', (0.2, 0.21, 0.23), 0.45, 0.8)
+Hazard = material('Hazard', (0.85, 0.62, 0.03), 0.6)
+Concrete = material('Concrete', (0.40, 0.41, 0.42), 0.95)
+ConcreteDark = material('ConcreteDark', (0.30, 0.31, 0.32), 0.95)
 
 
 def xf(loc=(0, 0, 0), rot=(0, 0, 0)):
@@ -142,22 +147,25 @@ class Model:
         self._bevel(rim, bevel, m)
         return self
 
-    def sphere(self, r, loc, m, scale=(1, 1, 1), rot=(0, 0, 0), seg=16, rings=10, keep=None):
-        """keep = optional predicate on the unscaled vertex position; other verts are deleted."""
+    def sphere(self, r, loc, m, scale=(1, 1, 1), rot=(0, 0, 0), seg=16, rings=10, keep=None, warp=None):
+        """keep = optional predicate on the unscaled vertex position; other verts are deleted.
+        warp = optional function that reshapes each vertex position in place (sculpting)."""
         verts = bmesh.ops.create_uvsphere(self.bm, u_segments=seg, v_segments=rings, radius=r)['verts']
         if keep:
             drop = [v for v in verts if not keep(v.co)]
             verts = [v for v in verts if keep(v.co)]
             bmesh.ops.delete(self.bm, geom=drop, context='VERTS')
         for v in verts:
+            if warp:
+                warp(v.co)
             v.co.x *= scale[0]; v.co.y *= scale[1]; v.co.z *= scale[2]
         bmesh.ops.transform(self.bm, matrix=xf(loc, rot), verts=verts)
         self._paint(verts, m)
         return self
 
-    def capsule(self, r, h, loc, m, rot=(0, 0, 0), seg=14, taper_bottom=1.0, taper_top=1.0):
+    def capsule(self, r, h, loc, m, rot=(0, 0, 0), seg=14, taper_bottom=1.0, taper_top=1.0, rings=9):
         """Z-axis capsule, h = half length of the straight section (matches Rapier's capsule)."""
-        verts = bmesh.ops.create_uvsphere(self.bm, u_segments=seg, v_segments=9, radius=r)['verts']
+        verts = bmesh.ops.create_uvsphere(self.bm, u_segments=seg, v_segments=rings, radius=r)['verts']
         for v in verts:
             if v.co.z > 0:
                 v.co.x *= taper_top; v.co.y *= taper_top
@@ -166,6 +174,41 @@ class Model:
                 v.co.x *= taper_bottom; v.co.y *= taper_bottom
                 v.co.z = v.co.z * taper_bottom - h
         bmesh.ops.transform(self.bm, matrix=xf(loc, rot), verts=verts)
+        self._paint(verts, m)
+        return self
+
+    def limb(self, p0, p1, r, m, r2=None, seg=8, rings=5):
+        """Capsule between two points; r2 = radius at the p1 end."""
+        a, b = Vector(p0), Vector(p1)
+        d = b - a
+        rot = Vector((0, 0, 1)).rotation_difference(d.normalized()).to_euler()
+        return self.capsule(r, d.length / 2, (a + b) / 2, m, rot=rot, seg=seg, rings=rings,
+                            taper_top=(r2 / r) if r2 else 1.0)
+
+    def chain(self, pts, r, m, seg=6):
+        """A bent finger: capsules joined end to end."""
+        for a, b in zip(pts, pts[1:]):
+            self.limb(a, b, r, m, seg=seg)
+        return self
+
+    def loft(self, rings, loc, m, rot=(0, 0, 0), seg=14):
+        """Skin a stack of ellipses along Z. Each ring is (z, rx, ry[, cx, cy]); ends are capped.
+        This is what gives limbs and torsos an anatomical profile instead of a tube."""
+        bm = self.bm
+        loops = []
+        for ring in rings:
+            z, rx, ry = ring[:3]
+            cx = ring[3] if len(ring) > 3 else 0.0
+            cy = ring[4] if len(ring) > 4 else 0.0
+            loops.append([bm.verts.new((cx + rx * cos(2 * pi * i / seg), cy + ry * sin(2 * pi * i / seg), z))
+                          for i in range(seg)])
+        for a, b in zip(loops, loops[1:]):
+            for i in range(seg):
+                bm.faces.new((a[i], a[(i + 1) % seg], b[(i + 1) % seg], b[i]))
+        bm.faces.new(loops[0])
+        bm.faces.new(loops[-1])
+        verts = [v for l in loops for v in l]
+        bmesh.ops.transform(bm, matrix=xf(loc, rot), verts=verts)
         self._paint(verts, m)
         return self
 
@@ -234,56 +277,88 @@ def at(name):
     return (CHAR_AT[0] + p[0], CHAR_AT[1] + p[1], CHAR_AT[2] + p[2])
 
 
+def head_shape(c, k=1.0):
+    """Sculpt a sphere (r = 0.1) into a skull: narrow, tall, tapering jaw, flat face."""
+    x, y, z = c.x * 0.80, c.y, c.z * 1.2
+    if z < 0:
+        t = min(1.0, -z / 0.12)
+        x *= 1 - 0.30 * t * t                                # jaw narrows toward the chin
+        y *= (1 - 0.30 * t) if y < 0 else (1 - 0.05 * t)     # back of the skull tucks into the neck
+    if y > 0.062:
+        y = 0.062 + (y - 0.062) * 0.55                       # the face is flatter than the back of the head
+    c.x, c.y, c.z = x * k, y * k, z * k
+
+
 m = Model('Head')
-m.sphere(0.118, (0, 0, 0.005), Skin, scale=(0.92, 1.0, 1.08), seg=20, rings=14)
-m.sphere(0.085, (0, 0.022, -0.062), Skin, scale=(0.95, 0.95, 0.8), seg=16, rings=10)          # jaw
-m.sphere(0.128, (0, -0.012, 0.024), Hair, scale=(0.98, 1.05, 1.08), seg=20, rings=14,
-         keep=lambda c: c.z > 0.010 + c.y * 0.5)                                               # hair cap
+m.sphere(0.1, (0, 0, 0), Skin, seg=24, rings=18, warp=head_shape)
+m.sphere(0.1, (0, -0.004, 0.004), Hair, seg=24, rings=18, warp=lambda c: head_shape(c, 1.07),
+         keep=lambda c: c.z > 0.05 + max(0.0, c.y) * 0.22 or (c.y < 0.01 and c.z > -0.03) or (c.y < -0.04 and c.z > -0.06))
 for sx in (-1, 1):
-    m.sphere(0.021, (sx * 0.042, 0.094, 0.014), EyeWhite, seg=10, rings=8)
-    m.sphere(0.011, (sx * 0.042, 0.110, 0.014), EyeDark, seg=8, rings=6)
-    m.box((0.042, 0.012, 0.009), (sx * 0.042, 0.106, 0.046), Hair, rot=(0, sx * 0.15, 0), bevel=0.002)
-    m.sphere(0.022, (sx * 0.108, 0.0, 0.0), Skin, scale=(0.5, 1.0, 1.3), seg=8, rings=6)      # ears
-m.box((0.022, 0.03, 0.036), (0, 0.112, -0.012), Skin, bevel=0.008)                             # nose
-m.box((0.05, 0.008, 0.008), (0, 0.098, -0.058), Mouth, bevel=0.002)
-m.cyl(0.042, 0.09, (0, -0.005, -0.13), Skin, seg=12)                                           # neck
+    m.sphere(0.0125, (sx * 0.032, 0.0665, 0.02), EyeWhite, seg=12, rings=8)
+    m.sphere(0.0065, (sx * 0.032, 0.0745, 0.02), EyeDark, seg=10, rings=6)
+    m.sphere(0.0145, (sx * 0.032, 0.0685, 0.0275), Skin, scale=(1.15, 0.8, 0.5), seg=10, rings=6)       # upper lid
+    m.box((0.034, 0.008, 0.006), (sx * 0.033, 0.079, 0.04), Hair, rot=(0, sx * 0.12, 0), bevel=0.002)  # brow
+    m.sphere(0.02, (sx * 0.081, -0.006, 0.0), Skin, scale=(0.35, 0.8, 1.25), seg=8, rings=6)           # ear
+    m.sphere(0.009, (sx * 0.011, 0.085, -0.028), Skin, seg=8, rings=6)                                 # nostril wing
+m.prism([(0.074, 0.024), (0.075, -0.032), (0.101, -0.027), (0.097, -0.018)], 0.019, (0, 0, 0), Skin, bevel=0.004)  # nose
+m.sphere(0.01, (0, 0.073, -0.054), Lip, scale=(2.3, 0.8, 0.42), seg=10, rings=6)
+m.sphere(0.01, (0, 0.072, -0.063), Lip, scale=(2.0, 0.8, 0.5), seg=10, rings=6)
+m.loft([(-0.17, 0.047, 0.05), (-0.09, 0.044, 0.047, 0, -0.006)], (0, -0.004, 0), Skin, seg=12)         # neck
 m.finish(char, at('Head'))
 
 m = Model('Torso')
-m.box((0.30, 0.18, 0.44), (0, 0, 0), Shirt, bevel=0.045, taper=(1.2, 1.15), seg=3)
+m.loft([(-0.235, 0.132, 0.092), (-0.15, 0.138, 0.098), (-0.05, 0.152, 0.108, 0, 0.004),
+        (0.05, 0.170, 0.116, 0, 0.008), (0.13, 0.182, 0.112, 0, 0.004), (0.185, 0.176, 0.098),
+        (0.222, 0.115, 0.078), (0.238, 0.062, 0.062)], (0, 0, 0), Shirt, seg=20)
 for sx in (-1, 1):
-    m.sphere(0.074, (sx * 0.19, 0, 0.165), Shirt, seg=12, rings=8)                             # shoulders
-m.torus(0.05, 0.014, (0, 0, 0.222), Shirt, seg=16, sub=6)                                      # collar
-m.box((0.012, 0.004, 0.2), (0, 0.112, 0.05), Shirt, bevel=0.001)                               # placket
+    m.sphere(0.07, (sx * 0.195, 0, 0.162), Shirt, scale=(1, 0.95, 1.05), seg=12, rings=8)             # deltoids
+m.loft([(0.225, 0.05, 0.052), (0.262, 0.047, 0.05)], (0, -0.002, 0), Skin, seg=12)                   # neck base
+m.torus(0.058, 0.01, (0, -0.002, 0.236), Shirt, seg=18, sub=6)                                        # collar
+m.box((0.075, 0.006, 0.07), (0.085, 0.108, 0.07), Shirt, bevel=0.002)                                 # chest pocket
 m.finish(char, at('Torso'))
 
 m = Model('Pelvis')
-m.box((0.32, 0.19, 0.18), (0, 0, 0), Pants, bevel=0.04, taper=(1.05, 1.05), seg=3)
-m.box((0.34, 0.205, 0.036), (0, 0, 0.074), Belt, bevel=0.008)
-m.box((0.045, 0.012, 0.032), (0, 0.105, 0.074), Brass, bevel=0.004)
+m.loft([(-0.13, 0.11, 0.08), (-0.1, 0.176, 0.098), (-0.04, 0.18, 0.105), (0.02, 0.17, 0.106), (0.092, 0.14, 0.096)],
+       (0, 0, 0), Pants, seg=18)
+m.loft([(0.052, 0.156, 0.106), (0.094, 0.146, 0.101)], (0, 0, 0), Belt, seg=18)
+m.box((0.045, 0.012, 0.034), (0, 0.103, 0.073), Steel, bevel=0.004)                                   # buckle
 m.finish(char, at('Pelvis'))
 
 m = Model('UpperArm')
-m.capsule(0.046, 0.12, (0, 0, 0), Skin)
-m.capsule(0.056, 0.065, (0, 0, 0.062), Shirt, taper_bottom=1.0)                                # short sleeve
-m.torus(0.052, 0.007, (0, 0, -0.012), Shirt, seg=14, sub=6)                                    # sleeve hem
+m.loft([(-0.172, 0.036, 0.037), (-0.1, 0.04, 0.043), (0.02, 0.046, 0.052, 0, 0.004), (0.12, 0.05, 0.054),
+        (0.172, 0.044, 0.046)], (0, 0, 0), Skin, seg=12)
+m.sphere(0.038, (0, 0, -0.168), Skin, seg=10, rings=8)                                                # elbow
+m.loft([(-0.03, 0.05, 0.056, 0, 0.004), (0.06, 0.052, 0.058), (0.14, 0.054, 0.058), (0.18, 0.048, 0.05)],
+       (0, 0, 0), Shirt, seg=12)                                                                      # sleeve
+m.torus(0.052, 0.005, (0, 0.004, -0.03), Shirt, seg=14, sub=5)
 m.finish(char, at('UpperArm'))
 
 m = Model('Forearm')
-m.capsule(0.045, 0.11, (0, 0, 0), Skin, taper_bottom=0.78)
-m.box((0.036, 0.078, 0.09), (0, 0.004, -0.185), Skin, bevel=0.014)                             # hand
-m.box((0.022, 0.03, 0.045), (0, 0.048, -0.168), Skin, rot=(0.5, 0, 0), bevel=0.008)            # thumb
+m.loft([(-0.152, 0.025, 0.029), (-0.1, 0.029, 0.032), (0.0, 0.038, 0.041), (0.09, 0.043, 0.046),
+        (0.155, 0.037, 0.038)], (0, 0, 0), Skin, seg=12)
+m.box((0.03, 0.07, 0.085), (0, 0.004, -0.2), Skin, bevel=0.013, taper=(1, 0.8))                       # palm
+for i, y in enumerate((-0.024, -0.008, 0.008, 0.024)):                                               # fingers, slightly curled
+    m.chain([(0.0, y, -0.24), (0.006, y, -0.275), (0.016, y, -0.3 + abs(i - 1.5) * 0.006)], 0.0085, Skin)
+m.chain([(0.004, 0.036, -0.185), (0.01, 0.052, -0.22), (0.014, 0.055, -0.245)], 0.0105, Skin)          # thumb
 m.finish(char, at('Forearm'))
 
 m = Model('Thigh')
-m.capsule(0.078, 0.17, (0, 0, 0), Pants, taper_bottom=0.84)
+m.loft([(-0.244, 0.055, 0.058), (-0.15, 0.062, 0.067), (0.0, 0.076, 0.082, 0, 0.004), (0.15, 0.086, 0.09),
+        (0.246, 0.08, 0.084)], (0, 0, 0), Pants, seg=14)
+m.sphere(0.056, (0, 0.004, -0.242), Pants, seg=10, rings=8)                                           # knee
 m.finish(char, at('Thigh'))
 
 m = Model('Shin')
-m.capsule(0.064, 0.17, (0, 0, 0), Pants, taper_bottom=0.8)
-m.torus(0.05, 0.008, (0, 0, -0.165), Pants, seg=14, sub=6)                                     # trouser hem
-m.box((0.095, 0.235, 0.07), (0, 0.045, -0.2), Shoe, bevel=0.026, taper=(0.9, 0.92), seg=3)
-m.box((0.1, 0.24, 0.02), (0, 0.045, -0.238), Sole, bevel=0.005)
+m.loft([(-0.19, 0.039, 0.042), (-0.13, 0.041, 0.044), (0.0, 0.05, 0.055, 0, -0.004),
+        (0.12, 0.057, 0.064, 0, -0.008), (0.232, 0.054, 0.056)], (0, 0, 0), Pants, seg=14)
+m.torus(0.041, 0.006, (0, 0, -0.188), Pants, seg=14, sub=5)                                           # trouser hem
+m.cyl(0.044, 0.05, (0, -0.004, -0.178), Shoe, seg=12, bevel=0.006)                                    # ankle collar
+m.box((0.09, 0.2, 0.062), (0, 0.035, -0.203), Shoe, bevel=0.024, taper=(0.8, 0.9), seg=3)             # upper
+m.sphere(0.047, (0, 0.125, -0.208), Shoe, scale=(0.98, 1.2, 0.62), seg=12, rings=8)                   # toe box
+m.box((0.098, 0.262, 0.022), (0, 0.045, -0.237), Sole, bevel=0.007)
+m.box((0.09, 0.07, 0.014), (0, -0.045, -0.228), Sole, bevel=0.004)                                    # heel
+for i in range(4):
+    m.box((0.05, 0.007, 0.006), (0, 0.045 + i * 0.022, -0.172 - i * 0.004), Sole, rot=(0.25, 0, 0))   # laces
 m.finish(char, at('Shin'))
 
 # mirrored copies so the Blender scene shows a whole person (not exported)
@@ -299,53 +374,79 @@ for name in ('UpperArm', 'Forearm', 'Thigh', 'Shin'):
 weapons = collection('Weapons')
 WZ = 1.0  # display height
 
+# Sights are real: a rear notch and a front post on the centre line, so aiming down them works.
 m = Model('Pistol')
-m.box((0.028, 0.19, 0.03), (0, 0.01, 0.03), Gunmetal, bevel=0.004)                              # slide
+m.box((0.028, 0.19, 0.03), (0, 0.01, 0.03), Gunmetal, bevel=0.005)                              # slide
 m.box((0.0285, 0.04, 0.014), (0, 0.02, 0.038), Steel, bevel=0.002)                              # ejection port
-for i in range(5):
-    m.box((0.0295, 0.004, 0.022), (0, -0.045 - i * 0.008, 0.031), Polymer)                      # serrations
+for i in range(6):
+    m.box((0.0295, 0.0035, 0.022), (0, -0.04 - i * 0.007, 0.031), Polymer)                      # serrations
 m.box((0.026, 0.165, 0.02), (0, 0.0, 0.006), Polymer, bevel=0.003)                              # frame
-m.cyl(0.0075, 0.014, (0, 0.108, 0.031), Steel, rot=AXIS_Y, seg=10)                              # muzzle
-m.box((0.027, 0.046, 0.105), (0, -0.058, -0.046), Polymer, rot=(-0.25, 0, 0), bevel=0.007)      # grip
-m.box((0.008, 0.055, 0.006), (0, 0.004, -0.036), Polymer, bevel=0.002)                          # guard bottom
-m.box((0.008, 0.006, 0.032), (0, 0.031, -0.021), Polymer, bevel=0.002)                          # guard front
+m.box((0.02, 0.06, 0.01), (0, 0.065, -0.006), Polymer, bevel=0.002)                             # accessory rail
+for i in range(3):
+    m.box((0.022, 0.006, 0.004), (0, 0.048 + i * 0.016, -0.011), Polymer)
+m.cyl(0.0078, 0.016, (0, 0.108, 0.031), Steel, rot=AXIS_Y, seg=12)                              # barrel
+m.cyl(0.0048, 0.017, (0, 0.109, 0.031), Bore, rot=AXIS_Y, seg=10)
+m.box((0.027, 0.046, 0.105), (0, -0.058, -0.046), Polymer, rot=(-0.25, 0, 0), bevel=0.008)      # grip
+m.box((0.029, 0.05, 0.012), (0, -0.074, -0.1), Polymer, rot=(-0.25, 0, 0), bevel=0.003)         # magazine baseplate
+m.box((0.008, 0.055, 0.006), (0, 0.004, -0.036), Polymer, bevel=0.002)                          # trigger guard
+m.box((0.008, 0.006, 0.032), (0, 0.031, -0.021), Polymer, bevel=0.002)
 m.box((0.006, 0.006, 0.022), (0, 0.004, -0.017), Steel, rot=(0.3, 0, 0))                        # trigger
-m.box((0.004, 0.006, 0.006), (0, 0.097, 0.048), Polymer)                                        # front sight
-m.box((0.016, 0.006, 0.006), (0, -0.078, 0.048), Polymer)                                       # rear sight
+m.box((0.0305, 0.022, 0.005), (0, -0.01, 0.016), Steel, bevel=0.001)                            # slide stop
+m.box((0.0035, 0.006, 0.008), (0, 0.097, 0.049), Polymer)                                       # front post
+for sx in (-1, 1):
+    m.box((0.006, 0.007, 0.008), (sx * 0.0068, -0.078, 0.049), Polymer)                         # rear notch
 m.finish(weapons, (0.0, -1.5, WZ))
 
 m = Model('Shotgun')
 m.box((0.045, 0.2, 0.066), (0, 0, 0), Gunmetal, bevel=0.009)                                    # receiver
-m.cyl(0.013, 0.52, (0, 0.36, 0.016), Gunmetal, rot=AXIS_Y, seg=12)                              # barrel
+m.box((0.046, 0.06, 0.02), (0, 0.02, 0.012), Bore, bevel=0.002)                                 # ejection port
+m.cyl(0.013, 0.52, (0, 0.36, 0.016), Gunmetal, rot=AXIS_Y, seg=14)                              # barrel
+m.cyl(0.0105, 0.01, (0, 0.6205, 0.016), Bore, rot=AXIS_Y, seg=12)
 m.cyl(0.012, 0.42, (0, 0.31, -0.014), Gunmetal, rot=AXIS_Y, seg=12)                             # magazine tube
-m.cyl(0.025, 0.17, (0, 0.27, -0.014), Wood, rot=AXIS_Y, seg=10, bevel=0.005)                    # pump
-for i in range(5):
-    m.torus(0.025, 0.003, (0, 0.21 + i * 0.03, -0.014), Wood, rot=AXIS_Y, seg=10, sub=4)        # pump grooves
+m.cyl(0.014, 0.02, (0, 0.525, -0.014), Steel, rot=AXIS_Y, seg=12, bevel=0.003)                  # tube cap
+m.cyl(0.025, 0.17, (0, 0.27, -0.014), Wood, rot=AXIS_Y, seg=12, bevel=0.005)                    # pump
+for i in range(6):
+    m.torus(0.025, 0.003, (0, 0.205 + i * 0.026, -0.014), Wood, rot=AXIS_Y, seg=12, sub=4)      # pump grooves
 m.box((0.03, 0.012, 0.045), (0, 0.5, 0.001), Gunmetal, bevel=0.003)                             # barrel band
-m.sphere(0.004, (0, 0.61, 0.031), Brass, seg=6, rings=4)                                        # bead sight
-m.prism([(-0.095, 0.032), (-0.095, -0.032), (-0.17, -0.05), (-0.43, -0.105), (-0.445, -0.1),
-         (-0.445, 0.01), (-0.24, 0.03)], 0.04, (0, 0, 0), Wood, bevel=0.007)                    # stock
-m.box((0.008, 0.06, 0.006), (0, -0.04, -0.05), Gunmetal, bevel=0.002)
+m.box((0.01, 0.5, 0.004), (0, 0.36, 0.031), Gunmetal)                                           # sighting rib
+m.sphere(0.0045, (0, 0.6, 0.038), Brass, seg=8, rings=6)                                        # bead sight
+m.prism([(-0.095, 0.032), (-0.095, -0.032), (-0.17, -0.05), (-0.42, -0.105), (-0.43, -0.1),
+         (-0.43, 0.01), (-0.24, 0.03)], 0.04, (0, 0, 0), Wood, bevel=0.008)                     # stock
+m.box((0.042, 0.02, 0.118), (0, -0.44, -0.046), Polymer, rot=(-0.06, 0, 0), bevel=0.006)        # recoil pad
+m.box((0.008, 0.06, 0.006), (0, -0.04, -0.05), Gunmetal, bevel=0.002)                           # trigger guard
+m.box((0.008, 0.006, 0.02), (0, -0.012, -0.042), Gunmetal, bevel=0.002)
 m.box((0.006, 0.006, 0.02), (0, -0.04, -0.04), Steel, rot=(0.3, 0, 0))
 m.finish(weapons, (0.5, -1.5, WZ))
 
 m = Model('Rifle')
 m.box((0.045, 0.27, 0.06), (0, 0, 0), Gunmetal, bevel=0.006)                                    # receiver
-m.box((0.04, 0.21, 0.022), (0, -0.015, 0.038), Gunmetal, bevel=0.009)                           # dust cover
-m.box((0.047, 0.2, 0.052), (0, 0.235, 0.0), Wood, bevel=0.013)                                  # handguard
-m.cyl(0.009, 0.3, (0, 0.47, 0.006), Gunmetal, rot=AXIS_Y, seg=10)                               # barrel
-m.cyl(0.008, 0.21, (0, 0.24, 0.036), Gunmetal, rot=AXIS_Y, seg=10)                              # gas tube
-m.box((0.014, 0.02, 0.05), (0, 0.55, 0.03), Gunmetal, bevel=0.003)                              # front sight
-m.cyl(0.013, 0.045, (0, 0.635, 0.006), Gunmetal, rot=AXIS_Y, seg=10, bevel=0.003)               # muzzle brake
-m.box((0.014, 0.03, 0.014), (0, 0.11, 0.052), Gunmetal, bevel=0.003)                            # rear sight
+m.box((0.04, 0.21, 0.022), (0, -0.015, 0.038), Gunmetal, bevel=0.01)                            # dust cover
+for i in range(3):
+    m.box((0.041, 0.006, 0.02), (0, -0.07 + i * 0.06, 0.039), Gunmetal, bevel=0.002)            # cover ribs
+m.box((0.047, 0.2, 0.05), (0, 0.235, -0.002), Wood, bevel=0.014)                                # lower handguard
+m.box((0.036, 0.17, 0.022), (0, 0.235, 0.034), Wood, bevel=0.009)                               # upper handguard
+m.cyl(0.009, 0.3, (0, 0.47, 0.006), Gunmetal, rot=AXIS_Y, seg=12)                               # barrel
+m.cyl(0.008, 0.2, (0, 0.24, 0.036), Gunmetal, rot=AXIS_Y, seg=10)                               # gas tube
+m.box((0.02, 0.035, 0.05), (0, 0.345, 0.022), Gunmetal, bevel=0.004)                            # gas block
+m.cyl(0.0035, 0.25, (0, 0.47, -0.012), Steel, rot=AXIS_Y, seg=6)                                # cleaning rod
+m.box((0.014, 0.022, 0.048), (0, 0.55, 0.03), Gunmetal, bevel=0.003)                            # front sight base
+m.box((0.003, 0.004, 0.014), (0, 0.55, 0.061), Gunmetal)                                        # front post
+for sx in (-1, 1):
+    m.box((0.003, 0.02, 0.022), (sx * 0.009, 0.55, 0.062), Gunmetal, bevel=0.001)               # sight ears
+    m.box((0.005, 0.008, 0.01), (sx * 0.006, 0.11, 0.063), Gunmetal)                            # rear notch
+m.box((0.02, 0.05, 0.012), (0, 0.12, 0.053), Gunmetal, bevel=0.003)                             # rear sight leaf
+m.cyl(0.013, 0.05, (0, 0.635, 0.006), Gunmetal, rot=AXIS_Y, seg=10, bevel=0.003)                # muzzle brake
+m.cyl(0.0065, 0.052, (0, 0.636, 0.006), Bore, rot=AXIS_Y, seg=10)
 m.prism([(0.025, -0.028), (0.09, -0.028), (0.125, -0.12), (0.15, -0.205), (0.092, -0.222),
-         (0.066, -0.13)], 0.03, (0, 0, 0), Steel, bevel=0.004)                                  # curved magazine
-m.box((0.032, 0.042, 0.095), (0, -0.095, -0.072), Wood, rot=(-0.3, 0, 0), bevel=0.009)          # pistol grip
+         (0.066, -0.13)], 0.03, (0, 0, 0), Gunmetal, bevel=0.004)                               # curved magazine
+m.box((0.032, 0.042, 0.095), (0, -0.095, -0.072), Wood, rot=(-0.3, 0, 0), bevel=0.01)           # pistol grip
 m.box((0.008, 0.07, 0.006), (0, -0.035, -0.055), Gunmetal, bevel=0.002)                         # trigger guard
 m.box((0.006, 0.006, 0.022), (0, -0.04, -0.04), Steel, rot=(0.3, 0, 0))
-m.prism([(-0.135, 0.026), (-0.135, -0.022), (-0.39, -0.08), (-0.405, -0.075), (-0.405, 0.036),
-         (-0.37, 0.042)], 0.036, (0, 0, 0), Wood, bevel=0.006)                                  # stock
+m.prism([(-0.135, 0.026), (-0.135, -0.022), (-0.385, -0.08), (-0.4, -0.075), (-0.4, 0.036),
+         (-0.37, 0.042)], 0.036, (0, 0, 0), Wood, bevel=0.007)                                  # stock
+m.box((0.04, 0.012, 0.12), (0, -0.405, -0.02), Gunmetal, bevel=0.003)                           # butt plate
 m.box((0.01, 0.03, 0.012), (0.027, 0.04, 0.02), Steel, bevel=0.003)                             # charging handle
+m.box((0.004, 0.08, 0.012), (0.0235, -0.03, 0.0), Steel, rot=(0.15, 0, 0), bevel=0.001)         # selector lever
 m.finish(weapons, (1.0, -1.5, WZ))
 
 m = Model('Machete')
@@ -388,6 +489,36 @@ for sx in (-1, 1):
 m.box((0.04, 0.05, 0.115), (0, -0.1, -0.088), Polymer, rot=(-0.25, 0, 0), bevel=0.011)          # handle
 m.box((0.008, 0.06, 0.006), (0, -0.035, -0.06), Polymer, bevel=0.002)
 m.finish(weapons, (2.5, -1.5, WZ))
+
+# ================================================================== FIRST-PERSON HANDS
+# Gloved hands with a sleeve. HandR is a fist around a vertical grip at its origin (index finger
+# straight along the frame). HandL is an open hand cupping something from below at its origin.
+# Forearms run back and down, toward where the player's shoulders would be.
+hands = collection('Hands')
+
+m = Model('HandR')
+for i, z in enumerate((-0.012, -0.034, -0.055)):                                                 # three fingers round the grip
+    m.chain([(0.03, -0.022, z), (0.027, 0.026, z), (-0.012, 0.034, z - 0.002), (-0.026, 0.012, z - 0.003)],
+            0.0105 - i * 0.0005, Glove)
+m.chain([(0.03, -0.02, 0.012), (0.026, 0.03, 0.014), (0.02, 0.068, 0.012)], 0.0098, Glove)         # index finger
+m.chain([(0.012, -0.045, 0.012), (-0.02, -0.03, 0.016), (-0.026, 0.02, 0.014)], 0.0115, Glove)     # thumb
+m.box((0.034, 0.07, 0.092), (0.03, -0.035, -0.024), Glove, rot=(0, 0, 0.25), bevel=0.013)          # back of the hand
+m.box((0.012, 0.05, 0.062), (0.05, -0.028, -0.02), GlovePad, rot=(0, 0, 0.25), bevel=0.004)        # knuckle guard
+W, E = Vector((0.036, -0.075, -0.03)), Vector((0.19, -0.68, -0.3))
+m.limb(W, W.lerp(E, 0.13), 0.034, Glove, r2=0.038)                                               # glove cuff
+m.limb(W.lerp(E, 0.09), E, 0.041, Sleeve, r2=0.055, seg=10)                                      # sleeve
+m.finish(hands, (0.0, -2.6, WZ))
+
+m = Model('HandL')
+m.box((0.075, 0.095, 0.03), (0, 0, -0.022), Glove, bevel=0.012)                                  # palm
+m.box((0.05, 0.06, 0.008), (0, 0, -0.04), GlovePad, bevel=0.003)
+for i, y in enumerate((-0.033, -0.011, 0.011, 0.033)):                                          # fingers up the far side
+    m.chain([(0.03, y, -0.02), (0.044, y, 0.004), (0.04, y + 0.003, 0.03), (0.026, y + 0.004, 0.043)], 0.0102, Glove)
+m.chain([(-0.03, -0.02, -0.02), (-0.044, 0.0, 0.004), (-0.04, 0.02, 0.03)], 0.0115, Glove)         # thumb
+W, E = Vector((-0.02, -0.06, -0.03)), Vector((-0.3, -0.62, -0.3))
+m.limb(W, W.lerp(E, 0.13), 0.034, Glove, r2=0.038)
+m.limb(W.lerp(E, 0.09), E, 0.041, Sleeve, r2=0.055, seg=10)
+m.finish(hands, (0.6, -2.6, WZ))
 
 # ================================================================== PROPS
 props = collection('Props')
@@ -466,7 +597,7 @@ if bg:
     bg.inputs[1].default_value = 0.6
 
 # ================================================================== EXPORT
-EXPORT = [o for c in (char, weapons, props) for o in c.objects]
+EXPORT = [o for c in (char, weapons, hands, props) for o in c.objects]
 for o in bpy.data.objects:
     o.select_set(o in EXPORT)
 bpy.context.view_layer.objects.active = EXPORT[0]
