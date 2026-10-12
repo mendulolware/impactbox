@@ -714,9 +714,9 @@ m.loft([(-0.70, 0.023, 0.023), (-0.68, 0.032, 0.032), (-0.52, 0.033, 0.033),
         (-0.38, 0.028, 0.028), (-0.20, 0.018, 0.018), (-0.08, 0.014, 0.014),
         (0.12, 0.014, 0.014), (0.14, 0.020, 0.020)], (0, 0, 0), CrateWood, rot=AXIS_Y, seg=14)
 m.cyl(0.022, 0.012, (0, -0.145, 0), Wood, rot=AXIS_Y, seg=14)
-m.cyl(0.015, 0.21, (0, 0, 0), Glove, rot=AXIS_Y, seg=12)                         # wrapped handle
+m.cyl(0.0165, 0.21, (0, 0, 0), Glove, rot=AXIS_Y, seg=12)                       # wrapped handle
 for i in range(7):
-    m.torus(0.015, 0.0015, (0, -0.09 + i * 0.03, 0), GlovePad, rot=AXIS_Y, seg=10, sub=4)
+    m.torus(0.0165, 0.0015, (0, -0.09 + i * 0.03, 0), GlovePad, rot=AXIS_Y, seg=10, sub=4)
 m.finish(weapons, (6.5, -1.5, WZ))
 
 m = Model('Crowbar')
@@ -792,14 +792,17 @@ m.finish(weapons, (8.5, -1.5, WZ))
 # Grips start at (0, 0, 0). Each sight line has an open rear notch at x = 0.
 m = Model('DoubleBarrel')
 m.box((0.063, 0.13, 0.056), (0, 0.08, 0.035), Gunmetal, bevel=0.006, seg=1)
+m.box((0.025, 0.07, 0.020), (0, 0.01, 0.007), Gunmetal)                         # tang joins the grip
 for sx in (-1, 1):
     m.cyl(0.016, 0.32, (sx * 0.018, 0.29, 0.04), Gunmetal, rot=AXIS_Y, seg=14)
     m.cyl(0.0115, 0.008, (sx * 0.018, 0.449, 0.04), Bore, rot=AXIS_Y, seg=12)
     m.cyl(0.005, 0.007, (sx * 0.033, 0.095, 0.034), Steel, rot=AXIS_X, seg=8)      # hinge pins
     m.box((0.004, 0.012, 0.012), (sx * 0.006, 0.031, 0.073), Gunmetal)           # rear notch
-    m.box((0.006, 0.012, 0.022), (sx * 0.022, 0.003, 0.063), Steel, rot=(0.4, 0, 0))
+    m.box((0.006, 0.012, 0.022), (sx * 0.022, 0.013, 0.055), Steel, rot=(0.4, 0, 0))
 m.box((0.012, 0.32, 0.007), (0, 0.29, 0.056), Gunmetal)                         # joining / sight rib
 m.box((0.003, 0.008, 0.012), (0, 0.427, 0.073), Brass)                          # front post
+m.box((0.026, 0.014, 0.008), (0, 0.031, 0.063), Gunmetal)                       # rear sight pedestal
+m.box((0.006, 0.010, 0.009), (0, 0.427, 0.0635), Gunmetal)                      # front post foot
 m.box((0.055, 0.14, 0.035), (0, 0.23, 0.01), Wood, bevel=0.01, seg=1)
 m.prism([(-0.026, 0), (0.025, 0), (0.018, -0.035), (-0.035, -0.11),
          (-0.088, -0.101), (-0.054, -0.055)], 0.038, (0, 0, 0), Wood, bevel=0.005)
@@ -813,6 +816,7 @@ m.finish(weapons, (9.0, -1.5, WZ))
 m = Model('Uzi')
 m.box((0.05, 0.255, 0.069), (0, 0.055, 0.036), Gunmetal, bevel=0.006, seg=1)
 m.box((0.043, 0.22, 0.012), (0, 0.051, 0.077), Gunmetal, bevel=0.003, seg=1)
+m.box((0.043, 0.06, 0.012), (0, 0, 0), Gunmetal)                                # grip collar
 m.box((0.038, 0.047, 0.10), (0, 0, -0.05), Polymer, bevel=0.006, seg=1)          # grip / magazine well
 m.box((0.028, 0.036, 0.17), (0, 0, -0.143), Gunmetal, bevel=0.003, seg=1)
 m.box((0.034, 0.041, 0.009), (0, 0, -0.23), Polymer)
@@ -832,6 +836,8 @@ for sx in (-1, 1):
     m.box((0.004, 0.02, 0.024), (sx * 0.02, 0.157, 0.096), Gunmetal)             # front sight guards
     m.box((0.005, 0.155, 0.018), (sx * 0.029, -0.132, 0.0), Steel)               # folded stock arms
 m.box((0.003, 0.006, 0.015), (0, 0.157, 0.104), Gunmetal)
+for y in (-0.054, 0.157):
+    m.box((0.026, 0.014, 0.015), (0, y, 0.090), Gunmetal)                       # sight pedestals join top cover
 m.box((0.061, 0.018, 0.085), (0, -0.217, -0.03), Gunmetal, bevel=0.004, seg=1)
 m.box((0.005, 0.052, 0.023), (0.026, 0.083, 0.047), Bore)                       # ejection port
 m.finish(weapons, (9.5, -1.5, WZ))
@@ -869,6 +875,7 @@ m.finish(weapons, (10.0, -1.5, WZ))
 
 m = Model('Crossbow')
 m.box((0.052, 0.49, 0.037), (0, 0.145, 0.041), Gunmetal, bevel=0.004, seg=1)      # bolt track
+m.box((0.052, 0.10, 0.035), (0, 0.018, 0.012), Gunmetal)                        # trigger housing / grip joint
 m.prism([(-0.035, 0.025), (-0.32, 0.018), (-0.35, -0.075), (-0.26, -0.079),
          (-0.15, -0.013), (-0.035, -0.012)], 0.047, (0, 0, 0), Olive, bevel=0.004)
 m.box((0.047, 0.018, 0.11), (0, -0.35, -0.027), Polymer, bevel=0.004, seg=1)
@@ -887,7 +894,8 @@ m.cyl(0.003, 0.43, (0, 0.165, 0.068), Wood, rot=AXIS_Y, seg=8)                  
 m.cyl(0.0005, 0.045, (0, 0.4025, 0.068), Steel, rot=AXIS_Y, r2=0.008, seg=8)     # point forward
 for sx in (-1, 1):
     m.box((0.018, 0.045, 0.0015), (sx * 0.009, -0.031, 0.069), BarrelRed)
-m.box((0.024, 0.015, 0.022), (0, 0.31, 0.072), Gunmetal)
+m.box((0.024, 0.015, 0.029), (0, 0.31, 0.075), Gunmetal)
+m.box((0.027, 0.014, 0.030), (0, -0.06, 0.0745), Gunmetal)
 m.box((0.003, 0.006, 0.015), (0, 0.31, 0.097), Gunmetal)
 m.chain([(-0.055, 0.34, 0.025), (-0.067, 0.47, 0.025), (0.067, 0.47, 0.025),
          (0.055, 0.34, 0.025)], 0.007, Steel, seg=6)                             # stirrup
@@ -895,6 +903,7 @@ m.finish(weapons, (11.0, -1.5, WZ))                                             
 
 m = Model('Flamethrower')
 m.box((0.06, 0.20, 0.065), (0, 0.09, 0.039), Olive, bevel=0.007, seg=1)
+m.box((0.04, 0.06, 0.020), (0, 0, 0.004), Gunmetal)                             # grip mounting block
 m.cyl(0.017, 0.48, (0, 0.39, 0.048), Gunmetal, rot=AXIS_Y, seg=12)
 m.cyl(0.027, 0.24, (0, 0.32, 0.048), Olive, rot=AXIS_Y, seg=12)                  # heat shield
 for i in range(5):
@@ -1035,7 +1044,7 @@ m.finish(props, (9.0, 4.5, 2.1))
 m = Model('SandbagWall')
 for row in range(3):
     # The half-length end bags keep the staggered courses centred on the origin.
-    bags = [(-0.81, 0.25), (-0.375, 0.56), (0.245, 0.56), (0.785, 0.37)] if row == 1 else [(-0.62, 0.58), (0, 0.58), (0.62, 0.58)]
+    bags = [(-0.765, 0.29), (-0.30, 0.58), (0.30, 0.58), (0.765, 0.29)] if row == 1 else [(-0.62, 0.58), (0, 0.58), (0.62, 0.58)]
     for x, length in bags:
         m.box((length, 0.36, 0.175), (x, 0, -0.18 + row * 0.18), SandCanvas,
               bevel=0.053, seg=2)                                             # soft squared bags
@@ -1046,9 +1055,9 @@ m.finish(props, (10.8, 3.5, 0.2675))
 m = Model('Toilet')
 m.loft([(-0.4, 0.15, 0.205, 0, 0.005), (-0.36, 0.14, 0.19), (-0.18, 0.09, 0.105, 0, -0.035),
         (-0.06, 0.13, 0.15)], (0, 0, 0), Ceramic, seg=16)                        # pedestal
-m.sphere(0.20, (0, 0.03, 0.005), Ceramic, scale=(1, 1.36, 0.95), seg=20, rings=12,
+m.sphere(0.20, (0, 0.066, 0.005), Ceramic, scale=(1, 1, 0.95), seg=20, rings=12,
          keep=lambda c: c.z <= 0)                                              # open bowl, no cap across mouth
-m.torus(0.159, 0.028, (0, 0.04, 0.007), Ceramic, seg=20, sub=6)                 # round seat / visible opening
+m.torus(0.185, 0.028, (0, 0.066, 0.009), Ceramic, seg=24, sub=8)                 # seat rests on bowl rim
 m.cyl(0.13, 0.008, (0, 0.04, -0.038), Bore, seg=20)                             # shadow inside bowl
 m.cyl(0.072, 0.008, (0, 0.04, -0.031), Lens, seg=16)                            # water surface
 m.box((0.36, 0.19, 0.39), (0, -0.214, 0.185), Ceramic, bevel=0.025, seg=2)       # cistern
@@ -1083,9 +1092,9 @@ for sx in (-1, 1):
             a = k * 2 * pi / 5
             m.cyl(0.031, 0.014, (sx * 0.929, y + cos(a) * 0.122, -0.34 + sin(a) * 0.122),
                   Bore, rot=AXIS_X, seg=6)                                    # wheel vents
-m.prism([(0.395, 0.611), (0.866, 0.165), (0.853, 0.156), (0.382, 0.602)],
+m.prism([(0.407, 0.628), (0.867, 0.193), (0.871, 0.197), (0.411, 0.632)],
         1.28, (0, 0, 0), Lens)                                                 # windshield
-m.prism([(-1.228, 0.156), (-0.815, 0.609), (-0.80, 0.599), (-1.213, 0.145)],
+m.prism([(-1.217, 0.194), (-0.837, 0.614), (-0.841, 0.618), (-1.221, 0.198)],
         1.28, (0, 0, 0), Lens)                                                 # rear screen
 for sy in (-1, 1):
     m.box((1.69, 0.16, 0.145), (0, sy * 2.07, -0.22), Polymer, bevel=0.025, seg=1)
@@ -1124,12 +1133,12 @@ m.sphere(0.125, (0, 0, 0.031), Hazard, scale=(1, 1, 0.90), seg=20, rings=12,
          keep=lambda c: c.z >= -0.001)
 m.torus(0.132, 0.010, (0, 0, 0.035), Hazard, seg=20, sub=6)                      # brim with open centre
 for sx in (-1, 1):
-    m.chain([(sx * 0.049, -0.098, 0.09), (sx * 0.048, -0.055, 0.128),
-             (sx * 0.044, 0.016, 0.142), (sx * 0.045, 0.074, 0.116)], 0.005, Hazard, seg=6)
+    ridge = [(sx * 0.04, y, 0.032 + 0.9 * math.sqrt(0.125 ** 2 - 0.04 ** 2 - y ** 2))
+             for y in (-0.11, -0.08, -0.04, 0, 0.04, 0.08, 0.11)]
+    m.chain(ridge, 0.0048, Hazard, seg=6)
     for y in (-0.034, 0, 0.034):
-        m.box((0.003, 0.017, 0.006), (sx * 0.112, y, 0.08), Bore)               # ventilation slots
-m.sphere(0.105, (0, 0.039, 0.033), Hazard, scale=(1.12, 1, 0.04), seg=16, rings=8,
-         keep=lambda c: c.y >= 0.075)                                          # short forward peak
+        x = math.sqrt(0.125 ** 2 - ((0.08 - 0.031) / 0.9) ** 2 - y ** 2)
+        m.sphere(0.006, (sx * x, y, 0.08), Bore, scale=(0.5, 1.4, 0.5), seg=8, rings=5)
 m.finish(accessories, (0.5, -3.8, 1.0))
 
 m = Model('CombatHelmet')
@@ -1145,18 +1154,21 @@ for sx in (-1, 1):
 m.box((0.031, 0.011, 0.035), (0, 0.119, 0.073), Gunmetal, bevel=0.004, seg=1)    # front mounting plate
 m.finish(accessories, (1.0, -3.8, 1.0))
 
+def balaclava_shape(c):
+    head_shape(c, 1.13)
+    if c.y > 0.025:
+        c.y += 0.023 * max(0, 1 - abs(c.x) / 0.052) * max(0, 1 - abs(c.z + 0.025) / 0.065)
+
+
 m = Model('Balaclava')
 # The same skull warp as Head, expanded enough to cover its existing hair.
 # Remove front vertices in the eye band: this is an actual opening, not black paint.
 m.sphere(0.1, (0, -0.002, 0.002), Glove, seg=32, rings=24,
-         warp=lambda c: head_shape(c, 1.13),
-         keep=lambda c: not (c.y > 0.042 and 0.004 < c.z < 0.040))
-m.chain([(-0.063, 0.073, 0.05), (-0.032, 0.087, 0.051), (0, 0.090, 0.050),
-         (0.032, 0.087, 0.051), (0.063, 0.073, 0.05)], 0.003, GlovePad, seg=6)     # sewn eye opening
-m.chain([(-0.063, 0.073, 0.003), (-0.032, 0.087, 0.003), (0, 0.09, 0.004),
-         (0.032, 0.087, 0.003), (0.063, 0.073, 0.003)], 0.003, GlovePad, seg=6)
-m.sphere(0.033, (0, 0.086, -0.032), Glove, scale=(0.85, 0.77, 1.08), seg=12, rings=8)  # nose fabric clears Head nose
-m.torus(0.052, 0.009, (0, -0.009, -0.131), GlovePad, seg=16, sub=5)              # lower hem
+         warp=balaclava_shape,
+         keep=lambda c: not (c.y > 0.055 and 0.008 < c.z < 0.028))
+m.loft([(-0.167, 0.054, 0.058), (-0.127, 0.055, 0.058), (-0.095, 0.060, 0.065)],
+       (0, -0.003, 0), Glove, seg=16)                                         # connected neck gaiter
+m.torus(0.055, 0.0075, (0, -0.003, -0.166), GlovePad, seg=16, sub=5)             # lower hem covers Head neck
 m.finish(accessories, (1.5, -3.8, 1.0))
 
 # ================================================================== STAGE (not exported)
