@@ -355,7 +355,7 @@ export class Ragdoll {
     const zombie = this.kind === 'zombie';
     this.hitAccum += impulse;
     const standing = this.mode !== 'ragdoll';
-    const heavy = opts.blade || opts.explosion || name === 'head' || LEGS.has(name)
+    const heavy = (opts.blade && !opts.light) || opts.explosion || name === 'head' || LEGS.has(name)
       || this.hitAccum > (zombie ? 480 : 250) || (!zombie && this.health - dmg < 40);
     if (standing && !heavy && !this.dead) {
       this.flinchT = FLINCH;
@@ -386,8 +386,8 @@ export class Ragdoll {
       if (opts.blade) {
         gore.wound(p.mesh, lp, ln, { size: 0.07, slash: true });   // a slash mark, with a gash cut into it
         openWound(p, lp, 0.03, maxR);
-      } else if (opts.bite) {
-        openWound(p, lp, 0.024, maxR);                             // a chunk torn out, no exit wound
+      } else if (opts.bite || opts.stab) {
+        openWound(p, lp, opts.stab ? 0.02 : 0.024, maxR);          // a puncture or a torn chunk, no exit wound
       } else {
         // entry hole, and a bigger one where the bullet leaves
         openWound(p, lp, opts.hole || 0.026, maxR);
@@ -403,6 +403,9 @@ export class Ragdoll {
         _t.copy(dir).multiplyScalar(0.5); _t.y += 0.5;
         gore.blood(point, _t, 26, 5, 1.0);
         gore.wallSplatter(point, dir, 2.5);
+      } else if (opts.stab || opts.bite) {
+        _t.copy(dir).multiplyScalar(-0.5); _t.y += 0.4;
+        gore.blood(point, _t, 9, 2.8, 0.9);               // wells up out of the wound
       } else {
         gore.blood(point, dir, 14, 7, 0.35);              // exit spray carries on past the body
         _t.copy(dir).multiplyScalar(-0.4); _t.y += 0.3;

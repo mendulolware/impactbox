@@ -62,3 +62,17 @@ body.helmet #slowmo { right: 6%; top: 12%; }
 #health { position: absolute; left: 50%; bottom: 96px; width: 220px; height: 7px; transform: translateX(-50%); background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.2); border-radius: 4px; overflow: hidden; }
 #health-fill { height: 100%; width: 100%; background: #d9d9d9; transition: width .15s; }
 #health.low #health-fill { background: #e23; }
+
+/* ---- eleven weapons: tighter slots ---- */
+#weapon-bar { gap: 4px; }
+.slot { min-width: 58px; padding: 5px 6px; font-size: 11px; }
+.slot b { font-size: 10px; }
+
+/* ---- sniper scope ---- */
+#scope { display: none; position: absolute; inset: 0;
+  background:
+    linear-gradient(#000, #000) center / 1px 100% no-repeat,
+    linear-gradient(#000, #000) center / 100% 1px no-repeat,
+    radial-gradient(circle at center, transparent 0, transparent 37.5vh, rgba(0,0,0,.55) 38vh, #000 39vh); }
+body.scoped #scope { display: block; }
+body.scoped #weapon-bar, body.scoped #help, body.scoped #health { opacity: 0; }

@@ -51,6 +51,10 @@ function tone({ f0 = 120, f1 = 40, dur = 0.3, gain = 0.6, type = 'sine' }) {
 export const sfx = {
   pistol()    { noise({ dur: 0.18, f0: 5000, f1: 300, gain: 0.7 }); tone({ f0: 220, f1: 50, dur: 0.12, gain: 0.5 }); },
   shotgun()   { noise({ dur: 0.45, f0: 4000, f1: 120, gain: 1.0 }); tone({ f0: 130, f1: 35, dur: 0.3, gain: 0.8 }); },
+  revolver()  { noise({ dur: 0.3, f0: 4500, f1: 180, gain: 1.0 }); tone({ f0: 170, f1: 40, dur: 0.22, gain: 0.8 }); },
+  smg()       { noise({ dur: 0.09, f0: 6500, f1: 700, gain: 0.5 }); tone({ f0: 320, f1: 90, dur: 0.06, gain: 0.3 }); },
+  sniper()    { noise({ dur: 0.7, f0: 7000, f1: 90, gain: 1.3 }); tone({ f0: 150, f1: 28, dur: 0.5, gain: 1.0 }); },
+  rocket()    { noise({ dur: 1.1, f0: 500, f1: 3500, q: 0.8, gain: 0.8, type: 'bandpass' }); tone({ f0: 80, f1: 40, dur: 0.4, gain: 0.7 }); },
   rifle()     { noise({ dur: 0.12, f0: 6000, f1: 500, gain: 0.6 }); tone({ f0: 280, f1: 70, dur: 0.08, gain: 0.4 }); },
   slash()     { noise({ dur: 0.18, f0: 700, f1: 4500, q: 1.2, gain: 0.3, type: 'bandpass' }); },
   chop()      { noise({ dur: 0.14, f0: 2500, f1: 200, gain: 0.7 }); tone({ f0: 150, f1: 50, dur: 0.12, gain: 0.5 }); },

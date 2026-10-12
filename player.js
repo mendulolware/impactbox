@@ -95,7 +95,8 @@ export class Player {
     }
     const helmet = !!this.ctx.helmet;
     const ads = this.ctx.weapons ? this.ctx.weapons.ads : 0;
-    this.sens = 1 - 0.45 * ads;
+    const zoom = this.ctx.weapons ? this.ctx.weapons.zoom : 0.3;
+    this.sens = 1 - (zoom > 0.5 ? 0.86 : 0.45) * ads;   // scopes need a much slower hand
 
     const f = enabled ? (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0) : 0;
     const s = enabled ? (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0) : 0;
@@ -180,7 +181,7 @@ export class Player {
     this.eye.set(this.pos.x, this.pos.y + EYE, this.pos.z);
 
     // eyes narrow in on the sights; a helmet camera has a fixed lens, so it barely changes
-    const fov = (helmet ? FOV_HELMET : FOV) * (1 - (helmet ? 0.05 : 0.3) * ads);
+    const fov = (helmet ? FOV_HELMET : FOV) * (1 - (helmet && zoom < 0.5 ? 0.05 : zoom) * ads);
     this.fov += (fov - this.fov) * Math.min(1, rdt * 14);
     if (Math.abs(cam.fov - this.fov) > 0.01) {
       cam.fov = this.fov;

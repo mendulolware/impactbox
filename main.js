@@ -400,7 +400,9 @@ document.addEventListener('pointerlockerror', () => { lockFallback = true; });
 document.addEventListener('mousemove', (e) => {
   if (!gameActive()) return;
   if (document.pointerLockElement === canvas || lockFallback) {
-    ctx.player.look(e.movementX, e.movementY);
+    // knife out with a button held: the mouse is your arm, not your head
+    if (ctx.weapons.handMode) ctx.weapons.handMove(e.movementX, e.movementY);
+    else ctx.player.look(e.movementX, e.movementY);
     input.mx += e.movementX;
     input.my += e.movementY;
   }
@@ -429,8 +431,10 @@ document.addEventListener('keydown', (e) => {
   input.keys.add(e.code);
   if (e.code.startsWith('Digit')) {
     const n = parseInt(e.code.slice(5), 10);
-    if (n >= 1 && n <= WEAPONS.length) ctx.weapons.select(n - 1);
+    const slot = n === 0 ? 9 : n - 1;           // 1-9, then 0 is the tenth
+    if (slot < WEAPONS.length) ctx.weapons.select(slot);
   }
+  if (e.code === 'Minus' && WEAPONS.length > 10) ctx.weapons.select(10);
   if (e.code === 'KeyT') toggleSlowmo();
   if (e.code === 'KeyV') toggleHelmet();
   if (e.code === 'KeyX') deleteTarget();

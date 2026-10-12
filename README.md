@@ -19,7 +19,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | LMB | fire / swing / throw / grab |
 | RMB | aim down the sights (guns); throw the held object (Grab Gun) |
 | V | helmet cam on/off |
-| 1-6 or wheel | Pistol, Shotgun, Rifle, Machete, Grenade, Grab Gun |
+| 1-9, 0, - or wheel | Pistol, Revolver, SMG, Shotgun, Rifle, Sniper, Rocket, Machete, Knife, Grenade, Grab Gun |
 | Q (or Tab) | spawn menu |
 | T | slow-mo |
 | X | delete what you're aiming at (or holding) |
@@ -69,6 +69,16 @@ Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted aft
 - **Hands:** `HandR` (grip) and `HandL` (support) models are attached per weapon. Placements live in the `VIEW` table in `weapons.js`.
 - **Aiming:** right mouse moves the weapon so its sight line (`sight` in `VIEW`) sits on the screen centre, narrows the field of view, tightens spread and slows you down. Guns have real rear notches and front posts.
 - **Helmet cam (V):** wide field of view with a light colour grade and corner darkening in `main.js` (no fisheye, no grain), a camera that lags slightly behind your aim, heavier head bob and a REC overlay. Aiming in this view shoulders the weapon below the camera instead of putting the sights on screen, as in real helmet footage; shots leave from eye level along the weapon.
+
+## Weapons
+
+Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of `weapons.js`.
+
+- **Sniper** rounds pass through up to three bodies; aiming swaps the weapon for a full-screen scope.
+- **Rocket** is a physical projectile (`flyRocket` in `props.js`) that explodes on whatever is in front of it.
+- **Knife** is hand-driven, like a VR controller. Hold the left mouse button and the mouse moves your hand instead of your view;
+  hold the right button and push the mouse forward to thrust. The blade is swept through the world every frame (`updateKnife`),
+  so what it cuts, where, and how deep depends on how you move: fast swipes slash, point-first movement stabs, slow contact does nothing.
 
 ## Gore
 

@@ -75,6 +75,8 @@ GlowCyan = material('GlowCyan', (0.25, 0.80, 1.0), 0.3, 0.0, emit=3.0)
 Glove = material('Glove', (0.045, 0.045, 0.05), 0.8)
 GlovePad = material('GlovePad', (0.10, 0.10, 0.105), 0.6)
 Sleeve = material('Sleeve', (0.17, 0.20, 0.13), 0.9)
+Olive = material('Olive', (0.16, 0.19, 0.11), 0.6, 0.35)
+Lens = material('Lens', (0.02, 0.04, 0.07), 0.05, 0.9)
 
 CrateWood = material('CrateWood', (0.50, 0.33, 0.16), 0.85)
 CrateFrame = material('CrateFrame', (0.30, 0.18, 0.08), 0.85)
@@ -449,6 +451,109 @@ m.box((0.01, 0.03, 0.012), (0.027, 0.04, 0.02), Steel, bevel=0.003)             
 m.box((0.004, 0.08, 0.012), (0.0235, -0.03, 0.0), Steel, rot=(0.15, 0, 0), bevel=0.001)         # selector lever
 m.finish(weapons, (1.0, -1.5, WZ))
 
+m = Model('Revolver')
+m.box((0.026, 0.085, 0.05), (0, -0.005, 0.02), Gunmetal, bevel=0.005)                           # frame
+m.box((0.02, 0.07, 0.008), (0, 0.0, 0.048), Gunmetal, bevel=0.002)                              # top strap
+m.cyl(0.0225, 0.044, (0, 0.002, 0.024), Steel, rot=AXIS_Y, seg=12, bevel=0.003)                 # cylinder
+for k in range(6):
+    a6 = k * pi / 3
+    m.cyl(0.0065, 0.046, (cos(a6) * 0.0235, 0.002, 0.024 + sin(a6) * 0.0235), Bore, rot=AXIS_Y, seg=6)  # flutes
+m.cyl(0.0095, 0.15, (0, 0.105, 0.036), Gunmetal, rot=AXIS_Y, seg=12)                            # barrel
+m.cyl(0.0058, 0.012, (0, 0.176, 0.036), Bore, rot=AXIS_Y, seg=10)
+m.box((0.012, 0.13, 0.014), (0, 0.1, 0.022), Gunmetal, bevel=0.003)                             # ejector shroud
+m.box((0.012, 0.14, 0.006), (0, 0.105, 0.048), Gunmetal, bevel=0.001)                           # barrel rib
+m.box((0.008, 0.018, 0.022), (0, -0.052, 0.046), Steel, rot=(0.5, 0, 0), bevel=0.002)           # hammer
+m.box((0.03, 0.044, 0.105), (0, -0.062, -0.048), Wood, rot=(-0.35, 0, 0), bevel=0.012)          # grip
+m.box((0.008, 0.05, 0.006), (0, -0.005, -0.03), Gunmetal, bevel=0.002)                          # trigger guard
+m.box((0.008, 0.006, 0.026), (0, 0.02, -0.018), Gunmetal, bevel=0.002)
+m.box((0.006, 0.006, 0.02), (0, -0.008, -0.014), Steel, rot=(0.3, 0, 0))                        # trigger
+m.box((0.003, 0.012, 0.008), (0, 0.168, 0.054), Gunmetal)                                       # front blade
+for sx in (-1, 1):
+    m.box((0.006, 0.008, 0.008), (sx * 0.0065, -0.036, 0.054), Gunmetal)                        # rear notch
+m.finish(weapons, (3.0, -1.5, WZ))
+
+m = Model('SMG')
+m.box((0.04, 0.27, 0.056), (0, 0, 0), Gunmetal, bevel=0.007)                                    # receiver
+m.cyl(0.02, 0.2, (0, 0.03, 0.028), Gunmetal, rot=AXIS_Y, seg=12)                                # receiver tube
+m.box((0.043, 0.12, 0.048), (0, 0.115, -0.006), Polymer, bevel=0.01)                            # handguard
+m.cyl(0.0085, 0.1, (0, 0.21, 0.006), Gunmetal, rot=AXIS_Y, seg=10)                              # barrel
+m.cyl(0.0052, 0.012, (0, 0.256, 0.006), Bore, rot=AXIS_Y, seg=8)
+m.box((0.026, 0.036, 0.17), (0, 0.035, -0.105), Gunmetal, rot=(0.13, 0, 0), bevel=0.004)        # magazine
+m.box((0.03, 0.042, 0.09), (0, -0.07, -0.07), Polymer, rot=(-0.25, 0, 0), bevel=0.009)          # grip
+m.box((0.008, 0.06, 0.006), (0, -0.02, -0.05), Polymer, bevel=0.002)                            # trigger guard
+m.box((0.006, 0.006, 0.02), (0, -0.03, -0.038), Steel, rot=(0.3, 0, 0))
+for sx in (-1, 1):
+    m.cyl(0.004, 0.2, (sx * 0.015, -0.23, 0.012), Steel, rot=AXIS_Y, seg=6)                     # stock rods
+    m.box((0.003, 0.014, 0.02), (sx * 0.009, 0.17, 0.047), Gunmetal, bevel=0.001)               # front sight ears
+    m.box((0.005, 0.008, 0.01), (sx * 0.006, -0.1, 0.046), Gunmetal)                            # rear notch
+m.box((0.04, 0.014, 0.1), (0, -0.335, -0.012), Polymer, bevel=0.005)                            # butt plate
+m.box((0.003, 0.004, 0.012), (0, 0.17, 0.045), Gunmetal)                                        # front post
+m.box((0.008, 0.026, 0.01), (0.024, 0.04, 0.03), Steel, bevel=0.002)                            # cocking handle
+m.finish(weapons, (3.5, -1.5, WZ))
+
+m = Model('Sniper')
+m.prism([(-0.1, 0.03), (-0.1, -0.03), (-0.2, -0.05), (-0.46, -0.1), (-0.475, -0.095), (-0.475, 0.025),
+         (-0.3, 0.04), (-0.2, 0.03)], 0.042, (0, 0, 0), Wood, bevel=0.008)                      # stock
+m.box((0.044, 0.02, 0.125), (0, -0.485, -0.036), Polymer, bevel=0.006)                          # recoil pad
+m.box((0.044, 0.46, 0.04), (0, 0.13, -0.012), Wood, bevel=0.012)                                # forend
+m.cyl(0.02, 0.26, (0, 0.03, 0.02), Gunmetal, rot=AXIS_Y, seg=14)                                # receiver
+m.cyl(0.0105, 0.62, (0, 0.46, 0.02), Gunmetal, rot=AXIS_Y, seg=12)                              # barrel
+m.cyl(0.015, 0.06, (0, 0.76, 0.02), Gunmetal, rot=AXIS_Y, seg=10, bevel=0.003)                  # muzzle brake
+m.cyl(0.0065, 0.062, (0, 0.761, 0.02), Bore, rot=AXIS_Y, seg=8)
+m.cyl(0.0055, 0.05, (0.03, -0.06, 0.02), Steel, rot=(0, pi / 2 + 0.5, 0), seg=8)                # bolt handle
+m.sphere(0.011, (0.056, -0.06, 0.007), Polymer, seg=8, rings=6)
+m.box((0.028, 0.06, 0.05), (0, 0.04, -0.045), Gunmetal, bevel=0.004)                            # magazine
+m.box((0.008, 0.06, 0.006), (0, -0.045, -0.04), Gunmetal, bevel=0.002)                          # trigger guard
+m.box((0.006, 0.006, 0.02), (0, -0.05, -0.03), Steel, rot=(0.3, 0, 0))
+m.cyl(0.0165, 0.2, (0, 0.03, 0.072), Polymer, rot=AXIS_Y, seg=14)                               # scope tube
+m.cyl(0.024, 0.07, (0, 0.165, 0.072), Polymer, rot=AXIS_Y, r2=0.0165, seg=14)                   # objective bell
+m.cyl(0.0165, 0.05, (0, -0.095, 0.072), Polymer, rot=AXIS_Y, r2=0.021, seg=14)                  # eyepiece
+m.cyl(0.021, 0.004, (0, 0.2, 0.072), Lens, rot=AXIS_Y, seg=14)
+m.cyl(0.019, 0.004, (0, -0.121, 0.072), Lens, rot=AXIS_Y, seg=14)
+m.cyl(0.009, 0.018, (0, 0.03, 0.094), Polymer, seg=10)                                          # elevation turret
+m.cyl(0.009, 0.018, (0.022, 0.03, 0.072), Polymer, rot=AXIS_X, seg=10)                          # windage turret
+for y in (-0.03, 0.09):
+    m.box((0.02, 0.016, 0.03), (0, y, 0.05), Gunmetal, bevel=0.003)                             # scope rings
+m.finish(weapons, (4.0, -1.5, WZ))
+
+m = Model('RocketLauncher')
+m.cyl(0.04, 0.9, (0, 0.05, 0.06), Olive, rot=AXIS_Y, seg=16)                                    # tube
+m.cyl(0.04, 0.14, (0, -0.44, 0.06), Olive, rot=AXIS_Y, r2=0.062, seg=16)                        # rear flare (wide end back)
+m.cyl(0.046, 0.26, (0, -0.16, 0.06), Wood, rot=AXIS_Y, seg=16)                                  # heat shield
+m.cyl(0.044, 0.03, (0, 0.49, 0.06), Gunmetal, rot=AXIS_Y, seg=16)                               # muzzle ring
+m.cyl(0.032, 0.1, (0, 0.55, 0.06), Olive, rot=AXIS_Y, seg=12)                                   # warhead body
+m.cyl(0.006, 0.16, (0, 0.67, 0.06), Olive, rot=AXIS_Y, r2=0.05, seg=12)                         # warhead cone
+m.cyl(0.05, 0.05, (0, 0.585, 0.06), Olive, rot=AXIS_Y, r2=0.05, seg=12)
+m.box((0.03, 0.04, 0.1), (0, 0.0, -0.03), Polymer, rot=(-0.15, 0, 0), bevel=0.009)              # front grip
+m.box((0.03, 0.04, 0.09), (0, -0.13, -0.025), Wood, rot=(-0.15, 0, 0), bevel=0.009)             # rear grip
+m.box((0.008, 0.05, 0.006), (0, 0.035, -0.015), Gunmetal, bevel=0.002)
+m.box((0.006, 0.006, 0.02), (0, 0.025, -0.002), Steel, rot=(0.3, 0, 0))
+m.box((0.006, 0.01, 0.05), (0, 0.16, 0.118), Gunmetal, bevel=0.001)                             # front sight
+for sx in (-1, 1):
+    m.box((0.005, 0.01, 0.03), (sx * 0.007, -0.02, 0.126), Gunmetal)                            # rear notch
+m.box((0.02, 0.03, 0.05), (0, -0.02, 0.105), Gunmetal, bevel=0.003)
+m.finish(weapons, (4.6, -1.5, WZ))
+
+m = Model('Rocket')                                                                              # the projectile, nose toward +Y
+m.cyl(0.03, 0.26, (0, 0, 0), Olive, rot=AXIS_Y, seg=10)
+m.cyl(0.006, 0.14, (0, 0.2, 0), Olive, rot=AXIS_Y, r2=0.05, seg=10)
+m.cyl(0.05, 0.03, (0, 0.118, 0), Olive, rot=AXIS_Y, seg=10)
+for k in range(4):
+    a4 = k * pi / 2
+    m.box((0.004, 0.09, 0.06), (cos(a4) * 0.05, -0.1, sin(a4) * 0.05), Gunmetal, rot=(0, -a4 + pi / 2, 0))   # fins
+m.finish(weapons, (5.1, -1.5, WZ))
+
+m = Model('Knife')                                                                               # handle on the origin, blade toward +Y
+m.cyl(0.0155, 0.115, (0, 0, 0), Polymer, rot=AXIS_Y, seg=10, bevel=0.004)                        # handle
+for i in range(5):
+    m.torus(0.0155, 0.0022, (0, -0.04 + i * 0.02, 0), Polymer, rot=AXIS_Y, seg=10, sub=4)        # grip rings
+m.box((0.014, 0.012, 0.056), (0, 0.062, 0), Gunmetal, bevel=0.003)                               # guard
+m.cyl(0.017, 0.012, (0, -0.062, 0), Gunmetal, rot=AXIS_Y, seg=10, bevel=0.003)                   # pommel
+m.prism([(0.066, 0.018), (0.066, -0.018), (0.2, -0.018), (0.265, -0.004), (0.285, 0.012), (0.24, 0.018)],
+        0.0045, (0, 0, 0), Steel)                                                                # blade, edge down
+m.box((0.0052, 0.11, 0.005), (0, 0.13, 0.008), Gunmetal)                                         # fuller
+m.finish(weapons, (5.5, -1.5, WZ))
+
 m = Model('Machete')
 m.box((0.028, 0.15, 0.036), (0, 0, 0), Wood, bevel=0.011)                                       # handle
 for y in (-0.045, 0.0, 0.045):
@@ -519,6 +624,19 @@ W, E = Vector((-0.02, -0.06, -0.03)), Vector((-0.3, -0.62, -0.3))
 m.limb(W, W.lerp(E, 0.13), 0.034, Glove, r2=0.038)
 m.limb(W.lerp(E, 0.09), E, 0.041, Sleeve, r2=0.055, seg=10)
 m.finish(hands, (0.6, -2.6, WZ))
+
+# The knife hand: a right fist around a handle that points forward (+Y), thumb along the top.
+# It has no forearm: the game draws one from WRIST back to the player's elbow as the hand moves.
+m = Model('KnifeHand')
+for i, y in enumerate((0.03, 0.01, -0.012, -0.034)):                                            # four fingers under and round
+    k = 0.78
+    m.chain([(0.022 * k, y, -0.03 * k), (-0.026 * k, y, -0.027 * k), (-0.034 * k, y - 0.002, 0.012 * k),
+             (-0.012 * k, y - 0.003, 0.028 * k)], 0.0105 - i * 0.0004, Glove)
+m.chain([(0.022, -0.022, 0.012), (0.008, 0.02, 0.023), (0.001, 0.047, 0.021)], 0.0115, Glove)      # thumb along the spine
+m.box((0.03, 0.09, 0.062), (0.03, -0.004, -0.006), Glove, rot=(0, 0.2, 0), bevel=0.013)            # back of the hand
+m.box((0.01, 0.06, 0.045), (0.047, 0.0, -0.004), GlovePad, rot=(0, 0.2, 0), bevel=0.004)           # knuckle guard
+m.limb((0.04, -0.06, -0.018), (0.07, -0.16, -0.06), 0.033, Glove, r2=0.038)                       # wrist and cuff
+m.finish(hands, (1.2, -2.6, WZ))
 
 # ================================================================== PROPS
 props = collection('Props')

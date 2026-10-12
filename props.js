@@ -9,6 +9,7 @@ const TYPES = {
   ball:      { label: 'Ball',             icon: '🏀', shape: 'ball', r: 0.38, color: 0xf08a24, density: 80, hp: Infinity, rest: 0.85 },
   block:     { label: 'Heavy Block',      icon: '🧱', shape: 'box', half: [0.5, 0.5, 0.5], color: 0x6f7378, density: 1600, hp: Infinity, rest: 0.05 },
   plank:     { label: 'Plank',            icon: '🪵', shape: 'box', half: [1.1, 0.05, 0.14], color: 0xc9a066, density: 300, hp: Infinity, rest: 0.1 },
+  rocket:    { label: 'Rocket',           icon: '🚀', shape: 'ball', r: 0.06, color: 0x4a5a3a, density: 400, hp: Infinity, rest: 0 },
   grenade:   { label: 'Grenade',          icon: '💣', shape: 'ball', r: 0.1, color: 0x2e4a2e, density: 1800, hp: Infinity, rest: 0.3, fuse: 2.4 },
 };
 
@@ -17,7 +18,7 @@ export const PROP_TYPES = TYPES;
 // prop type -> model name in assets/models.glb (the ball is just a sphere)
 const MODEL_OF = {
   crate: 'Crate', barrel: 'Barrel', explosive: 'ExplosiveBarrel',
-  block: 'Block', plank: 'Plank', grenade: 'Grenade',
+  block: 'Block', plank: 'Plank', grenade: 'Grenade', rocket: 'Rocket',
 };
 
 const geoCache = new Map();
@@ -28,6 +29,9 @@ function geo(key, make) {
 }
 
 const _q = new THREE.Quaternion();
+const _v = new THREE.Vector3();
+const _fwd = new THREE.Vector3(0, 0, -1);
+const rnd = (a, b) => a + Math.random() * (b - a);
 
 export class Prop {
   constructor(ctx, type, pos, rotY = 0) {
@@ -46,7 +50,7 @@ export class Prop {
         .setTranslation(pos.x, pos.y, pos.z)
         .setRotation({ x: 0, y: Math.sin(rotY / 2), z: 0, w: Math.cos(rotY / 2) })
         .setLinearDamping(0.05).setAngularDamping(0.3)
-        .setCcdEnabled(type === 'grenade' || type === 'ball')
+        .setCcdEnabled(type === 'grenade' || type === 'ball' || type === 'rocket')
     );
     let cd, g;
     if (d.shape === 'box') {
@@ -90,6 +94,39 @@ export class Prop {
     ctx.owners.set(this.collider.handle, { kind: 'prop', prop: this });
   }
 
+  /** Send a rocket on its way. */
+  launch(dir, speed) {
+    this.body.setGravityScale(0.12, true);
+    this.body.setLinvel({ x: dir.x * speed, y: dir.y * speed, z: dir.z * speed }, true);
+    this.life = 5;
+  }
+
+  /** Rockets fly nose-first, trail smoke, and go off on whatever is in front of them. */
+  flyRocket(dt) {
+    const { world, gore, player } = this.ctx;
+    const t = this.body.translation(), v = this.body.linvel();
+    const sp = Math.hypot(v.x, v.y, v.z) || 1;
+    const d = { x: v.x / sp, y: v.y / sp, z: v.z / sp };
+    this.life -= dt;
+    const mine = this.collider.handle, pc = player.collider.handle;
+    const hit = world.castRay(new RAPIER.Ray(t, d), sp * dt + 0.3, true, undefined, undefined, undefined, undefined,
+      (c) => c.handle !== mine && c.handle !== pc);
+    if (hit || this.life <= 0) {
+      const k = hit ? hit.timeOfImpact : 0;
+      this.exploded = true;
+      this.ctx.explode({ x: t.x + d.x * k, y: t.y + d.y * k, z: t.z + d.z * k }, 7, 1.15);
+      this.remove();
+      return true;
+    }
+    for (let i = 0; i < 2; i++) {
+      const g = rnd(0.3, 0.5);
+      gore.smoke.emit(t.x - d.x * 0.2, t.y - d.y * 0.2, t.z - d.z * 0.2, rnd(-0.4, 0.4), rnd(0, 0.6), rnd(-0.4, 0.4),
+        rnd(0.25, 0.45), rnd(0.7, 1.4), -0.25, g, g, g, 0, 1);
+    }
+    gore.fire.emit(t.x - d.x * 0.25, t.y - d.y * 0.25, t.z - d.z * 0.25, -d.x * 4, -d.y * 4, -d.z * 4, 0.22, 0.12, 0, 1, 0.6, 0.15, 0, 0);
+    return false;
+  }
+
   hit(dmg, point, dir, impulse, opts = {}) {
     if (this.removed) return;
     if (impulse > 0) {
@@ -117,6 +154,7 @@ export class Prop {
 
   update(dt) {
     if (this.removed) return;
+    if (this.life !== undefined && this.flyRocket(dt)) return; // exploded: the body is gone
     if (this.fuse > 0) {
       this.fuse -= dt;
       const blink = Math.sin(this.fuse * 28) > 0;
@@ -138,7 +176,12 @@ export class Prop {
     const t = this.body.translation();
     const r = this.body.rotation();
     this.mesh.position.set(t.x, t.y, t.z);
-    this.mesh.quaternion.set(r.x, r.y, r.z, r.w);
+    if (this.life !== undefined) {
+      const v = this.body.linvel(); // rockets point where they are going
+      if (_v.set(v.x, v.y, v.z).lengthSq() > 1) this.mesh.quaternion.setFromUnitVectors(_fwd, _v.normalize());
+    } else {
+      this.mesh.quaternion.set(r.x, r.y, r.z, r.w);
+    }
   }
 
   remove() {
