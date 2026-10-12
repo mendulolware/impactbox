@@ -31,10 +31,12 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | File | What it does |
 | --- | --- |
 | `main.js` | renderer, game loop, input, spawn menu, explosions, hit routing |
-| `ragdoll.js` | 11-part body: procedural animation, active ragdoll, damage, severing, gibbing, bleeding |
+| `ragdoll.js` | 11-body ragdoll under one skinned figure: procedural animation, active ragdoll, damage, severing, gibbing, bleeding |
 | `brain.js` | NPC AI: senses, civilian / thug / zombie behaviour, steering |
 | `weapons.js` | weapon definitions, firing, melee, grenades, grab gun, viewmodels |
-| `props.js` | crates, barrels, explosive barrels, balls, grenades |
+| `props.js` | crates, barrels, cars, furniture, grenades, rockets and the rest of the spawn menu |
+| `models.js` | loads `assets/models.glb`; lays surface detail and edge wear over the models; hands out body pieces |
+| `detail.js` | fine tiling surfaces for the models (steel, plastic, wood grain, cloth, leather, skin), generated in code |
 | `gore.js` | instanced blood/gib/fire particles and surface decals |
 | `wounds.js` | holes cut into body parts, and what is visible inside them |
 | `player.js` | first-person character controller |
@@ -42,6 +44,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | `textures.js` | asphalt, concrete and timber generated in code, each with colour, normal and roughness maps |
 | `post.js` | picture pipeline: ambient occlusion, bloom, colour grade |
 | `audio.js` | procedural sound effects |
+| `viewer.html` | a turntable for looking at any model under the game's own sky and lighting (not part of the game) |
 
 ## How NPCs work
 
@@ -64,12 +67,20 @@ what it wants: a heading, a speed, a gesture and something to look at. Steering 
 swing/twist limits. A living NPC braces as it falls and writhes when badly hurt; a dead one loses tone and goes limp, with a few twitches.
 Light hits make a standing NPC flinch and stagger instead of dropping; legs, heads, blades, blasts, repeated hits and low health put it down.
 
+**The body you see** is one continuous skinned figure (`models/character.py`): T-shirt, jeans and trainers over a body whose surface runs
+unbroken through the elbows, knees, waist, shoulders, hips and neck. Each of the eleven rigid bodies is a bone, and every vertex
+follows one or two of them, so limbs bend instead of hinging. The figure is stored as a piece per rigid body so that each can
+still be wounded, cut off or destroyed on its own; when a joint parts, `detach()` makes the skin on each side stop following the other,
+and the caps of flesh and bone that were hidden inside the joint become the stumps. Skin, shirt, trouser and hair colours are chosen per NPC.
+
 Parts of the same NPC never collide with each other (contact hook in `main.js`).
 Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted after one of its joints was cut.
 
 ## First person
 
-- **Hands:** `HandR` (grip) and `HandL` (support) models are attached per weapon. Placements live in the `VIEW` table in `weapons.js`.
+- **Hands:** gloved hands with sleeves are attached per weapon: `HandR` grips, `HandL` cups a fore-end, `HandSupport` closes over the
+  gripping hand for a two-handed pistol hold, and `KnifeHand` holds the knife while a sleeve is stretched back to the elbow.
+  They all come from one hand builder (`models/hands.py`) that is given finger joint angles. Placements live in the `VIEW` table in `weapons.js`.
 - **Aiming:** right mouse moves the weapon so its sight line (`sight` in `VIEW`) sits on the screen centre, narrows the field of view, tightens spread and slows you down. Guns have real rear notches and front posts.
 - **Helmet cam (V):** wide field of view with a light colour grade and corner darkening in `main.js` (no fisheye, no grain), a camera that lags slightly behind your aim, heavier head bob and a REC overlay. Aiming in this view shoulders the weapon below the camera instead of putting the sights on screen, as in real helmet footage; shots leave from eye level along the weapon.
 
@@ -98,27 +109,45 @@ pools that spread under bodies and stumps, wounds stuck onto the body part that 
 
 `wounds.js` opens real holes in bodies. Each wound is a sphere in the body part's local space, and the part's
 materials get a shader that discards every pixel inside it. Behind the skin there is an inside-out flesh wall,
-a shrunken meat core with narrower holes (so the wound has depth), and innards: ribs, spine, lungs, heart, gut,
-brain and limb bones. Bullets cut an entry hole and a larger exit hole; hits near an existing wound widen it.
+a layer of meat (the same skin pulled in along its normals, with narrower holes, so the wound has depth), and innards: ribs,
+spine, lungs, heart, gut, brain and limb bones. All of it is skinned to the same bones as the body. Bullets cut an entry hole and a larger exit hole; hits near an existing wound widen it.
 Hole size per weapon is `hole` in the `WEAPONS` table; a part holds up to 12 wounds.
 
 ## Models
 
-All models are made in Blender and exported to `assets/models.glb`, which `models.js` loads at startup.
-If the file is missing the game falls back to primitive shapes.
+Every model is built by code in Blender and exported to `assets/models.glb` (59 models, about 215,000 triangles), which `models.js`
+loads at startup. If the file is missing the game falls back to primitive shapes. Pictures of everything are in `models/previews/`.
 
-- `models/impactbox-models.blend` - the Blender scene (character parts, weapons, first-person hands, props).
-- `models/build_models.py` - regenerates every model and re-exports the GLB. Open the .blend, then run it from the Scripting tab.
-- `models/previews/` - renders.
+To rebuild: open `models/impactbox-models.blend` and run `models/build_models.py` from the Scripting tab, or from a terminal
 
-The library also holds models that are built and exported but not used by the game yet: melee weapons (Axe, BaseballBat, Crowbar,
-Katana, Chainsaw, SledgeHammer) and guns (DoubleBarrel, Uzi, Minigun, Crossbow, Flamethrower). The props (chair, table, toilet, traffic cone,
-propane tank, pallet, sandbags, dumpster, street lamp, car) are in the spawn menu, and the headwear (PoliceCap, HardHat, CombatHelmet, Balaclava)
-is worn by some NPCs.
+    blender -b models/impactbox-models.blend -P models/build_models.py -P models/render_previews.py
 
-Rules the game relies on: one object per model, named as in `MODEL_OF` (`ragdoll.js`, `props.js`) and `VIEWMODELS` (`weapons.js`);
-+Y is forward in Blender; character part origins sit at the collider centre; materials named `Skin`, `Shirt` and `Pants` are re-coloured per NPC.
-Hand-edit the models in Blender if you like, but re-running the script overwrites them, so export with File > Export > glTF (selection only) instead.
+| File | What it builds |
+| --- | --- |
+| `kit.py` | the modelling kit: boxes, lathed profiles, extruded outlines, swept tubes, lofts, rounded grips and stocks, blades, knurled knobs |
+| `materials.py` | every material, with what the game should lay over it and what shows through when it wears |
+| `guns.py`, `guns2.py`, `melee.py` | the weapons in the game: pistol, revolver, SMG, pump shotgun, rifle, scoped sniper, rocket launcher, grenade, grab gun, knife, machete |
+| `extras.py` | built but not wired in yet: axe, bat, crowbar, katana, chainsaw, sledgehammer, double-barrel, Uzi, minigun, crossbow, flamethrower |
+| `hands.py` | the first-person hands, and the hand builder the NPCs share |
+| `props.py`, `car.py` | crate, drums, concrete block, plank, chair, table, cone, propane tank, pallet, dumpster, street lamp, sandbags, toilet, ball, car |
+| `character.py` | the NPC body (see "How NPCs work") |
+| `hats.py` | balaclava, combat helmet, hard hat, police cap - shaped on the head model so they fit it |
+
+What makes them read as real things rather than shapes:
+
+- **Real profiles.** Guns are extruded from side outlines with proper sights, barrels with actual bores, trigger guards bent from
+  flat bar, grips and stocks lofted from rounded sections. Dimensions are those of the real objects.
+- **Baked into the vertices** when a model is finished (`kit.py`): area-weighted normals, so bevelled edges catch the light;
+  ambient occlusion, so creases and contact lines are darker; and wear on exposed convex edges.
+- **Surface detail** (`detail.js`): each material names a fine tiling surface, laid over it at true scale because the models carry
+  texture coordinates in metres. It stays sharp with a gun right in front of the camera.
+- **Wear** (`models.js`): where the baked wear is high the shader swaps the finish for what is underneath - bright steel under
+  bluing, rust under paint, pale wood under varnish - breaking the edge up with the detail texture.
+
+Rules the game relies on: models are found by object name (`MODEL_OF` in `props.js`, `VIEW` in `weapons.js`, `Body_<part>` in `ragdoll.js`);
++Y is forward in Blender; materials named `Skin`, `Shirt`, `Pants`, `Hair` and `CarPaint` are re-coloured per instance.
+The build prints `ref`: the sight height, muzzle and hand positions of each gun, which go in the `VIEW` table.
+`viewer.html` shows any model on a turntable under the game's lighting.
 
 ## Tuning knobs
 

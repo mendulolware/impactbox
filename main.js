@@ -481,6 +481,11 @@ let crashed = false;
 function frame(now) {
   requestAnimationFrame(frame);
   if (crashed) return;
+  if (ctx.frozen) {                       // debugging: time stands still, the free camera keeps drawing
+    if (ctx.view === 'fp') post.render(scene, camera, ctx.helmet);     // the player's own view, held still
+    else if (ctx.view) ctx.debugView(...ctx.view);
+    return;
+  }
   try { tick(now); } catch (e) {
     // a wasm panic leaves the physics world unusable, so stop instead of spamming the console
     crashed = true;
@@ -492,6 +497,20 @@ function frame(now) {
 
 // debugging aid: advance the game n frames from the console (works even when the tab is throttled)
 ctx.debugStep = (n = 1) => { for (let i = 0; i < n; i++) tick(last + 1000 / 60); last = performance.now(); };
+/** Debugging: draw one frame from a free camera (no weapon in view) without advancing the game. */
+ctx.debugView = (from, at, fov = 40) => {
+  ctx.view = [from, at, fov];
+  const keep = camera.fov;
+  camera.fov = fov;
+  camera.updateProjectionMatrix();
+  camera.position.set(from[0], from[1], from[2]);
+  camera.lookAt(at[0], at[1], at[2]);
+  ctx.weapons.pivot.visible = false;
+  post.render(scene, camera, false);
+  ctx.weapons.pivot.visible = true;
+  camera.fov = keep;
+  camera.updateProjectionMatrix();
+};
 
 function tick(now) {
   const dt = Math.min(Math.max((now - last) / 1000, 0), 0.05);

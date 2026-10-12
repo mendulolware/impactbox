@@ -5,11 +5,11 @@ import * as THREE from 'three';
 // differently). Everything tiles seamlessly. No image files are loaded.
 
 // ---- tileable value noise -------------------------------------------------------------------
-function hash(ix, iy, seed) {
+export function hash(ix, iy, seed) {
   const s = Math.sin(ix * 127.1 + iy * 311.7 + seed * 74.7) * 43758.5453;
   return s - Math.floor(s);
 }
-function noise(x, y, period, seed) {
+export function noise(x, y, period, seed) {
   const ix = Math.floor(x), iy = Math.floor(y);
   const fx = x - ix, fy = y - iy;
   const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
@@ -19,7 +19,7 @@ function noise(x, y, period, seed) {
   return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy;
 }
 /** Fractal noise over the unit square, tiling with `period` cells at the coarsest octave. */
-function fbm(u, v, period, octaves, seed) {
+export function fbm(u, v, period, octaves, seed) {
   let sum = 0, amp = 0.5, norm = 0;
   for (let o = 0; o < octaves; o++) {
     const p = period << o;
@@ -38,7 +38,7 @@ function canvasOf(size) {
 }
 
 /** Run a per-pixel function and build colour / normal / roughness textures from what it returns. */
-function bake(size, strength, fn) {
+export function bake(size, strength, fn) {
   const height = new Float32Array(size * size);
   const col = canvasOf(size), nrm = canvasOf(size), rgh = canvasOf(size);
   const cctx = col.getContext('2d'), nctx = nrm.getContext('2d'), rctx = rgh.getContext('2d');
@@ -80,7 +80,7 @@ function bake(size, strength, fn) {
 }
 
 /** A black-on-clear drawing (cracks, seams) read back as a 0..1 mask. */
-function lineMask(size, draw) {
+export function lineMask(size, draw) {
   const c = canvasOf(size);
   const g = c.getContext('2d');
   g.strokeStyle = '#fff'; g.fillStyle = '#fff'; g.lineCap = 'round';

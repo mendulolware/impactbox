@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { getModel } from './models.js';
+import { getModel, bodyPieces, tintedMaterial } from './models.js';
 import { openWound } from './wounds.js';
 import { Brain } from './brain.js';
 
@@ -23,10 +23,10 @@ const PARTS = {
   pelvis: { shape: 'box', half: [0.17, 0.09, 0.10], pos: [0, 1.00, 0], hp: 70, role: 'pants' },
   torso:  { shape: 'box', half: [0.18, 0.22, 0.10], pos: [0, 1.33, 0], hp: 90, role: 'shirt' },
   head:   { shape: 'ball', r: 0.12,                  pos: [0, 1.70, 0], hp: 32, role: 'skin' },
-  uarmL:  { shape: 'cap', h: 0.12, r: 0.050, pos: [0.25, 1.33, 0], hp: 36, role: 'shirt' },
-  farmL:  { shape: 'cap', h: 0.11, r: 0.045, pos: [0.25, 1.005, 0], hp: 30, role: 'skin' },
-  uarmR:  { shape: 'cap', h: 0.12, r: 0.050, pos: [-0.25, 1.33, 0], hp: 36, role: 'shirt' },
-  farmR:  { shape: 'cap', h: 0.11, r: 0.045, pos: [-0.25, 1.005, 0], hp: 30, role: 'skin' },
+  uarmL:  { shape: 'cap', h: 0.12, r: 0.050, pos: [0.21, 1.33, 0], hp: 36, role: 'shirt' },
+  farmL:  { shape: 'cap', h: 0.11, r: 0.045, pos: [0.21, 1.005, 0], hp: 30, role: 'skin' },
+  uarmR:  { shape: 'cap', h: 0.12, r: 0.050, pos: [-0.21, 1.33, 0], hp: 36, role: 'shirt' },
+  farmR:  { shape: 'cap', h: 0.11, r: 0.045, pos: [-0.21, 1.005, 0], hp: 30, role: 'skin' },
   thighL: { shape: 'cap', h: 0.17, r: 0.075, pos: [0.10, 0.705, 0], hp: 46, role: 'pants' },
   shinL:  { shape: 'cap', h: 0.17, r: 0.060, pos: [0.10, 0.23, 0], hp: 38, role: 'pants' },
   thighR: { shape: 'cap', h: 0.17, r: 0.075, pos: [-0.10, 0.705, 0], hp: 46, role: 'pants' },
@@ -38,10 +38,10 @@ const PARTS = {
 const JOINTS = [
   { name: 'spine',     a: 'pelvis', b: 'torso',  anchor: [0, 1.10, 0], stump: 0.13, cone: 0.55 },
   { name: 'neck',      a: 'torso',  b: 'head',   anchor: [0, 1.56, 0], stump: 0.05, cone: 0.7 },
-  { name: 'shoulderL', a: 'torso',  b: 'uarmL',  anchor: [0.25, 1.50, 0], stump: 0.05, cone: 2.3 },
-  { name: 'elbowL',    a: 'uarmL',  b: 'farmL',  anchor: [0.25, 1.16, 0], stump: 0.043, axis: [1, 0, 0], limits: [0, 2.4] },
-  { name: 'shoulderR', a: 'torso',  b: 'uarmR',  anchor: [-0.25, 1.50, 0], stump: 0.05, cone: 2.3 },
-  { name: 'elbowR',    a: 'uarmR',  b: 'farmR',  anchor: [-0.25, 1.16, 0], stump: 0.043, axis: [1, 0, 0], limits: [0, 2.4] },
+  { name: 'shoulderL', a: 'torso',  b: 'uarmL',  anchor: [0.21, 1.45, 0], stump: 0.05, cone: 2.3 },
+  { name: 'elbowL',    a: 'uarmL',  b: 'farmL',  anchor: [0.21, 1.16, 0], stump: 0.043, axis: [1, 0, 0], limits: [0, 2.4] },
+  { name: 'shoulderR', a: 'torso',  b: 'uarmR',  anchor: [-0.21, 1.45, 0], stump: 0.05, cone: 2.3 },
+  { name: 'elbowR',    a: 'uarmR',  b: 'farmR',  anchor: [-0.21, 1.16, 0], stump: 0.043, axis: [1, 0, 0], limits: [0, 2.4] },
   { name: 'hipL',      a: 'pelvis', b: 'thighL', anchor: [0.10, 0.95, 0], stump: 0.072, cone: 1.5 },
   { name: 'kneeL',     a: 'thighL', b: 'shinL',  anchor: [0.10, 0.46, 0], stump: 0.058, axis: [1, 0, 0], limits: [-2.4, 0] },
   { name: 'hipR',      a: 'pelvis', b: 'thighR', anchor: [-0.10, 0.95, 0], stump: 0.072, cone: 1.5 },
@@ -70,7 +70,16 @@ const LEGS = new Set(['thighL', 'thighR', 'shinL', 'shinR']);
 const LIMBS = new Set(['uarmL', 'farmL', 'uarmR', 'farmR', 'thighL', 'shinL', 'thighR', 'shinR']);
 const KNOCK_PARTS = ['torso', 'head', 'pelvis', 'thighL', 'thighR'];
 
+// The body model (models/character.py) is one skinned figure cut into a piece per ragdoll body.
+// Each rigid body is a bone; these are the bones' places in the rest pose the model was built in.
+const BONE_INDEX = {};
+Object.keys(PARTS).forEach((n, i) => { BONE_INDEX[n] = i; });
+const REST_INV = Object.values(PARTS).map((d) => new THREE.Matrix4().makeTranslation(-d.pos[0], -d.pos[1], -d.pos[2]));
+const IDENT = new THREE.Matrix4();
+const BODY_MATS = new Set(['Skin', 'Shirt', 'Pants']);   // what has flesh behind it
+
 const SKIN = [0xf1c8a0, 0xe0ac86, 0xc68a62, 0x9a6444, 0x6b4430];
+const HAIR = [0x17100b, 0x2a1a10, 0x4a3018, 0x6b4a26, 0x8a7a66, 0x101012];
 const SHIRT = [0xc0392b, 0x2e86c1, 0x27ae60, 0xf1c40f, 0x7d3c98, 0xecf0f1, 0xe67e22, 0x2c3e50];
 const PANTS = [0x2c3e50, 0x1b1b1f, 0x5d4e37, 0x34495e, 0x566573];
 
@@ -199,7 +208,13 @@ export class Ragdoll {
       shirt: this.kind === 'thug' ? 0x1a1a1c : SHIRT[Math.floor(Math.random() * SHIRT.length)],
       pants: PANTS[Math.floor(Math.random() * PANTS.length)],
     };
-    const tint = { Skin: mat(colors.skin), Shirt: mat(colors.shirt), Pants: mat(colors.pants) };
+    this.skinned = !!bodyPieces('pelvis');
+    const tint = this.skinned
+      ? {
+        Skin: tintedMaterial('Skin', colors.skin), Shirt: tintedMaterial('Shirt', colors.shirt),
+        Pants: tintedMaterial('Pants', colors.pants), Hair: tintedMaterial('Hair', HAIR[Math.floor(Math.random() * HAIR.length)]),
+      }
+      : { Skin: mat(colors.skin), Shirt: mat(colors.shirt), Pants: mat(colors.pants) };
 
     const qYaw = new THREE.Quaternion().setFromAxisAngle(UP, yaw);
 
@@ -230,8 +245,9 @@ export class Ragdoll {
       cd.setDensity(900).setFriction(0.9).setRestitution(0.02).setActiveHooks(RAPIER.ActiveHooks.FILTER_CONTACT_PAIRS);
       const collider = world.createCollider(cd, body);
 
-      // Blender model if available, otherwise the collider shape itself
-      let mesh = getModel(MODEL_OF[name], tint);
+      // With the skinned body this is just the bone: an empty that follows the rigid body, and that
+      // hats, stumps, innards and blood marks hang off. Without models it is the collider shape itself.
+      let mesh = this.skinned ? new THREE.Group() : getModel(MODEL_OF[name], tint);
       if (!mesh) {
         mesh = new THREE.Mesh(g(), mat(colors[d.role]));
         mesh.castShadow = true;
@@ -252,12 +268,36 @@ export class Ragdoll {
       mesh.traverse((o) => { if (o.isMesh) skin.push({ mesh: o, body: bodyMats.has(o.material) || o === mesh, isSkin: o.material === tint.Skin }); });
       // local box around the part, used to work out where a bullet comes out the other side
       const ext = d.shape === 'box' ? d.half : d.shape === 'ball' ? [d.r, d.r, d.r] : [d.r, d.h + d.r, d.r];
-      this.parts[name] = { name, def: d, body, collider, mesh, skin, ext, hp: d.hp, gone: false, inertia: body.mass() * len * len / 12 };
+      this.parts[name] = {
+        name, def: d, body, collider, mesh, skin, ext, hp: d.hp, gone: false, inertia: body.mass() * len * len / 12,
+        skinned: [], rest: new THREE.Vector3(...d.pos), hat: hat ? hat.name : null,
+      };
       if (hat) mesh.add(hat); // added after `skin` was collected, so headwear is not cut by wounds
       this.pose[name] = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
       this.captured[name] = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
       this.colHandles.add(collider.handle);
       ctx.owners.set(collider.handle, { kind: 'part', ragdoll: this, name });
+    }
+
+    if (this.skinned) {
+      // one skeleton for the whole figure: bone i is the group that follows rigid body i
+      this.skeleton = new THREE.Skeleton(Object.keys(PARTS).map((n) => this.parts[n].mesh), REST_INV);
+      const bald = Math.random() < 0.08 || this.parts.head.hat === 'Balaclava';
+      for (const name in PARTS) {
+        const part = this.parts[name];
+        for (const piece of bodyPieces(name)) {
+          const mn = piece.material.name;
+          if (mn === 'Hair' && bald && piece.geometry.getAttribute('position').count > 400) continue;   // keeps the eyebrows
+          const sm = new THREE.SkinnedMesh(piece.geometry, tint[mn] || piece.material);
+          sm.bind(this.skeleton, IDENT);
+          sm.frustumCulled = false;      // it sits at the origin while its bones are out in the world
+          sm.castShadow = true;
+          sm.receiveShadow = true;
+          scene.add(sm);
+          part.skinned.push(sm);
+          part.skin.push({ mesh: sm, body: BODY_MATS.has(mn), isSkin: mn === 'Skin' });
+        }
+      }
     }
 
     for (const j of JOINTS) {
@@ -474,7 +514,7 @@ export class Ragdoll {
     this.bleedRate = 0;
     this.stun = 0.6;
     this.twitch = 1;
-    const green = mat(0x8fbf6a);
+    const green = this.skinned ? tintedMaterial('Skin', 0x8fbf6a) : mat(0x8fbf6a);
     for (const n in this.parts) {
       for (const s of this.parts[n].skin) {
         if (!s.isSkin) continue;
@@ -487,13 +527,14 @@ export class Ragdoll {
 
   /** Cut a part (and anything hanging off it) free of its parent. */
   sever(name, dir) {
-    if (this.severed.has(name)) return;
+    if (this.severed.has(name) || !JOINT_OF[name]) return;   // (the pelvis is the root: it hangs off nothing)
     const jd = this.joints[JOINT_OF[name].name];
     if (!jd) return;
     this.goLimp(3);
     // removing a joint twice (e.g. its body was gibbed) would panic the wasm world, so check first
     if (this.ctx.world.getImpulseJoint(jd.joint.handle)) this.ctx.world.removeImpulseJoint(jd.joint, true);
     this.severed.add(name);
+    this.detach(jd.def);
 
     const { gore, sfx } = this.ctx;
     const parent = this.parts[jd.def.a];
@@ -538,12 +579,38 @@ export class Ragdoll {
     this.colHandles.delete(p.collider.handle);
     this.ctx.world.removeRigidBody(p.body); // also drops every joint attached to it
     this.ctx.scene.remove(p.mesh);
+    for (const m of p.skinned) this.ctx.scene.remove(m);
     p.gone = true;
+    for (const j of JOINTS) if (j.a === name || j.b === name) this.detach(j);
     // everything that hung off this part is now loose
     for (const n in PARTS) for (let a = PARENT[n]; a; a = PARENT[a]) if (a === name) this.severed.add(n);
     this.severed.add(name);
     if (LEGS.has(name)) this.crippled = true;
-    if (name === 'head' || name === 'torso') this.die('gib');
+    if (name === 'head' || name === 'torso' || name === 'pelvis') this.die('gib');
+  }
+
+  /**
+   * A joint has parted. The skin on each side was blending toward the other side's bone; from now on
+   * it follows a stand-in fixed to its own side instead, so the cut end keeps the shape it had at rest.
+   */
+  detach(def) {
+    if (!this.skinned) return;
+    for (const [self, other] of [[def.a, def.b], [def.b, def.a]]) {
+      const p = this.parts[self];
+      if (p.gone) continue;
+      if (!p.cutFrom) p.cutFrom = new Set();
+      if (p.cutFrom.has(other)) continue;
+      p.cutFrom.add(other);
+      if (!p.skeleton) {              // its own copy of the bone list, so the swap below is private to this part
+        p.skeleton = new THREE.Skeleton(this.skeleton.bones, REST_INV);
+        for (const m of p.skinned) m.bind(p.skeleton, IDENT);
+      }
+      const a = PARTS[other].pos, b = PARTS[self].pos;
+      const standIn = new THREE.Object3D();
+      standIn.position.set(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+      p.mesh.add(standIn);
+      p.skeleton.bones[BONE_INDEX[other]] = standIn;
+    }
   }
 
   addStump(part, local, out, radius) {
@@ -993,8 +1060,11 @@ export class Ragdoll {
       if (!p.gone) {
         this.ctx.world.removeRigidBody(p.body);
         this.ctx.scene.remove(p.mesh);
+        for (const m of p.skinned) this.ctx.scene.remove(m);
       }
+      if (p.skeleton) p.skeleton.dispose();
     }
+    if (this.skeleton) this.skeleton.dispose();
   }
 }
 

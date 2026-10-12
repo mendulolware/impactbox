@@ -12,11 +12,12 @@ import * as THREE from 'three';
 
 export const MAX_WOUNDS = 12;
 const CORE_SCALE = 0.82;
+const SKIN_DEPTH = 0.011;    // skinned bodies: how far under the surface the meat starts
 
 const WOUND_GLSL = `
 uniform vec4 uWounds[${MAX_WOUNDS}];
 uniform int uWoundCount;
-uniform float uPosScale;     // mesh-local -> part-local (the meat core is a shrunk copy)
+uniform float uPosScale;     // mesh-local -> part-local (the rigid meat core is a shrunk copy)
 uniform float uHoleScale;    // deeper layers get narrower holes
 varying vec3 vWPos;
 // distance to the nearest wound, in wound radii (< 1 means inside the hole)
@@ -32,16 +33,18 @@ float woundDist() {
 }`;
 
 /** Copy of a material whose shader cuts wound holes and bloodies the skin around them. */
-function woundMaterial(base, uniforms, { posScale = 1, holeScale = 1, rim = true } = {}) {
+function woundMaterial(base, uniforms, { posScale = 1, holeScale = 1, rim = true, shrink = 0 } = {}) {
   const m = base.clone();
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uWounds = uniforms.wounds;
     shader.uniforms.uWoundCount = uniforms.count;
     shader.uniforms.uPosScale = { value: posScale };
     shader.uniforms.uHoleScale = { value: holeScale };
+    shader.uniforms.uOrigin = uniforms.origin;       // where the part sits in the body's rest pose
+    shader.uniforms.uShrink = { value: shrink };     // the meat layer is the same skin pulled in along its normals
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = position;');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform vec3 uOrigin;\nuniform float uShrink;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = position - uOrigin;\ntransformed -= normal * uShrink;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\n' + WOUND_GLSL)
       .replace('#include <clipping_planes_fragment>',
@@ -52,6 +55,7 @@ function woundMaterial(base, uniforms, { posScale = 1, holeScale = 1, rim = true
           : ''));
   };
   m.customProgramCacheKey = () => 'wound' + (rim ? 1 : 0);
+  m.name = base.name;
   return m;
 }
 
@@ -116,12 +120,26 @@ function prepare(part) {
   const uniforms = {
     wounds: { value: Array.from({ length: MAX_WOUNDS }, () => new THREE.Vector4(0, 0, 0, 1)) },
     count: { value: 0 },
+    origin: { value: part.rest || new THREE.Vector3() },
   };
   part.wounds = { uniforms, list: [] };
-  for (const s of part.skin) {
+  for (const s of [...part.skin]) {
     const base = s.mesh.material;
     s.mesh.material = woundMaterial(base, uniforms);
     if (!s.body) continue; // hair, eyes, shoes: holes only, nothing behind them
+    if (s.mesh.isSkinnedMesh) {
+      // skinned body: the wall and the meat are more skins on the same bones
+      const wall = new THREE.SkinnedMesh(s.mesh.geometry, woundMaterial(wallMat, uniforms, { rim: false }));
+      const core = new THREE.SkinnedMesh(s.mesh.geometry,
+        woundMaterial(meatMat, uniforms, { shrink: SKIN_DEPTH, holeScale: 0.72, rim: false }));
+      for (const m of [wall, core]) {
+        m.bind(s.mesh.skeleton, s.mesh.bindMatrix);
+        m.frustumCulled = false;
+        s.mesh.parent.add(m);
+        part.skinned.push(m);
+      }
+      continue;
+    }
     const wall = new THREE.Mesh(s.mesh.geometry, woundMaterial(wallMat, uniforms, { rim: false }));
     const core = new THREE.Mesh(s.mesh.geometry,
       woundMaterial(meatMat, uniforms, { posScale: CORE_SCALE, holeScale: 0.72, rim: false }));

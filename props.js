@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { getModel } from './models.js';
+import { getModel, tintedMaterial } from './models.js';
 
 const TYPES = {
   crate:     { label: 'Crate',            icon: '📦', shape: 'box', half: [0.3, 0.3, 0.3], color: 0xb5833a, density: 350, hp: 70, rest: 0.1, debris: 0x9a6a2a },
@@ -17,18 +17,19 @@ const TYPES = {
   lamp:      { label: 'Street Lamp',      icon: '💡', shape: 'box', half: [0.12, 2.1, 0.12], color: 0x333a42, density: 600, hp: Infinity, rest: 0.05 },
   sandbags:  { label: 'Sandbags',         icon: '🧱', shape: 'box', half: [0.95, 0.267, 0.18], color: 0x8a744a, density: 900, hp: Infinity, rest: 0.0 },
   toilet:    { label: 'Toilet',           icon: '🚽', shape: 'box', half: [0.2, 0.4, 0.31], color: 0xe6e6e0, density: 250, hp: 60, rest: 0.05, debris: 0xe6e6e0 },
-  car:       { label: 'Car',              icon: '🚗', shape: 'box', half: [0.92, 0.6, 2.14], color: 0x2a5a9a, density: 160, hp: 380, rest: 0.05, explosive: true, blast: [9, 1.5] },
+  car:       { label: 'Car',              icon: '🚗', shape: 'box', half: [0.92, 0.66, 2.14], color: 0x2a5a9a, density: 145, hp: 380, rest: 0.05, explosive: true, blast: [9, 1.5] },
   block:     { label: 'Heavy Block',      icon: '🧱', shape: 'box', half: [0.5, 0.5, 0.5], color: 0x6f7378, density: 1600, hp: Infinity, rest: 0.05 },
   plank:     { label: 'Plank',            icon: '🪵', shape: 'box', half: [1.1, 0.05, 0.14], color: 0xc9a066, density: 300, hp: Infinity, rest: 0.1 },
   rocket:    { label: 'Rocket',           icon: '🚀', shape: 'ball', r: 0.06, color: 0x4a5a3a, density: 400, hp: Infinity, rest: 0 },
-  grenade:   { label: 'Grenade',          icon: '💣', shape: 'ball', r: 0.1, color: 0x2e4a2e, density: 1800, hp: Infinity, rest: 0.3, fuse: 2.4 },
+  grenade:   { label: 'Grenade',          icon: '💣', shape: 'ball', r: 0.07, color: 0x2e4a2e, density: 5200, hp: Infinity, rest: 0.3, fuse: 2.4 },
 };
 
 export const PROP_TYPES = TYPES;
 
-// prop type -> model name in assets/models.glb (the ball is just a sphere)
+// prop type -> model name in assets/models.glb
+const CAR_PAINT = [0x0d2350, 0x5a0d0d, 0x1a1a1c, 0xb9bcc0, 0x0f3a24, 0xd9d6cc, 0x6a5a1a, 0x3a3f46];
 const MODEL_OF = {
-  crate: 'Crate', barrel: 'Barrel', explosive: 'ExplosiveBarrel',
+  ball: 'Ball', crate: 'Crate', barrel: 'Barrel', explosive: 'ExplosiveBarrel',
   block: 'Block', plank: 'Plank', grenade: 'Grenade', rocket: 'Rocket',
   chair: 'Chair', table: 'Table', cone: 'TrafficCone', propane: 'PropaneTank', pallet: 'WoodenPallet',
   dumpster: 'Dumpster', lamp: 'StreetLamp', sandbags: 'SandbagWall', toilet: 'Toilet', car: 'Car',
@@ -83,13 +84,17 @@ export class Prop {
     this.mesh = getModel(MODEL_OF[type]);
     if (this.mesh) {
       if (type === 'grenade') {
-        this.mesh.scale.setScalar(1.7); // the viewmodel-sized grenade, scaled up to its collider
+        this.mesh.scale.setScalar(2.0); // the viewmodel-sized grenade, scaled up to its collider
         this.mesh.traverse((o) => {
           if (o.isMesh && o.material.name === 'GrenadeBody') {
             this.mat = this.mat || o.material.clone();
             o.material = this.mat;
           }
         });
+      }
+      if (type === 'car') {             // every car gets its own paint
+        const paint = tintedMaterial('CarPaint', CAR_PAINT[Math.floor(Math.random() * CAR_PAINT.length)]);
+        this.mesh.traverse((o) => { if (o.isMesh && o.material.name === 'CarPaint') o.material = paint; });
       }
     } else {
       // no Blender model for this type: draw the collider shape

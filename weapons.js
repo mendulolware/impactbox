@@ -25,38 +25,42 @@ export const WEAPONS = [
 //   adsZ   - how far in front of the eye the weapon is held while aiming
 //   muzzle - where tracers and the flash come from
 //   handR / handL - [x, y, z, pitch] for the gripping / supporting hand
+//   handS  - pistols: the other hand closed round the gripping one (two-handed hold)
+// sight, muzzle and the hand positions come out of the model build (REF in models/guns.py).
 //   scope  - aiming swaps the weapon for a full-screen scope picture
 //   vr     - hand-driven: the mouse moves the hand itself (see updateKnife)
 const RIG_SCALE = 0.8;
 const HELMET_DROP = 0.1;   // how far the eyes are below the helmet camera (matches player.js)
 const VIEW = [
-  { model: 'Pistol',  hip: [0.19, -0.19, -0.50], sight: 0.053, adsZ: -0.42, muzzle: [0, 0.031, -0.118],
-    handR: [0, -0.046, 0.058, -0.25], handL: [0, -0.115, 0.08, -0.25] },
-  { model: 'Revolver', hip: [0.19, -0.19, -0.50], sight: 0.058, adsZ: -0.42, muzzle: [0, 0.036, -0.185],
-    handR: [0, -0.048, 0.062, -0.35], handL: [0, -0.118, 0.088, -0.3] },
-  { model: 'SMG',     hip: [0.19, -0.2, -0.42], sight: 0.051, adsZ: -0.40, muzzle: [0, 0.006, -0.265],
-    handR: [0, -0.07, 0.07, -0.25], handL: [0, -0.03, -0.115, 0] },
-  { model: 'Shotgun', hip: [0.19, -0.2, -0.42], sight: 0.041, adsZ: -0.44, muzzle: [0, 0.016, -0.63],
-    handR: [0, -0.04, 0.135, -0.7], handL: [0, -0.034, -0.27, 0] },
+  { model: 'Pistol',  hip: [0.19, -0.19, -0.50], sight: 0.053, adsZ: -0.42, muzzle: [0, 0.034, -0.106],
+    handR: [0, -0.046, 0.0625, -0.226], handS: [0, -0.046, 0.0625, -0.226] },
+  { model: 'Revolver', hip: [0.19, -0.19, -0.50], sight: 0.058, adsZ: -0.42, muzzle: [0, 0.038, -0.181],
+    handR: [0, -0.048, 0.062, -0.35], handS: [0, -0.048, 0.062, -0.35] },
+  { model: 'SMG',     hip: [0.19, -0.2, -0.42], sight: 0.0615, adsZ: -0.40, muzzle: [0, 0.006, -0.265],
+    handR: [0, -0.072, 0.068, -0.25], handL: [0, -0.021, -0.125, 0] },
+  { model: 'Shotgun', hip: [0.19, -0.2, -0.42], sight: 0.040, adsZ: -0.44, muzzle: [0, 0.016, -0.63],
+    handR: [0, -0.038, 0.135, -0.7], handL: [0, -0.040, -0.27, 0] },
   { model: 'Rifle',   hip: [0.19, -0.2, -0.42], sight: 0.067, adsZ: -0.44, muzzle: [0, 0.006, -0.665],
-    handR: [0, -0.072, 0.095, -0.3], handL: [0, -0.024, -0.235, 0] },
+    handR: [0, -0.072, 0.095, -0.3], handL: [0, -0.030, -0.235, 0] },
   { model: 'Sniper',  hip: [0.19, -0.2, -0.42], sight: 0.072, adsZ: -0.30, muzzle: [0, 0.02, -0.795], scope: true,
-    handR: [0, -0.04, 0.14, -0.6], handL: [0, -0.036, -0.2, 0] },
-  { model: 'RocketLauncher', hip: [0.22, -0.13, -0.26], sight: 0.14, adsZ: -0.24, muzzle: [0, 0.06, -0.78],
-    handR: [0, -0.03, 0.0, -0.15], handL: [0, 0.045, -0.28, 0] },
+    handR: [0, -0.050, 0.128, -0.6], handL: [0, -0.040, -0.2, 0] },
+  { model: 'RocketLauncher', hip: [0.22, -0.13, -0.26], sight: 0.14, adsZ: -0.24, muzzle: [0, 0.07, -0.84],
+    handR: [0, -0.03, 0.010, -0.15], handL: [0, 0.0445, -0.27, 0] },
   { model: 'Machete', hip: [0.3, -0.3, -0.5], melee: true },
   { model: 'Knife',   hip: [0.22, -0.2, -0.45], vr: true },
   { model: 'Grenade', hip: [0.28, -0.3, -0.5], held: true },
   { model: 'GrabGun', hip: [0.21, -0.22, -0.45], muzzle: [0, 0.005, -0.37],
-    handR: [0, -0.088, 0.1, -0.25], handL: [0, -0.036, -0.08, 0] },
+    handR: [0, -0.088, 0.1, -0.25], handL: [0, -0.045, -0.075, 0] },
 ];
 
 // ---- hand-driven knife (all in camera space: +x right, +y up, -z forward)
 const HAND_REST = new THREE.Vector3(0.22, -0.2, -0.45);
 const HAND_MIN = new THREE.Vector3(-0.5, -0.45, -0.95);
 const HAND_MAX = new THREE.Vector3(0.6, 0.35, -0.28);
-const ELBOW = new THREE.Vector3(0.36, -0.62, 0.12);        // where the forearm disappears off screen
-const WRIST = new THREE.Vector3(0.07, -0.06, 0.16);        // on the KnifeHand model
+const ELBOW = new THREE.Vector3(0.37, -0.37, -0.14);       // where the forearm disappears off screen (hand at rest)
+const SLEEVE_LEN = 0.3;                                    // length of the SleeveArm model
+const BACK = new THREE.Vector3(0, 0, 1);
+const WRIST = new THREE.Vector3(0.0035, 0.060, 0.102);     // on the KnifeHand model (REF.KnifeHand.wrist)
 const BLADE = [new THREE.Vector3(0, 0, -0.07), new THREE.Vector3(0, 0, -0.18), new THREE.Vector3(0, 0, -0.285)]; // base, middle, tip
 
 const _o = new THREE.Vector3();
@@ -107,8 +111,10 @@ function buildViewmodel(v) {
     g.add(model);
     const r = v.handR && hand('HandR', v.handR);
     const l = v.handL && hand('HandL', v.handL);
+    const s = v.handS && hand('HandSupport', v.handS);
     if (r) g.add(r);
     if (l) g.add(l);
+    if (s) g.add(s);
   }
   return g;
 }
@@ -155,13 +161,13 @@ export class Weapons {
     ctx.scene.add(this.flash);
 
     // the knife arm: a sleeve stretched from the wrist back to the elbow as the hand moves
-    let sleeve = null;
-    const hr = getModel('HandR', null, false);
-    if (hr) hr.traverse((o) => { if (o.isMesh && o.material.name === 'Sleeve') sleeve = o.material; });
-    this.forearm = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.8, 1, 1, 10),
-      sleeve || new THREE.MeshStandardMaterial({ color: 0x2c3321, roughness: 0.9 })
-    );
+    // (the SleeveArm model runs 0.3 m from its origin along +Z; a plain tube stands in if it is missing)
+    this.forearm = getModel('SleeveArm', null, false);
+    if (!this.forearm) {
+      const g = new THREE.CylinderGeometry(0.045, 0.04, SLEEVE_LEN, 10);
+      g.rotateX(Math.PI / 2).translate(0, 0, SLEEVE_LEN / 2);
+      this.forearm = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x2c3321, roughness: 0.9 }));
+    }
     this.forearm.visible = false;
     ctx.camera.add(this.forearm);
 
@@ -375,10 +381,11 @@ export class Weapons {
     cam.updateMatrixWorld(true);
     const model = this.models[this.index];
     const wrist = cam.worldToLocal(model.localToWorld(_m.copy(WRIST)));
-    const len = wrist.distanceTo(ELBOW);
-    this.forearm.position.copy(wrist).add(ELBOW).multiplyScalar(0.5);
-    this.forearm.scale.set(0.05, len, 0.05);
-    this.forearm.quaternion.setFromUnitVectors(UPV, _o.copy(wrist).sub(ELBOW).normalize());
+    _o.copy(this.handPos).sub(HAND_REST).multiplyScalar(0.55).add(ELBOW);   // the elbow follows the hand part of the way
+    const len = wrist.distanceTo(_o);
+    this.forearm.position.copy(wrist);
+    this.forearm.scale.set(1, 1, len / SLEEVE_LEN);
+    this.forearm.quaternion.setFromUnitVectors(BACK, _o.sub(wrist).normalize());
     this.forearm.visible = true;
 
     // sweep the blade through the world
