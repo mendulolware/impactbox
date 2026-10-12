@@ -905,6 +905,7 @@ def shot(names, path, view=(1, -1.4, 0.6), res=(960, 640), lens=70, margin=1.12,
     d = Vector(view).normalized()
     cam.data.lens = lens
     cam.data.sensor_width = 36
+    cam.data.sensor_fit = 'HORIZONTAL'      # so tall pictures are framed by the same sum as wide ones
     rot = d.to_track_quat('Z', 'Y')
     cam.rotation_euler = rot.to_euler()
     right = rot @ Vector((1, 0, 0))
