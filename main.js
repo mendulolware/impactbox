@@ -18,33 +18,83 @@ await Promise.all([RAPIER.init(), loadModels()]);
 const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.95;
+renderer.toneMappingExposure = 1.08;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 400);
 scene.add(camera);
 
-// ---- helmet-cam look: the scene is drawn to a texture, then graded (no distortion, no grain)
+// ---- cinematic post-process: restrained bloom, grade, vignette and helmet-camera treatment
 const lens = {
-  target: new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, samples: 4 }),
+  target: new THREE.WebGLRenderTarget(2, 2, {
+    type: THREE.HalfFloatType,
+    samples: 4,
+    colorSpace: THREE.LinearSRGBColorSpace,
+  }),
   scene: new THREE.Scene(),
   camera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1),
   material: new THREE.ShaderMaterial({
     depthTest: false,
     depthWrite: false,
-    uniforms: { tScene: { value: null } },
+    uniforms: {
+      tScene: { value: null },
+      resolution: { value: new THREE.Vector2(2, 2) },
+      time: { value: 0 },
+      helmet: { value: 0 },
+    },
     vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`,
     fragmentShader: `
-      uniform sampler2D tScene; varying vec2 vUv;
+      uniform sampler2D tScene;
+      uniform vec2 resolution;
+      uniform float time;
+      uniform float helmet;
+      varying vec2 vUv;
+
+      float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+      }
+
       void main() {
-        vec3 col = texture2D(tScene, vUv).rgb;
-        vec2 v = vUv * 2.0 - 1.0;
-        col *= mix(0.55, 1.0, smoothstep(1.55, 0.6, length(v)));          // soft darkening toward the corners
-        float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
-        col = mix(vec3(l), col, 0.85) * vec3(0.98, 1.0, 1.02) * 1.06;      // slightly flat, cool camera colour
+        vec2 px = 1.0 / resolution;
+        vec2 centre = vUv * 2.0 - 1.0;
+        float edge = dot(centre, centre);
+        float aberration = (0.25 + helmet * 0.55) * edge;
+        vec3 col;
+        col.r = texture2D(tScene, vUv + px * aberration).r;
+        col.g = texture2D(tScene, vUv).g;
+        col.b = texture2D(tScene, vUv - px * aberration).b;
+
+        // Small, thresholded cross blur gives bright surfaces a soft photographic bloom.
+        vec3 bloom = vec3(0.0);
+        vec2 spread = px * 3.5;
+        bloom += texture2D(tScene, vUv + vec2(spread.x, 0.0)).rgb;
+        bloom += texture2D(tScene, vUv - vec2(spread.x, 0.0)).rgb;
+        bloom += texture2D(tScene, vUv + vec2(0.0, spread.y)).rgb;
+        bloom += texture2D(tScene, vUv - vec2(0.0, spread.y)).rgb;
+        bloom *= 0.25;
+        bloom = max(bloom - vec3(0.72), 0.0);
+        col += bloom * (0.13 + helmet * 0.03);
+
+        // Filmic contrast and slightly warm highlights / cool shadows.
+        float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
+        col = mix(vec3(luma), col, 1.08 - helmet * 0.23);
+        col *= mix(vec3(0.95, 0.98, 1.035), vec3(1.035, 1.01, 0.96), smoothstep(0.12, 0.9, luma));
+        col = (col - 0.5) * 1.055 + 0.5;
+
+        float vignette = smoothstep(1.35, 0.28, length(centre * vec2(0.78, 1.0)));
+        col *= mix(0.76, 1.0, vignette);
+        col *= mix(1.0, mix(0.72, 1.0, smoothstep(1.52, 0.62, length(centre))), helmet);
+
+        float grain = hash(gl_FragCoord.xy + fract(time) * 173.0) - 0.5;
+        col += grain * (0.006 + helmet * 0.014);
+        if (helmet > 0.5) {
+          float scan = sin(gl_FragCoord.y * 0.72 + time * 18.0) * 0.006;
+          col += scan;
+        }
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -58,6 +108,7 @@ function resize() {
   renderer.setSize(w, h, false);
   const pr = renderer.getPixelRatio();
   lens.target.setSize(Math.max(2, Math.floor(w * pr)), Math.max(2, Math.floor(h * pr)));
+  lens.material.uniforms.resolution.value.set(Math.max(2, Math.floor(w * pr)), Math.max(2, Math.floor(h * pr)));
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
@@ -559,14 +610,14 @@ function tick(now) {
       const p2 = (n) => String(n).padStart(2, '0');
       camTimeEl.textContent = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}  ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
     }
-    renderer.setRenderTarget(lens.target);
-    renderer.render(scene, camera);
-    renderer.setRenderTarget(null);
-    lens.material.uniforms.tScene.value = lens.target.texture;
-    renderer.render(lens.scene, lens.camera);
-  } else {
-    renderer.render(scene, camera);
   }
+  lens.material.uniforms.time.value = now * 0.001;
+  lens.material.uniforms.helmet.value = ctx.helmet ? 1 : 0;
+  renderer.setRenderTarget(lens.target);
+  renderer.render(scene, camera);
+  renderer.setRenderTarget(null);
+  lens.material.uniforms.tScene.value = lens.target.texture;
+  renderer.render(lens.scene, lens.camera);
 }
 
 $('loading').remove();
