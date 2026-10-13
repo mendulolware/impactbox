@@ -31,14 +31,14 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | File | What it does |
 | --- | --- |
 | `main.js` | renderer, game loop, input, spawn menu, explosions, hit routing |
-| `ragdoll.js` | 11-body ragdoll under one skinned figure: procedural animation, active ragdoll, damage, severing, gibbing, bleeding |
+| `ragdoll.js` | 11-body ragdoll under one skinned figure: procedural animation, active ragdoll, injuries that show (limp arms, limping, crawling, bleeding out), fall damage, severing, gibbing |
 | `brain.js` | NPC AI: senses, civilian / thug / zombie behaviour, steering |
 | `weapons.js` | weapon definitions, firing, melee, grenades, grab gun, viewmodels |
 | `props.js` | crates, barrels, cars, furniture, grenades, rockets and the rest of the spawn menu |
 | `models.js` | loads `assets/models.glb`; lays surface detail and edge wear over the models; hands out body pieces |
 | `detail.js` | fine tiling surfaces for the models (steel, plastic, wood grain, cloth, leather, skin), generated in code |
-| `gore.js` | instanced blood/gib/fire particles and surface decals |
-| `wounds.js` | holes cut into body parts, and what is visible inside them |
+| `gore.js` | blood droplets and mist, fire and smoke; decals (splats, spatter, runs, pools, smears); physical chunks (meat, bone, skull, ribs, gut, eyes) |
+| `wounds.js` | holes and gashes cut into body parts, blood soaking and running from them, burns, what is visible inside, and the torn stumps |
 | `player.js` | first-person character controller |
 | `world.js` | arena, sky with clouds, sun, fog, painted lines |
 | `textures.js` | asphalt, concrete and timber generated in code, each with colour, normal and roughness maps |
@@ -64,16 +64,35 @@ what it wants: a heading, a speed, a gesture and something to look at. Steering 
 | Zombie | hunts the nearest living thing, lunges and bites; only head damage really stops it; anyone it bites rises as a zombie 6 seconds after dying |
 
 **Active ragdoll (`muscles()` in `ragdoll.js`).** Every joint is pulled toward a target angle with a strength called tone, plus joint friction and
-swing/twist limits. A living NPC braces as it falls and writhes when badly hurt; a dead one loses tone and goes limp, with a few twitches.
+swing/twist limits. Each limit is measured from the middle of that joint's real range (`ref` in `JOINTS`), so a hip swings far forward and
+hardly back, and a joint at its limit absorbs the motion instead of springing back. A living NPC braces for a moment as it falls and writhes
+when badly hurt; a dead one drops at once and goes limp, with a few twitches.
 Light hits make a standing NPC flinch and stagger instead of dropping; legs, heads, blades, blasts, repeated hits and low health put it down.
+Getting up goes through a crouch (`squat`) instead of sliding straight to standing.
+
+**Hands, feet and self-collision.** Forearms and shins carry an extra collider for the hand and the foot (`EXTRA`), and parts of one body
+collide with each other unless they share a joint (`selfCollide`, used by the contact hook in `main.js`). An arm lies on a chest instead of in it.
+Bodies have continuous collision detection on, so a thrown one cannot pass through a wall. `preStep()` / `sync()` take the energy out of a
+part the solver throws back up off the ground (a heavy torso landing on a light head used to bounce a metre).
+
+**Being hurt shows** (all in `ragdoll.js`):
+
+- Every wound is an entry in `drips`: it drips (a trail on the ground if its owner is moving) and costs health until it clots (limbs) or kills (body wounds). Stumps bleed fastest. Zombies do not bleed out.
+- At 20 health or less a human cannot stay standing (`goLimp`), and dies of blood loss if still bleeding ("BLED OUT").
+- An arm below about half its health hangs dead (`dangle`, the `limp` set): those bodies stay dynamic while the rest of the NPC is animated.
+- A hurt leg limps (`lame`): shorter, stiffer steps on that side, the body tipping over it, and a slower walk.
+- A body wound gets a hand pressed to it (`clutch`).
+- `crawl()`: an NPC that cannot stand (a leg gone, or too little health) drags itself along on its arms. People crawl away from what frightened them; zombies crawl toward their prey and still bite when they reach it. A bleeding body dragged over the ground leaves a smear (`trail`).
+- `impacts()`: a head, chest or pelvis that stops dead against something takes damage, with blood where it hit and a split scalp for heads. A fall of 1.5 m is harmless, 3 m hurts, 8 m kills; being thrown into a wall by the grab gun counts too.
 
 **The body you see** is one continuous skinned figure (`models/character.py`): T-shirt, jeans and trainers over a body whose surface runs
 unbroken through the elbows, knees, waist, shoulders, hips and neck. Each of the eleven rigid bodies is a bone, and every vertex
 follows one or two of them, so limbs bend instead of hinging. The figure is stored as a piece per rigid body so that each can
 still be wounded, cut off or destroyed on its own; when a joint parts, `detach()` makes the skin on each side stop following the other,
-and the caps of flesh and bone that were hidden inside the joint become the stumps. Skin, shirt, trouser and hair colours are chosen per NPC.
+adds the caps of flesh and bone that close the cut, and `makeStump()` (`wounds.js`) puts a torn end on each side.
+Skin, shirt, trouser and hair colours are chosen per NPC.
+An untouched NPC is drawn joined up, one mesh per material (10 draw calls); `split()` swaps in the per-part pieces at the first injury.
 
-Parts of the same NPC never collide with each other (contact hook in `main.js`).
 Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted after one of its joints was cut.
 
 ## First person
@@ -103,15 +122,24 @@ Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of
 
 ## Gore
 
-`gore.js`: stretched blood droplets that stick where they land (floors, walls, ramps), procedural splatter decals that drip on walls,
-pools that spread under bodies and stumps, wounds stuck onto the body part that was hit, and physical meat/bone chunks.
-`ragdoll.js` adds bone-and-flesh stumps and pulsing arterial spray when a limb comes off.
+`gore.js` has three layers:
 
-`wounds.js` opens real holes in bodies. Each wound is a sphere in the body part's local space, and the part's
-materials get a shader that discards every pixel inside it. Behind the skin there is an inside-out flesh wall,
-a layer of meat (the same skin pulled in along its normals, with narrower holes, so the wound has depth), and innards: ribs,
-spine, lungs, heart, gut, brain and limb bones. All of it is skinned to the same bones as the body. Bullets cut an entry hole and a larger exit hole; hits near an existing wound widen it.
+- **Particles.** Blood droplets are small, glossy and drawn out into streaks by their speed; a fine red mist hangs for half a second where a round went through; fire and smoke are soft-edged puffs.
+- **Decals.** Five kinds of mark, each drawn once at start-up (`SHAPES`, `bakeDecal`) with a melted outline, darker where the blood is thick, and a raised lip so it catches the light: impact splats, fine directional spatter behind a victim, runs that creep down walls, pools that spread under bodies, and smears where a bleeding body was dragged. Drops that land at an angle leave a long mark pointing the way they were going. Big decals are kept from hanging off edges (`_fit`).
+- **Chunks.** Physical pieces that depend on what was destroyed (`CHUNK_MIX`): skull plates, brain and eyes from a head; ribs, gut and organs from a torso; meat, fat and snapped bone from limbs. Each leaves a wet mark where it lands.
+
+`wounds.js` opens real holes in bodies. Each wound is a short line with a radius in the body part's local space (a point for a bullet,
+longer for a blade's gash), and the part's materials get a shader that discards every pixel inside it. The wound remembers which way
+the bullet or blade went and bores along that, so the hole opens cleanly wherever the skin is. The same shader soaks the skin and
+clothes around a wound with blood that spreads and then runs down the body as the wound ages (`woundClock`), and chars whatever an
+explosion burned (`burn`). Behind the skin: the skin's own back faces painted as the far wall of the cavity, a layer of meat (the same
+skin pulled in along its normals, with narrower holes, so the wound has depth), and innards (ribs, spine, lungs, heart, liver, gut, brain,
+limb bones) as one mesh per body part. Bullets cut an entry hole and a larger exit hole; hits near an existing hole widen it.
 Hole size per weapon is `hole` in the `WEAPONS` table; a part holds up to 12 wounds.
+
+`makeStump()` builds the torn end left where a limb comes off: a mound of muscle ringed with fat, snapped bone standing out of it (two for a forearm
+or shin, spine and windpipe for a neck), ragged skin round the edge, and gut hanging out of a body cut in half. `ragdoll.js` adds the pulsing arterial spray.
+Explosions burn and pepper bodies rather than launching them out of the arena, and only destroy the parts that were right on top of the blast.
 
 ## Models
 
@@ -151,6 +179,8 @@ The build prints `ref`: the sight height, muzzle and hand positions of each gun,
 
 ## Tuning knobs
 
-- Body part HP and layout: `PARTS` at the top of `ragdoll.js`.
+- Body part HP and layout: `PARTS` at the top of `ragdoll.js`. Joint limits: `JOINTS`. Landing damage: `IMPACT` and `impact()`. Crawl strength: `CRAWL_PULL`.
+- How fast wounds bleed: the `this.bleed(...)` calls in `hit()` (drops per second, health per second) and the cap in `update()`.
+- Blood look: drop sizes in `blood()`, decal shapes in `SHAPES`, decal budgets where `this.sets` is built (`gore.js`).
 - Weapon damage, rate, impulse: `WEAPONS` at the top of `weapons.js`.
 - Max NPCs: `MAX_RAGDOLLS` in `main.js`.

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from './vendor/loaders/GLTFLoader.js';
+import { mergeGeometries } from './vendor/utils/BufferGeometryUtils.js';
 import { detail } from './detail.js';
 
 // Models are authored in Blender (models/build_models.py) and exported to one GLB.
@@ -99,6 +100,28 @@ export function bodyPieces(part) {
   src.traverse((o) => { if (o.isMesh) out.push({ geometry: o.geometry, material: o.material }); });
   return out;
 }
+
+const CAPS = new Set(['Flesh', 'BoneEnd']);    // the hidden ends that close each cut: only ever seen once a joint parts
+let whole = null;
+/**
+ * The same figure as bodyPieces(), joined up: one skinned geometry per material for the whole body,
+ * without the hidden joint caps. An untouched NPC is drawn with these (10 meshes instead of 47).
+ */
+export function bodyWhole(parts) {
+  if (whole) return whole;
+  const by = new Map();
+  for (const p of parts) {
+    for (const piece of bodyPieces(p) || []) {
+      const name = piece.material.name;
+      if (CAPS.has(name)) continue;
+      if (!by.has(name)) by.set(name, { material: piece.material, list: [] });
+      by.get(name).list.push(piece.geometry);
+    }
+  }
+  whole = [...by.values()].map(({ material, list }) => ({ material, geometry: list.length > 1 ? mergeGeometries(list) : list[0] }));
+  return whole;
+}
+export const isCap = (materialName) => CAPS.has(materialName);
 
 /** The shared material with this Blender name (clone it before changing it). */
 export const getMaterial = (name) => materials.get(name) || null;

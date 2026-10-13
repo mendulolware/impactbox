@@ -201,7 +201,7 @@ export class Brain {
 
   thug(dt, scan) {
     const n = this.npc, g = this.goal, pl = this.ctx.player;
-    if (n.health <= 35 && this.state === 'attack') { this.state = 'flee'; this.fear = 1; this.threat.copy(pl.pos); }
+    if ((n.health <= 35 || n.crawling) && this.state === 'attack') { this.state = 'flee'; this.fear = 1; this.threat.copy(pl.pos); }
     if (this.state !== 'attack') { this.civilian(dt, scan); return; }
 
     if (pl.dead) { this.state = 'calm'; this.anger = 0; return; }

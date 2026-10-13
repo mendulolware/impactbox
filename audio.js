@@ -60,6 +60,7 @@ export const sfx = {
   chop()      { noise({ dur: 0.14, f0: 2500, f1: 200, gain: 0.7 }); tone({ f0: 150, f1: 50, dur: 0.12, gain: 0.5 }); },
   squish()    { noise({ dur: 0.14, f0: 900, f1: 150, gain: 0.45 }); },
   explosion() { noise({ dur: 1.5, f0: 1600, f1: 50, gain: 1.3 }); tone({ f0: 95, f1: 22, dur: 1.0, gain: 1.0 }); },
+  crack()     { noise({ dur: 0.07, f0: 3200, f1: 900, q: 2.5, gain: 0.6, type: 'bandpass' }); tone({ f0: 260, f1: 80, dur: 0.05, gain: 0.3, type: 'square' }); },
   thud(v = 1) { tone({ f0: 100, f1: 40, dur: 0.1, gain: 0.3 * v }); },
   pop()       { tone({ f0: 380, f1: 820, dur: 0.07, gain: 0.15, type: 'triangle' }); },
   tick()      { tone({ f0: 1200, f1: 900, dur: 0.04, gain: 0.12, type: 'square' }); },

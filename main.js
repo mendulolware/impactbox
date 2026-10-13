@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { initAudio, sfx } from './audio.js';
 import { Gore } from './gore.js';
-import { Ragdoll } from './ragdoll.js';
+import { Ragdoll, selfCollide } from './ragdoll.js';
+import { tickWounds } from './wounds.js';
 import { Prop, PROP_TYPES } from './props.js';
 import { Player } from './player.js';
 import { Weapons, WEAPONS } from './weapons.js';
@@ -46,13 +47,13 @@ resize();
 const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
 world.numSolverIterations = 8;
 
-// Parts of the same NPC never collide with each other: hard self-collision is what makes
-// ragdolls twitch. Soft joint limits in ragdoll.js keep limbs from folding through the body.
+// Parts of the same NPC collide with each other unless they share a joint (ragdoll.js decides),
+// so an arm lies on a chest instead of in it and legs do not pass through each other.
 const eventQueue = new RAPIER.EventQueue(true); // Rapier only runs hooks when a queue is passed
 const physicsHooks = {
   filterContactPair(c1, c2) {
     const a = ctx.owners.get(c1), b = ctx.owners.get(c2);
-    if (a && b && a.kind === 'part' && b.kind === 'part' && a.ragdoll === b.ragdoll) return null;
+    if (a && b && a.kind === 'part' && b.kind === 'part' && a.ragdoll === b.ragdoll && !selfCollide(a.name, b.name)) return null;
     return RAPIER.SolverFlags.COMPUTE_IMPULSE;
   },
   filterIntersectionPair() { return true; },
@@ -148,8 +149,9 @@ ctx.explode = (p, radius = 7, power = 1) => {
       _d.normalize();
       r.goLimp(2.5); // animated NPCs must become physical before they can be thrown
       const m = part.body.mass();
-      part.body.applyImpulse({ x: _d.x * m * 24 * f * power, y: _d.y * m * 24 * f * power, z: _d.z * m * 24 * f * power }, true);
-      r.hit(name, 105 * f * power, _v.clone(), _d.clone(), 0, { explosion: true });
+      // thrown metres, not out of the arena: what a blast does to a body is tear it, not launch it
+      part.body.applyImpulse({ x: _d.x * m * 7.5 * f * power, y: _d.y * m * 7.5 * f * power, z: _d.z * m * 7.5 * f * power }, true);
+      r.hit(name, 105 * f * power, _v.clone(), _d.clone(), 0, { explosion: true, heat: f });
     }
   }
 
@@ -184,7 +186,10 @@ ctx.explode = (p, radius = 7, power = 1) => {
   }
 };
 
-const KILL_TEXT = { headshot: 'HEADSHOT', decap: 'DECAPITATED', bisect: 'BISECTED', gib: 'OBLITERATED', torso: 'TORSO SHOT', pelvis: 'GUT SHOT' };
+const KILL_TEXT = {
+  headshot: 'HEADSHOT', decap: 'DECAPITATED', bisect: 'BISECTED', gib: 'OBLITERATED', torso: 'TORSO SHOT', pelvis: 'GUT SHOT',
+  bled: 'BLED OUT', impact: 'SKULL CRACKED',
+};
 ctx.onKill = (rag, cause) => {
   ctx.kills++;
   toast(KILL_TEXT[cause] || 'KILLED');
@@ -535,6 +540,7 @@ function tick(now) {
   for (const p of ctx.props) p.update(sdt);
 
   if (sdt > 0) {
+    for (const r of ctx.ragdolls) r.preStep();
     const steps = Math.max(1, Math.ceil(sdt / (1 / 60)));
     world.timestep = sdt / steps;
     for (let i = 0; i < steps; i++) world.step(eventQueue, physicsHooks);
@@ -546,6 +552,7 @@ function tick(now) {
   if (ctx.props.some((p) => p.removed)) ctx.props = ctx.props.filter((p) => !p.removed);
 
   ctx.gore.update(sdt);
+  tickWounds(sdt);
 
   // shadow camera follows the player
   const sun = ctx.sun;

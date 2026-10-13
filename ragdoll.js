@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { getModel, bodyPieces, tintedMaterial } from './models.js';
-import { openWound } from './wounds.js';
+import { getModel, bodyPieces, bodyWhole, isCap, tintedMaterial } from './models.js';
+import { openWound, burn, makeStump } from './wounds.js';
 import { Brain } from './brain.js';
 
 // An NPC has two lives:
@@ -13,10 +13,16 @@ import { Brain } from './brain.js';
 // The ragdoll is "active": muscles() pulls every joint toward a pose with a strength called tone.
 // A living body braces as it falls and writhes when badly hurt; a dead one loses tone over a
 // second or so and goes limp. Light hits on a standing NPC make it flinch instead of collapse.
+//
+// Being hurt shows: a wrecked arm hangs dead while its owner keeps walking, a bad leg limps, a hand
+// goes to a gut wound, wounds drip and leave a trail, blood loss ends in a collapse, and someone who
+// cannot stand drags themselves along the ground. Hard landings break things too.
 
 const UP = new THREE.Vector3(0, 1, 0);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const clamp = THREE.MathUtils.clamp;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const CRAWL_PULL = 12;     // m/s^2 an arm can drag the body with
 
 // Body layout (feet at y = 0, character faces -Z). pos = part centre.
 const PARTS = {
@@ -34,19 +40,34 @@ const PARTS = {
 };
 
 // a = parent, b = child; anchor in character space. Listed parent-first (the animation relies on it).
-// stump = radius of the wound left behind, cone = soft swing limit (radians) while ragdolled.
+// cut = half-widths of the wound left when the joint parts, kind = what that wound looks like.
+// cone = soft swing limit (radians) while ragdolled, measured from the middle of the joint's range:
+// ref = [forward, outward] says where that middle is (a hip swings far forward and hardly back).
 const JOINTS = [
-  { name: 'spine',     a: 'pelvis', b: 'torso',  anchor: [0, 1.10, 0], stump: 0.13, cone: 0.55 },
-  { name: 'neck',      a: 'torso',  b: 'head',   anchor: [0, 1.56, 0], stump: 0.05, cone: 0.7 },
-  { name: 'shoulderL', a: 'torso',  b: 'uarmL',  anchor: [0.21, 1.45, 0], stump: 0.05, cone: 2.3 },
-  { name: 'elbowL',    a: 'uarmL',  b: 'farmL',  anchor: [0.21, 1.16, 0], stump: 0.043, axis: [1, 0, 0], limits: [0, 2.4] },
-  { name: 'shoulderR', a: 'torso',  b: 'uarmR',  anchor: [-0.21, 1.45, 0], stump: 0.05, cone: 2.3 },
-  { name: 'elbowR',    a: 'uarmR',  b: 'farmR',  anchor: [-0.21, 1.16, 0], stump: 0.043, axis: [1, 0, 0], limits: [0, 2.4] },
-  { name: 'hipL',      a: 'pelvis', b: 'thighL', anchor: [0.10, 0.95, 0], stump: 0.072, cone: 1.5 },
-  { name: 'kneeL',     a: 'thighL', b: 'shinL',  anchor: [0.10, 0.46, 0], stump: 0.058, axis: [1, 0, 0], limits: [-2.4, 0] },
-  { name: 'hipR',      a: 'pelvis', b: 'thighR', anchor: [-0.10, 0.95, 0], stump: 0.072, cone: 1.5 },
-  { name: 'kneeR',     a: 'thighR', b: 'shinR',  anchor: [-0.10, 0.46, 0], stump: 0.058, axis: [1, 0, 0], limits: [-2.4, 0] },
+  { name: 'spine',     a: 'pelvis', b: 'torso',  anchor: [0, 1.10, 0], cut: [0.15, 0.095], kind: 'gut', cone: 0.6, ref: [-0.15, 0] },
+  { name: 'neck',      a: 'torso',  b: 'head',   anchor: [0, 1.56, 0], cut: [0.052, 0.052], kind: 'neck', cone: 0.7, ref: [-0.1, 0] },
+  { name: 'shoulderL', a: 'torso',  b: 'uarmL',  anchor: [0.21, 1.45, 0], cut: [0.05, 0.05], kind: 'limb', cone: 2.0, ref: [0.5, 0.5] },
+  { name: 'elbowL',    a: 'uarmL',  b: 'farmL',  anchor: [0.21, 1.16, 0], cut: [0.043, 0.043], kind: 'limb2', axis: [1, 0, 0], limits: [0, 2.4] },
+  { name: 'shoulderR', a: 'torso',  b: 'uarmR',  anchor: [-0.21, 1.45, 0], cut: [0.05, 0.05], kind: 'limb', cone: 2.0, ref: [0.5, -0.5] },
+  { name: 'elbowR',    a: 'uarmR',  b: 'farmR',  anchor: [-0.21, 1.16, 0], cut: [0.043, 0.043], kind: 'limb2', axis: [1, 0, 0], limits: [0, 2.4] },
+  { name: 'hipL',      a: 'pelvis', b: 'thighL', anchor: [0.10, 0.95, 0], cut: [0.075, 0.075], kind: 'limb', cone: 1.15, ref: [0.55, 0.1] },
+  { name: 'kneeL',     a: 'thighL', b: 'shinL',  anchor: [0.10, 0.46, 0], cut: [0.058, 0.058], kind: 'limb2', axis: [1, 0, 0], limits: [-2.4, 0] },
+  { name: 'hipR',      a: 'pelvis', b: 'thighR', anchor: [-0.10, 0.95, 0], cut: [0.075, 0.075], kind: 'limb', cone: 1.15, ref: [0.55, -0.1] },
+  { name: 'kneeR',     a: 'thighR', b: 'shinR',  anchor: [-0.10, 0.46, 0], cut: [0.058, 0.058], kind: 'limb2', axis: [1, 0, 0], limits: [-2.4, 0] },
 ];
+for (const j of JOINTS) {
+  j.refAxis = new THREE.Vector3(0, 1, 0);
+  if (j.ref) j.refAxis.applyEuler(new THREE.Euler(j.ref[0], 0, j.ref[1], 'YXZ'));
+}
+
+// Hands and feet: extra shapes on the forearm and shin bodies, so a body lies on the ground the way
+// one does (feet do not sink in, legs do not roll like pipes). Shin-local / forearm-local.
+const EXTRA = {
+  shinL: () => RAPIER.ColliderDesc.cuboid(0.045, 0.04, 0.115).setTranslation(0, -0.19, -0.075),
+  shinR: () => RAPIER.ColliderDesc.cuboid(0.045, 0.04, 0.115).setTranslation(0, -0.19, -0.075),
+  farmL: () => RAPIER.ColliderDesc.ball(0.042).setTranslation(0, -0.2, 0),
+  farmR: () => RAPIER.ColliderDesc.ball(0.042).setTranslation(0, -0.2, 0),
+};
 
 // ragdoll part -> model name in assets/models.glb (left and right share a mesh)
 const MODEL_OF = {
@@ -66,7 +87,17 @@ const PARENT = {};
 const JOINT_OF = {};
 for (const j of JOINTS) { PARENT[j.b] = j.a; JOINT_OF[j.b] = j; }
 
+// Which parts of one body may collide with each other: everything except neighbours across a joint.
+// (Neighbours overlap by design; the joint and its limits keep them apart.)
+const SELF = new Set();
+for (const x in PARTS) for (const y in PARTS) if (x < y && PARENT[x] !== y && PARENT[y] !== x) SELF.add(x + '|' + y);
+export const selfCollide = (x, y) => SELF.has(x < y ? x + '|' + y : y + '|' + x);
+
 const LEGS = new Set(['thighL', 'thighR', 'shinL', 'shinR']);
+const ARMS = new Set(['uarmL', 'farmL', 'uarmR', 'farmR']);
+const CORE = ['head', 'torso', 'pelvis'];
+// how hard (m/s lost within a few hundredths of a second) a part may hit something before it does damage
+const IMPACT = { head: 4.8, torso: 4.5, pelvis: 4.5 };
 const LIMBS = new Set(['uarmL', 'farmL', 'uarmR', 'farmR', 'thighL', 'shinL', 'thighR', 'shinR']);
 const KNOCK_PARTS = ['torso', 'head', 'pelvis', 'thighL', 'thighR'];
 
@@ -96,9 +127,6 @@ function mat(color) {
   if (!m) { m = new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.0 }); matCache.set(color, m); }
   return m;
 }
-const fleshMat = new THREE.MeshStandardMaterial({ color: 0x7a0a0a, roughness: 0.25 });
-const fatMat = new THREE.MeshStandardMaterial({ color: 0xa8423a, roughness: 0.4 });
-const boneMat = new THREE.MeshStandardMaterial({ color: 0xded7c2, roughness: 0.55 });
 const eyeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
 
 const _q = new THREE.Quaternion();
@@ -126,29 +154,6 @@ function pickHat(kind) {
   return name ? getModel(name) : null;
 }
 
-/** Cross-section left where a limb was removed: flesh, a ring of fat, and a bone end. */
-function makeStump(radius) {
-  const g = new THREE.Group(); // +Y points out of the wound
-  const flesh = new THREE.Mesh(geo('stumpF', () => new THREE.CylinderGeometry(1, 0.92, 0.5, 12)), fleshMat);
-  flesh.scale.set(radius, 0.05, radius);
-  const fat = new THREE.Mesh(geo('stumpR', () => new THREE.TorusGeometry(0.9, 0.16, 5, 12)), fatMat);
-  fat.rotation.x = Math.PI / 2;
-  fat.scale.setScalar(radius);
-  fat.position.y = 0.012;
-  const bone = new THREE.Mesh(geo('stumpB', () => new THREE.CylinderGeometry(0.8, 1, 1, 7)), boneMat);
-  bone.scale.set(radius * 0.32, 0.07 + radius * 0.4, radius * 0.32);
-  bone.position.y = 0.03;
-  g.add(flesh, fat, bone);
-  for (let i = 0; i < 3; i++) { // ragged bits
-    const bit = new THREE.Mesh(geo('stumpBit', () => new THREE.IcosahedronGeometry(1, 0)), fleshMat);
-    const a = Math.random() * 6.28;
-    bit.position.set(Math.cos(a) * radius * 0.6, 0.02, Math.sin(a) * radius * 0.6);
-    bit.scale.set(radius * 0.3, radius * rnd(0.3, 0.7), radius * 0.3);
-    g.add(bit);
-  }
-  return g;
-}
-
 export class Ragdoll {
   constructor(ctx, pos, yaw = 0, opts = {}) {
     this.ctx = ctx;
@@ -165,7 +170,20 @@ export class Ragdoll {
     this.pooled = false;
     this.crippled = false;
     this.removed = false;
-    this.bleedRate = 0;
+    this.bleedRate = 0;         // health lost per second, from every open wound together
+    this.sevBleed = 0;          // the part of that which comes from missing limbs
+    this.drips = [];            // open wounds: { part, local, rate, hp, t, acc }
+    this.limp = new Set();      // parts that hang dead while the rest of the body is still animated
+    this.lame = { L: 0, R: 0 }; // 0..1 how badly each leg is hurt
+    this.gutShot = false;       // hurt in the body: a hand goes to it
+    this.clutch = 0;
+    this.squat = 0;             // getting up goes through a crouch
+    this.crawling = false;
+    this.crawlPhase = Math.random() * 6;
+    this.impactMute = 0.3;      // no landing damage while this runs (after hits, grabs and mode changes)
+    this.trailAt = new THREE.Vector3(pos.x, -99, pos.z);
+    this.mass = 0;
+    this.lastDt = 1 / 60;
     this.kind = opts.kind || (opts.zombie ? 'zombie' : 'civilian'); // 'civilian' | 'thug' | 'zombie'
     this.infected = false;      // bitten: rises as a zombie after dying
     this.PUNCH = PUNCH;
@@ -225,6 +243,7 @@ export class Ragdoll {
           .setTranslation(pos.x + off.x, pos.y + off.y, pos.z + off.z)
           .setRotation({ x: qYaw.x, y: qYaw.y, z: qYaw.z, w: qYaw.w })
           .setLinearDamping(0.05)
+          .setCcdEnabled(true)      // thrown bodies must not pass through walls
           .setAngularDamping(0.7)   // joint friction in muscles() does the real damping
       );
       let cd, g, len;
@@ -241,9 +260,16 @@ export class Ragdoll {
         g = () => geo(`cap${d.h},${d.r}`, () => new THREE.CapsuleGeometry(d.r, d.h * 2, 4, 10));
         len = d.h * 2 + d.r * 2;
       }
-      // the contact hook (main.js) turns off collisions between parts of the same NPC
+      // the contact hook (main.js) decides which parts of the same NPC may touch
       cd.setDensity(900).setFriction(0.9).setRestitution(0.02).setActiveHooks(RAPIER.ActiveHooks.FILTER_CONTACT_PAIRS);
       const collider = world.createCollider(cd, body);
+      const inertia = body.mass() * len * len / 12;
+      const colliders = [collider];
+      if (EXTRA[name]) {
+        colliders.push(world.createCollider(EXTRA[name]().setDensity(500).setFriction(0.9).setRestitution(0.02)
+          .setActiveHooks(RAPIER.ActiveHooks.FILTER_CONTACT_PAIRS), body));
+      }
+      this.mass += body.mass();
 
       // With the skinned body this is just the bone: an empty that follows the rigid body, and that
       // hats, stumps, innards and blood marks hang off. Without models it is the collider shape itself.
@@ -269,34 +295,29 @@ export class Ragdoll {
       // local box around the part, used to work out where a bullet comes out the other side
       const ext = d.shape === 'box' ? d.half : d.shape === 'ball' ? [d.r, d.r, d.r] : [d.r, d.h + d.r, d.r];
       this.parts[name] = {
-        name, def: d, body, collider, mesh, skin, ext, hp: d.hp, gone: false, inertia: body.mass() * len * len / 12,
-        skinned: [], rest: new THREE.Vector3(...d.pos), hat: hat ? hat.name : null,
+        name, def: d, body, collider, colliders, mesh, skin, ext, hp: d.hp, gone: false, inertia,
+        skinned: [], rest: new THREE.Vector3(...d.pos), hat: hat ? hat.name : null, pv: new THREE.Vector3(), vy0: 0,
       };
       if (hat) mesh.add(hat); // added after `skin` was collected, so headwear is not cut by wounds
       this.pose[name] = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
       this.captured[name] = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
-      this.colHandles.add(collider.handle);
-      ctx.owners.set(collider.handle, { kind: 'part', ragdoll: this, name });
+      for (const c of colliders) {
+        this.colHandles.add(c.handle);
+        ctx.owners.set(c.handle, { kind: 'part', ragdoll: this, name });
+      }
     }
 
     if (this.skinned) {
       // one skeleton for the whole figure: bone i is the group that follows rigid body i
       this.skeleton = new THREE.Skeleton(Object.keys(PARTS).map((n) => this.parts[n].mesh), REST_INV);
-      const bald = Math.random() < 0.08 || this.parts.head.hat === 'Balaclava';
-      for (const name in PARTS) {
-        const part = this.parts[name];
-        for (const piece of bodyPieces(name)) {
-          const mn = piece.material.name;
-          if (mn === 'Hair' && bald && piece.geometry.getAttribute('position').count > 400) continue;   // keeps the eyebrows
-          const sm = new THREE.SkinnedMesh(piece.geometry, tint[mn] || piece.material);
-          sm.bind(this.skeleton, IDENT);
-          sm.frustumCulled = false;      // it sits at the origin while its bones are out in the world
-          sm.castShadow = true;
-          sm.receiveShadow = true;
-          scene.add(sm);
-          part.skinned.push(sm);
-          part.skin.push({ mesh: sm, body: BODY_MATS.has(mn), isSkin: mn === 'Skin' });
-        }
+      this.bald = Math.random() < 0.08 || this.parts.head.hat === 'Balaclava';
+      this.tint = tint;
+      // Untouched, the figure is drawn as one mesh per material. The first injury splits it into
+      // a set of meshes per body part (split()), which is what wounds, burns and cuts work on.
+      this.whole = [];
+      for (const piece of bodyWhole(Object.keys(PARTS))) {
+        if (piece.material.name === 'Hair' && this.bald) continue;
+        this.whole.push(this.skinMesh(piece, this.skeleton));
       }
     }
 
@@ -334,6 +355,33 @@ export class Ragdoll {
 
   get alive() { return !this.dead && !this.removed; }
 
+  skinMesh(piece, skeleton) {
+    const sm = new THREE.SkinnedMesh(piece.geometry, this.tint[piece.material.name] || piece.material);
+    sm.bind(skeleton, IDENT);
+    sm.frustumCulled = false;      // it sits at the origin while its bones are out in the world
+    sm.castShadow = true;
+    sm.receiveShadow = true;
+    this.ctx.scene.add(sm);
+    return sm;
+  }
+
+  /** Swap the joined-up figure for one set of meshes per body part. Happens once, at the first injury. */
+  split() {
+    if (!this.whole) return;
+    for (const m of this.whole) this.ctx.scene.remove(m);
+    this.whole = null;
+    for (const name in PARTS) {
+      const part = this.parts[name];
+      for (const piece of bodyPieces(name)) {
+        const mn = piece.material.name;
+        if (isCap(mn) || (mn === 'Hair' && this.bald)) continue;     // the caps come with the cut (detach)
+        const sm = this.skinMesh(piece, this.skeleton);
+        part.skinned.push(sm);
+        part.skin.push({ mesh: sm, body: BODY_MATS.has(mn), isSkin: mn === 'Skin' });
+      }
+    }
+  }
+
   /** Where this NPC is, standing or sprawled. */
   center(out) {
     if (this.mode === 'ragdoll' && !this.parts.pelvis.gone) {
@@ -355,7 +403,7 @@ export class Ragdoll {
     for (const n in this.parts) {
       const p = this.parts[n];
       if (p.gone) continue;
-      const wantKin = kin && !this.isFree(n);
+      const wantKin = kin && !this.isFree(n) && !this.limp.has(n);
       if (p.body.isKinematic() !== wantKin) {
         p.body.setBodyType(wantKin ? KIN() : DYN(), true);
         if (!wantKin) {
@@ -366,6 +414,7 @@ export class Ragdoll {
       }
     }
     this.mode = mode;
+    this.impactMute = Math.max(this.impactMute, 0.3);
   }
 
   /** Drop into physics for at least `seconds`. Safe to call repeatedly. */
@@ -380,26 +429,29 @@ export class Ragdoll {
   }
 
   // ------------------------------------------------------------ damage
-  damage(n) {
+  damage(n, cause) {
     if (this.dead) return;
     this.health -= n;
-    if (this.health <= 0) this.die();
+    if (this.health <= 0) this.die(cause);
   }
 
   die(cause) {
     if (this.dead) return;
     this.dead = true;
     this.goLimp(1e9);
+    this.tone = Math.min(this.tone, cause === 'headshot' ? 0.05 : 0.2);   // nothing holds the body up any more: it drops
     this.twitch = cause === 'headshot' ? 1.3 : 0.6;   // nerves fire for a moment after death
     this.ctx.onKill(this, cause);
     this.ctx.alert('death', this.center(_c), 16);
   }
 
-  /** Apply a hit to a single part. opts: { blade, explosion, normal } */
+  /** Apply a hit to a single part. opts: { blade, light, stab, bite, explosion, heat, hole, normal, from } */
   hit(name, dmg, point, dir, impulse = 0, opts = {}) {
     const p = this.parts[name];
     if (!p || p.gone) return;
     const { gore, sfx } = this.ctx;
+    this.impactMute = Math.max(this.impactMute, 0.35);   // being shot is not a fall
+    if (dmg > 0 || opts.explosion) this.split();
 
     // Light hits stagger a standing NPC; legs, heads, blades, blasts, repeated hits and low
     // health put them on the ground. Zombies shrug off far more.
@@ -424,45 +476,67 @@ export class Ragdoll {
       p.body.applyImpulseAtPoint({ x: _v.x, y: _v.y, z: _v.z }, point, true);
     }
 
-    if (dmg > 0 && !opts.explosion) {
-      // a wound on the body itself
-      const t = p.body.translation(), r = p.body.rotation();
-      _q.set(r.x, r.y, r.z, r.w).invert();
-      const lp = new THREE.Vector3(point.x - t.x, point.y - t.y, point.z - t.z).applyQuaternion(_q);
-      const ln = opts.normal ? new THREE.Vector3(opts.normal.x, opts.normal.y, opts.normal.z) : _a.copy(dir).negate().clone();
-      ln.applyQuaternion(_q);
-      const ld = new THREE.Vector3(dir.x, dir.y, dir.z).applyQuaternion(_q).normalize();
-      const big = name === 'torso' || name === 'pelvis';
-      const maxR = big ? 0.11 : name === 'head' ? 0.07 : p.def.r * 0.95;
-      if (opts.blade) {
-        gore.wound(p.mesh, lp, ln, { size: 0.07, slash: true });   // a slash mark, with a gash cut into it
-        openWound(p, lp, 0.03, maxR);
-      } else if (opts.bite || opts.stab) {
-        openWound(p, lp, opts.stab ? 0.02 : 0.024, maxR);          // a puncture or a torn chunk, no exit wound
-      } else {
-        // entry hole, and a bigger one where the bullet leaves
-        openWound(p, lp, opts.hole || 0.026, maxR);
-        let t = 0.6;
-        for (let i = 0; i < 3; i++) {
-          const c = ld.getComponent(i);
-          if (Math.abs(c) > 1e-4) t = Math.min(t, (Math.sign(c) * p.ext[i] - lp.getComponent(i)) / c);
-        }
-        if (t > 0.03) openWound(p, lp.clone().addScaledVector(ld, t), (opts.hole || 0.026) * 1.5, maxR);
-      }
+    // the hit in the part's own space
+    const t = p.body.translation(), r = p.body.rotation();
+    _q.set(r.x, r.y, r.z, r.w).invert();
+    const lp = new THREE.Vector3(point.x - t.x, point.y - t.y, point.z - t.z).applyQuaternion(_q);
+    const ld = new THREE.Vector3(dir.x, dir.y, dir.z).applyQuaternion(_q).normalize();
+    const big = name === 'torso' || name === 'pelvis';
+    const maxR = big ? 0.11 : name === 'head' ? 0.07 : p.def.r * 0.95;
 
+    if (opts.explosion) {
+      // burned, and peppered with whatever the blast threw
+      const heat = opts.heat ?? Math.min(1, dmg / 105);
+      if (heat > 0.12) burn(p, Math.min(1, heat * 1.25));
+      if (heat > 0.35 && Math.random() < 0.45) {
+        let k = 9;
+        for (let i = 0; i < 3; i++) k = Math.min(k, p.ext[i] / Math.max(1e-3, Math.abs(ld.getComponent(i))));
+        lp.copy(ld).multiplyScalar(-k * 0.95);
+        lp.x += rnd(-0.02, 0.02); lp.y += rnd(-0.03, 0.03); lp.z += rnd(-0.02, 0.02);
+        openWound(p, lp, rnd(0.012, 0.028), maxR, null, ld, 0.04);
+        this.bleed(p, lp, 3, 0.3);
+      }
+    } else if (dmg > 0) {
       if (opts.blade) {
+        // a gash: along the blade's travel for a swipe, any way across the body for a chop
+        const ln = opts.normal ? new THREE.Vector3(opts.normal.x, opts.normal.y, opts.normal.z).applyQuaternion(_q).normalize() : ld.clone().negate();
+        const tan = opts.light ? ld.clone().addScaledVector(ln, -ld.dot(ln)) : new THREE.Vector3(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)).cross(ld);
+        if (tan.lengthSq() < 1e-6) tan.set(0, 1, 0);
+        tan.normalize();
+        const half = opts.light ? 0.03 + Math.min(0.05, dmg * 0.0014) : rnd(0.07, 0.11);
+        openWound(p, lp.clone().addScaledVector(tan, -half), opts.light ? 0.01 : 0.015, maxR, lp.clone().addScaledVector(tan, half),
+          opts.light ? ln.negate() : ld, opts.light ? 0.035 : 0.07);
+        this.bleed(p, lp, opts.light ? 4 : 8, opts.light ? 0.35 : 1.0);
         _t.copy(dir).multiplyScalar(0.5); _t.y += 0.5;
-        gore.blood(point, _t, 26, 5, 1.0);
+        gore.blood(point, _t, opts.light ? 12 : 26, 5, 1.0);
+        gore.mist(point, _t, 3);
         gore.wallSplatter(point, dir, 2.5);
-      } else if (opts.stab || opts.bite) {
+      } else if (opts.bite || opts.stab) {
+        openWound(p, lp, opts.stab ? 0.02 : 0.024, maxR, null, opts.stab ? ld : null, 0.06);   // a puncture or a torn chunk, no exit wound
+        this.bleed(p, lp, opts.stab ? 6 : 4, opts.stab ? 0.8 : 0.4);
         _t.copy(dir).multiplyScalar(-0.5); _t.y += 0.4;
         gore.blood(point, _t, 9, 2.8, 0.9);               // wells up out of the wound
       } else {
+        // entry hole, and a bigger one where the bullet leaves
+        openWound(p, lp, opts.hole || 0.026, maxR, null, ld);
+        this.bleed(p, lp, big ? 5 : name === 'head' ? 4 : 3, big ? 0.4 : name === 'head' ? 0.4 : 0.18);
+        let k = 0.6;
+        for (let i = 0; i < 3; i++) {
+          const c = ld.getComponent(i);
+          if (Math.abs(c) > 1e-4) k = Math.min(k, (Math.sign(c) * p.ext[i] - lp.getComponent(i)) / c);
+        }
+        if (k > 0.03) {
+          const out = lp.clone().addScaledVector(ld, k);
+          openWound(p, out, (opts.hole || 0.026) * 1.5, maxR, null, ld);
+          this.bleed(p, out, 3, 0);
+        }
         gore.blood(point, dir, 14, 7, 0.35);              // exit spray carries on past the body
         _t.copy(dir).multiplyScalar(-0.4); _t.y += 0.3;
         gore.blood(point, _t, 5, 2.5, 0.8);                // a little comes back out the front
+        gore.mist(point, dir, name === 'head' ? 7 : 4, name === 'head' ? 1.5 : 1);
         gore.wallSplatter(point, dir, 4.5);
       }
+      if (big) this.gutShot = true;
       sfx.squish();
     }
 
@@ -470,12 +544,23 @@ export class Ragdoll {
     const mult = name === 'head' ? 2.2 : (LIMBS.has(name) ? 0.55 : 1) * (zombie ? 0.3 : 1);
     p.hp -= dmg;
 
+    // a badly hurt limb stops working before it comes off
+    if (p.hp > 0 && dmg > 0) {
+      const side = name.slice(-1);
+      if (ARMS.has(name) && p.hp < p.def.hp * 0.55) this.dangle(name);
+      if (LEGS.has(name)) {
+        const th = this.parts['thigh' + side], sh = this.parts['shin' + side];
+        this.lame[side] = clamp((0.85 - Math.min(th.hp / th.def.hp, sh.hp / sh.def.hp)) / 0.5, 0, 1);
+      }
+    }
+
     // resolve what happens to the part first so the kill gets the right label
     if (p.hp <= 0) {
-      if (opts.explosion && p.hp < -40 && name !== 'pelvis') {
+      if (opts.explosion && p.hp < -75 && name !== 'pelvis') {      // right on top of it: nothing left
         this.gib(name);
       } else if (opts.explosion && name !== 'torso' && name !== 'pelvis' && Math.random() < 0.45) {
         // blasts don't take every limb off: this one is mangled but still attached
+        if (ARMS.has(name)) this.dangle(name);
       } else if (name === 'head') {
         if (opts.blade || opts.explosion) this.sever('head', dir);
         else if (p.hp < -26) this.gib('head');   // overkill: the head pops
@@ -490,6 +575,22 @@ export class Ragdoll {
       }
     }
     this.damage(dmg * mult);
+  }
+
+  /** An open wound: it drips, and costs health until it clots (limbs) or kills (body wounds). */
+  bleed(part, local, rate, hp) {
+    this.bled = true;
+    if (this.drips.length >= 10) this.drips.shift();
+    this.drips.push({ part, local: local.clone(), rate, hp, t: 0, acc: 0 });
+  }
+
+  /** This arm is finished: from here on it just hangs, even while its owner walks about. */
+  dangle(name) {
+    if (this.limp.has(name) || this.isFree(name)) return;
+    const side = name.slice(-1);
+    this.limp.add('farm' + side);
+    if (name.startsWith('uarm')) this.limp.add(name);
+    if (this.mode !== 'ragdoll') this.setMode(this.mode);
   }
 
   /** A zombie got hold of this NPC. */
@@ -511,10 +612,13 @@ export class Ragdoll {
     this.infected = false;
     this.brain = new Brain(this, 'zombie');
     this.health = 70;
-    this.bleedRate = 0;
+    this.bleedRate = this.sevBleed = 0;
+    this.gutShot = false;
     this.stun = 0.6;
     this.twitch = 1;
     const green = this.skinned ? tintedMaterial('Skin', 0x8fbf6a) : mat(0x8fbf6a);
+    if (this.whole) for (const m of this.whole) if (m.material === this.tint.Skin) m.material = green;
+    if (this.tint) this.tint.Skin = green;
     for (const n in this.parts) {
       for (const s of this.parts[n].skin) {
         if (!s.isSkin) continue;
@@ -530,6 +634,7 @@ export class Ragdoll {
     if (this.severed.has(name) || !JOINT_OF[name]) return;   // (the pelvis is the root: it hangs off nothing)
     const jd = this.joints[JOINT_OF[name].name];
     if (!jd) return;
+    this.split();
     this.goLimp(3);
     // removing a joint twice (e.g. its body was gibbed) would panic the wasm world, so check first
     if (this.ctx.world.getImpulseJoint(jd.joint.handle)) this.ctx.world.removeImpulseJoint(jd.joint, true);
@@ -541,20 +646,22 @@ export class Ragdoll {
     const child = this.parts[name];
     const wp = this.localToWorld(parent, jd.a1);
     gore.gush(wp, dir || UP, 42, 6);
-    gore.chunks(wp, 2, 3);
+    gore.chunks(wp, 2, 3, null, 'limb');
     sfx.chop();
 
-    // wound direction in each part's local frame: shoulders face sideways, everything else along the limb
+    // wound direction in each part's local frame: along the limb. (The shoulder is cut under the
+    // cap of the shoulder, so the body's side of it faces down the arm, not up.)
     const side = jd.def.name.startsWith('shoulder');
-    const outA = side ? new THREE.Vector3(Math.sign(jd.a1.x), 0, 0) : new THREE.Vector3(0, Math.sign(jd.a1.y) || 1, 0);
+    const outA = new THREE.Vector3(0, side ? -1 : Math.sign(jd.a1.y) || 1, 0);
     const outB = new THREE.Vector3(0, Math.sign(jd.a2.y) || 1, 0);
     if (!parent.gone) {
-      this.addStump(parent, jd.a1, outA, jd.def.stump);
-      this.bleeders.push({ part: parent, local: jd.a1, out: outA, t: 10, rate: 70, pooled: false });
+      this.addStump(parent, jd.a1, outA, jd.def);
+      this.bleeders.push({ part: parent, local: jd.a1, out: outA, t: 10, rate: 42, pooled: false });
     }
-    this.addStump(child, jd.a2, outB, jd.def.stump);
-    this.bleeders.push({ part: child, local: jd.a2, out: outB, t: 6, rate: 40, pooled: false });
-    this.bleedRate += 3;
+    this.addStump(child, jd.a2, outB, jd.def);
+    this.bleeders.push({ part: child, local: jd.a2, out: outB, t: 6, rate: 24, pooled: false });
+    this.sevBleed += name.startsWith('farm') || name.startsWith('shin') ? 1.6 : 2.6;   // the nearer the body, the faster it empties
+    this.bled = true;
 
     this.damage(12);
     if (name === 'head') this.die('decap');
@@ -568,15 +675,19 @@ export class Ragdoll {
   gib(name) {
     const p = this.parts[name];
     if (!p || p.gone) return;
+    this.split();
     this.goLimp(3);
     if (name !== 'torso') this.sever(name, null);
     const t = p.body.translation(), v = p.body.linvel();
     const at = { x: t.x, y: t.y, z: t.z };
-    this.ctx.gore.gibs(at, 55);
-    this.ctx.gore.chunks(at, name === 'torso' ? 9 : 6, 6, v);
+    const core = name === 'torso' || name === 'pelvis';
+    this.ctx.gore.gibs(at, core ? 70 : 45);
+    this.ctx.gore.chunks(at, core ? 11 : name === 'head' ? 9 : 5, 6, v, core ? 'torso' : name === 'head' ? 'head' : 'limb');
     this.ctx.sfx.squish();
-    this.ctx.owners.delete(p.collider.handle);
-    this.colHandles.delete(p.collider.handle);
+    for (const c of p.colliders) {
+      this.ctx.owners.delete(c.handle);
+      this.colHandles.delete(c.handle);
+    }
     this.ctx.world.removeRigidBody(p.body); // also drops every joint attached to it
     this.ctx.scene.remove(p.mesh);
     for (const m of p.skinned) this.ctx.scene.remove(m);
@@ -604,6 +715,8 @@ export class Ragdoll {
       if (!p.skeleton) {              // its own copy of the bone list, so the swap below is private to this part
         p.skeleton = new THREE.Skeleton(this.skeleton.bones, REST_INV);
         for (const m of p.skinned) m.bind(p.skeleton, IDENT);
+        // now that an end of it is open, it needs the flesh and bone that close its cuts
+        for (const piece of bodyPieces(self)) if (isCap(piece.material.name)) p.skinned.push(this.skinMesh(piece, p.skeleton));
       }
       const a = PARTS[other].pos, b = PARTS[self].pos;
       const standIn = new THREE.Object3D();
@@ -613,8 +726,8 @@ export class Ragdoll {
     }
   }
 
-  addStump(part, local, out, radius) {
-    const s = makeStump(radius);
+  addStump(part, local, out, def) {
+    const s = makeStump(def.cut[0], def.cut[1], def.kind);
     s.quaternion.setFromUnitVectors(UP, out);
     s.position.copy(local);
     part.mesh.add(s);
@@ -646,17 +759,26 @@ export class Ragdoll {
     const fl = this.flinchT > 0 ? Math.sin(Math.PI * (1 - this.flinchT / FLINCH)) : 0;
     const pn = this.punchT > 0 ? Math.sin(Math.PI * (1 - this.punchT / PUNCH)) : 0;
     const lg = this.lungeT > 0 ? Math.sin(Math.PI * (1 - this.lungeT / LUNGE)) : 0;
+    // hurt: a hand pressed to a body wound (if there is a working arm to do it with), a bad leg favoured
+    const armOk = (side) => !this.limp.has('farm' + side) && !this.isFree('farm' + side);
+    const cSide = armOk('L') ? 'L' : armOk('R') ? 'R' : null;
+    const wantClutch = this.gutShot && !z && cSide && this.gesture === 'none' ? 1 : 0;
+    this.clutch += (wantClutch - this.clutch) * Math.min(1, dt * 4);
+    const cl = cSide ? this.clutch : 0, sq = this.squat;
+    const lameL = this.lame.L, lameR = this.lame.R;
 
     // ---- legs. +x swings a limb forward; knees only bend backward (negative)
     const stride = mix(z ? 0.38 : 0.55, 0.95, run);
     const lift = mix(0.95, 1.55, run);
-    let hipL = stride * s * w, hipR = -stride * s * w;
-    let kneeL = -(0.06 + lift * Math.max(0, c)) * w - 0.03;
-    let kneeR = -(0.06 + lift * Math.max(0, -c)) * w - 0.03;
+    let hipL = stride * s * w * (1 - 0.45 * lameL), hipR = -stride * s * w * (1 - 0.45 * lameR);
+    let kneeL = -(0.06 + lift * Math.max(0, c) * (1 - 0.65 * lameL)) * w - 0.03;       // a bad leg is swung stiff
+    let kneeR = -(0.06 + lift * Math.max(0, -c) * (1 - 0.65 * lameR)) * w - 0.03;
     hipL = mix(hipL, 1.9, cw); hipR = mix(hipR, 1.9, cw);                 // squat right down
     kneeL = mix(kneeL, -2.3, cw); kneeR = mix(kneeR, -2.3, cw);
     hipL += 0.12 * ft; kneeL -= 0.25 * ft + 0.3 * fl;                    // fighting crouch / buckling
     hipR += 0.12 * ft; kneeR -= 0.25 * ft + 0.3 * fl;
+    hipL = mix(hipL, 1.75, sq); hipR = mix(hipR, 1.75, sq);               // getting up starts from a crouch
+    kneeL = mix(kneeL, -2.2, sq); kneeR = mix(kneeR, -2.2, sq);
 
     // ---- upper body
     let spX, spY, spZ = 0, nkX, nkY, nkZ = 0, shLx, shRx, shLz = 0.07, shRz = -0.07, elL, elR;
@@ -692,6 +814,21 @@ export class Ragdoll {
     shLx += 0.3 * lg; shRx += 0.3 * lg;
     spY += this.flinchSide * 0.45 * fl;
     nkX += 0.25 * fl;
+    // limping: the body tips over the bad leg while it carries the weight
+    spZ += (lameR * Math.max(0, c) - lameL * Math.max(0, -c)) * 0.2 * w;
+    spX -= 0.12 * Math.max(lameL, lameR) * w;
+    // clutching a wound: forearm across the belly, hunched over it
+    let shLy = 0, shRy = 0;
+    if (cl > 0.01) {
+      if (cSide === 'L') { shLx = mix(shLx, 0.3, cl); shLy = 0.8 * cl; shLz = mix(shLz, 0, cl); elL = mix(elL, 1.6, cl); }
+      else { shRx = mix(shRx, 0.3, cl); shRy = -0.8 * cl; shRz = mix(shRz, 0, cl); elR = mix(elR, 1.6, cl); }
+      spX -= 0.18 * cl;
+      nkX -= 0.1 * cl;
+    }
+    // getting up: folded forward, hands leaving the ground
+    spX = mix(spX, -0.6, sq);
+    shLx = mix(shLx, 0.7, sq); shRx = mix(shRx, 0.7, sq);
+    elL = mix(elL, 0.4, sq); elR = mix(elR, 0.4, sq);
 
     // ---- head follows whatever the brain is looking at
     let wantYaw = 0, wantPitch = 0;
@@ -715,8 +852,8 @@ export class Ragdoll {
     L('kneeR', kneeR);
     L('spine', spX, spY, spZ);
     L('neck', nkX, nkY, nkZ);
-    L('shoulderL', shLx, 0, shLz);
-    L('shoulderR', shRx, 0, shRz);
+    L('shoulderL', shLx, shLy, shLz);
+    L('shoulderR', shRx, shRy, shRz);
     L('elbowL', elL);
     L('elbowR', elR);
 
@@ -771,7 +908,8 @@ export class Ragdoll {
     this.lungeT = Math.max(0, this.lungeT - dt);
     this.hitAccum = Math.max(0, this.hitAccum - dt * 320);
 
-    const want = this.flinchT > 0 ? 0 : this.wantSpeed;       // a hit stops you in your tracks
+    // a hit stops you in your tracks; a bad leg or a hole in the gut slows you down
+    const want = this.flinchT > 0 ? 0 : this.wantSpeed * (1 - 0.5 * Math.max(this.lame.L, this.lame.R)) * (1 - 0.15 * this.clutch);
     this.speed += (want - this.speed) * Math.min(1, dt * 5);
     let dh = this.targetHeading - this.heading;
     dh = Math.atan2(Math.sin(dh), Math.cos(dh));
@@ -843,32 +981,39 @@ export class Ragdoll {
   /**
    * Active ragdoll. Every joint is pulled toward a target angle with strength `tone`, and always
    * has some friction, so limbs behave like limbs rather than rope. Joint limits (swing cone and
-   * twist) stop arms and legs folding through the body.
+   * twist) stop arms and legs folding the wrong way.
+   * limpOnly: the body is being animated and only its dead-hanging limbs are simulated.
    */
-  muscles(dt) {
-    this.fallT += dt;
-    const brace = !this.dead && this.fallT < 0.55;
-    const hurt = !this.dead && !brace && (this.crippled || this.health <= 20 || this.bleedRate > 0);
-    // the dead keep a trace of tone for a few seconds, then only joint friction is left
-    const want = this.dead ? (this.deadT > 3 ? 0 : 0.05) : brace ? 0.9 : hurt ? 0.42 : 0.3;
-    this.tone += (want - this.tone) * Math.min(1, dt * (this.dead ? 1.5 : 6));
-    const tone = this.tone;
-    const kp = tone * 81, kd = tone * 14 + 2.2;
-    const wake = hurt || brace;     // the living keep moving; the dead are allowed to settle and sleep
-    // a corpse that has come to rest is left alone: limit forces on a limb pinned against the
-    // floor would otherwise keep nudging it forever
-    const settled = this.dead && this.deadT > 4;
+  muscles(dt, limpOnly = false) {
+    let brace = false, hurt = false, wake = true, settled = false, crawl = null, tone = 0.04;
+    if (!limpOnly) {
+      this.fallT += dt;
+      brace = !this.dead && this.fallT < 0.3;      // a moment of reflex; by the time the ground arrives the body is loose again
+      hurt = !this.dead && !brace && (this.crippled || this.health <= 20 || this.bleedRate > 1);
+      crawl = this.crawl(dt, brace);
+      // the dead keep a trace of tone for a few seconds, then only joint friction is left
+      const want = this.dead ? (this.deadT > 3 ? 0 : 0.05) : brace ? 0.9 : crawl ? 0.6 : hurt ? 0.42 : 0.3;
+      this.tone += (want - this.tone) * Math.min(1, dt * (this.dead ? 1.5 : 6));
+      tone = this.tone;
+      wake = hurt || brace;     // the living keep moving; the dead are allowed to settle and sleep
+      // a corpse that has come to rest is left alone: limit forces on a limb pinned against the
+      // floor would otherwise keep nudging it forever
+      settled = this.dead && this.deadT > 4;
+    }
 
     for (const j of JOINTS) {
       if (this.severed.has(j.b)) continue;
+      const slack = this.limp.has(j.b);       // nothing works this joint any more
+      if (limpOnly && !slack) continue;
       const A = this.parts[j.a], B = this.parts[j.b];
       if (A.gone || B.gone) continue;
       if (!wake && B.body.isSleeping()) continue;
+      const kp = (slack ? Math.min(tone, 0.04) : tone) * 81, kd = slack ? 3.6 : tone * 14 + 2.2;
       const ra = A.body.rotation(), rb = B.body.rotation();
       _q.set(ra.x, ra.y, ra.z, ra.w);
       _q2.set(rb.x, rb.y, rb.z, rb.w);
-      _a.set(0, 1, 0).applyQuaternion(_q);    // parent's long axis
-      _b.set(0, 1, 0).applyQuaternion(_q2);   // child's long axis
+      _a.copy(j.refAxis).applyQuaternion(_q);  // the middle of the joint's range, as the parent holds it now
+      _b.set(0, 1, 0).applyQuaternion(_q2);    // child's long axis
       // inertia is stored about the part's centre; a limb swings about its end, which is ~4x more.
       // Without that factor the muscles are too weak to lift a limb against gravity.
       const I = Math.min(A.inertia, B.inertia) * 4;
@@ -877,7 +1022,14 @@ export class Ragdoll {
 
       // --- pose: rotation that would take the child to its target, as an axis * angle
       let x = brace ? BRACE[j.name] : REST[j.name];
-      if (hurt && j.name !== 'spine' && j.name !== 'neck') {
+      if (crawl && !slack) {
+        // arms take turns reaching out past the head and dragging back; the head is held up
+        const side = j.name.slice(-1);
+        if (j.name.startsWith('shoulder')) x = 1.2 + 1.6 * crawl[side];
+        else if (j.name.startsWith('elbow')) x = 0.25 + 1.3 * (1 - crawl[side]);
+        else if (j.name === 'neck') x = 0.45;
+        else if (j.name === 'spine') x = 0.12;
+      } else if (hurt && !slack && j.name !== 'spine' && j.name !== 'neck') {
         // writhing: slow, uneven pulls on each limb
         const sgn = j.name.startsWith('knee') ? -1 : 1;
         x += sgn * 0.55 * (0.5 + 0.5 * Math.sin(this.t * (1.3 + (j.anchor[0] > 0 ? 0.4 : 0)) + j.anchor[1] * 9 + this.seed));
@@ -895,7 +1047,7 @@ export class Ragdoll {
       const along = (tx * _b.x + ty * _b.y + tz * _b.z) * 0.93;
       tx -= _b.x * along; ty -= _b.y * along; tz -= _b.z * along;
 
-      // --- swing limit: child may only bend so far from the parent
+      // --- swing limit: child may only bend so far from the middle of its range
       if (j.cone && !(settled && Math.hypot(wx, wy, wz) < 1.5)) {
         const sw = Math.acos(clamp(_a.dot(_b), -1, 1));
         if (sw > j.cone) {
@@ -905,6 +1057,8 @@ export class Ragdoll {
             const k = 121 * (sw - j.cone) / l;
             tx += _v.x * k; ty += _v.y * k; tz += _v.z * k;
           }
+          // a joint at its limit soaks the motion up; without this it is a spring and throws it back
+          tx -= wx * 18; ty -= wy * 18; tz -= wz * 18;
         }
         // --- twist limit: and may only rotate so far about its own axis
         _qw.copy(_q).invert().multiply(_q2);           // child relative to parent
@@ -925,7 +1079,7 @@ export class Ragdoll {
     }
 
     // death throes: a few fading jerks
-    if (this.twitch > 0) {
+    if (!limpOnly && this.twitch > 0) {
       this.twitch -= dt;
       if (Math.random() < dt * 14 * this.twitch) {
         const names = ['farmL', 'farmR', 'shinL', 'shinR', 'head'];
@@ -936,6 +1090,159 @@ export class Ragdoll {
         }
       }
     }
+  }
+
+  /**
+   * Too hurt to stand but not finished: drag yourself along the ground. People crawl away from what
+   * frightened them, zombies toward whatever they were after (and still bite when they get there).
+   * Returns how far each arm is reached out ({ L, R }, 0..1), or null when not crawling.
+   */
+  crawl(dt, brace) {
+    this.crawling = false;
+    const tor = this.parts.torso, pel = this.parts.pelvis;
+    if (this.dead || brace || this.fallT < 1.4 || tor.gone || pel.gone || this.severed.has('torso')) return null;
+    const zombie = this.kind === 'zombie';
+    if (!(this.crippled || (!zombie && this.health <= 20))) return null;
+    if (this.ctx.weapons?.grab?.rag === this) return null;
+    const armL = !this.limp.has('uarmL') && !this.isFree('uarmL'), armR = !this.limp.has('uarmR') && !this.isFree('uarmR');
+    if (!armL && !armR) return null;
+
+    // keep thinking; the brain reckons from where the feet would be
+    const t = pel.body.translation();
+    this.root.set(t.x, t.y - 0.12, t.z);
+    this.crawling = true;
+    this.brain.update(dt);
+    const b = this.brain;
+    let dx, dz;
+    if (zombie) {
+      const tg = b.target;
+      if (!tg) return null;
+      const tp = tg === this.ctx.player ? tg.pos : tg.center(_c);
+      dx = tp.x - t.x; dz = tp.z - t.z;
+      if (Math.hypot(dx, dz) < 0.7) return null;        // there: stop dragging, start biting
+    } else {
+      if (b.state === 'calm') return null;
+      dx = t.x - b.threat.x; dz = t.z - b.threat.z;
+      if (Math.hypot(dx, dz) > 24) return null;         // far enough: lie still
+    }
+    const l = Math.hypot(dx, dz) || 1;
+    dx /= l; dz /= l;
+
+    this.crawlPhase += dt * (zombie ? 3.4 : 4.4);
+    const ph = this.crawlPhase;
+    const reach = { L: armL ? 0.5 + 0.5 * Math.sin(ph) : 0, R: armR ? 0.5 - 0.5 * Math.sin(ph) : 0 };
+    // an arm drags while it is coming back toward the body
+    const pull = (armL ? Math.max(0, -Math.cos(ph)) : 0) + (armR ? Math.max(0, Math.cos(ph)) : 0);
+    const r = tor.body.rotation();
+    _q.set(r.x, r.y, r.z, r.w);
+    _a.set(0, 1, 0).applyQuaternion(_q);      // toward the head
+    _b.set(0, 0, -1).applyQuaternion(_q);     // out of the chest
+    const v = tor.body.linvel();
+    if (v.x * dx + v.z * dz < (zombie ? 0.75 : 0.6)) {
+      // pulled from the shoulders, so the rest of the body swings round to trail behind
+      const f = this.mass * CRAWL_PULL * pull * dt;
+      const tt = tor.body.translation();
+      tor.body.applyImpulseAtPoint({ x: dx * f, y: f * 0.3, z: dz * f }, { x: tt.x + _a.x * 0.18, y: tt.y + _a.y * 0.18, z: tt.z + _a.z * 0.18 }, true);
+    }
+    // roll chest-down: nobody crawls on their back
+    let s = _b.z * _a.x - _b.x * _a.z;
+    if (_b.y > 0.9) s = 1;
+    const w = tor.body.angvel();
+    const k = (s * 9 - (w.x * _a.x + w.y * _a.y + w.z * _a.z) * 1.2) * dt;
+    tor.body.applyTorqueImpulse({ x: _a.x * k, y: _a.y * k, z: _a.z * k }, true);
+    pel.body.applyTorqueImpulse({ x: _a.x * k * 0.5, y: _a.y * k * 0.5, z: _a.z * k * 0.5 }, true);
+    return reach;
+  }
+
+  /** A bleeding body pulled over the ground (crawling, dragged, sliding) leaves a smear. */
+  trail() {
+    if (!(this.drips.length || this.sevBleed) || this.deadT > 120) return;
+    const p = this.parts.torso.gone ? this.parts.pelvis : this.parts.torso;
+    if (p.gone) return;
+    const t = p.body.translation();
+    const dx = t.x - this.trailAt.x, dz = t.z - this.trailAt.z, d = Math.hypot(dx, dz);
+    if (d < 0.32) return;
+    const fresh = this.trailAt.y < -50;      // first look: only note where we are
+    this.trailAt.set(t.x, 0, t.z);
+    if (fresh || d > 1.2) return;            // (a jump that big was a throw, not a drag)
+    const gore = this.ctx.gore;
+    const hit = gore.castFixed(t.x, t.y, t.z, 0, -1, 0, 0.3);
+    if (hit) gore.smear({ x: t.x - dx * 0.5, y: t.y - hit.timeOfImpact, z: t.z - dz * 0.5 }, hit.normal, { x: dx, y: 0, z: dz }, rnd(0.16, 0.3), d * 1.6);
+  }
+
+  /** Something in the body stopped dead against something solid: bruises, breaks, blood on the wall. */
+  impacts() {
+    if (this.ctx.weapons?.grab?.rag === this) this.impactMute = Math.max(this.impactMute, 0.1);   // being waved about by the grab gun
+    let touching = null;                      // found out only if something looks like a hit
+    // pv trails the real velocity by a few frames, so a stop spread over several steps (legs
+    // crumpling under a long fall) counts the same as one that happens in a single step
+    const lag = 1 - Math.exp(-this.lastDt / 0.06);
+    for (const n of CORE) {
+      const p = this.parts[n];
+      if (p.gone) continue;
+      const v = p.body.linvel();
+      const dv = Math.hypot(v.x - p.pv.x, v.y - p.pv.y, v.z - p.pv.z);
+      if (this.impactMute <= 0 && dv > IMPACT[n]) {
+        // it only counts if the body is against something that is not itself (the legs may have
+        // taken the landing: the torso need not be the part that touched)
+        if (touching === null) touching = this.touching();
+        if (touching) { this.impact(p, dv - IMPACT[n], touching); return; }
+      }
+      p.pv.x += (v.x - p.pv.x) * lag; p.pv.y += (v.y - p.pv.y) * lag; p.pv.z += (v.z - p.pv.z) * lag;
+    }
+  }
+
+  /** Something outside this body that it is in contact with right now, or false. */
+  touching() {
+    let found = false;
+    for (const n in this.parts) {
+      const p = this.parts[n];
+      if (p.gone || this.isFree(n)) continue;
+      for (const col of p.colliders) {
+        this.ctx.world.contactPairsWith(col, (c) => {
+          if (found || this.colHandles.has(c.handle)) return;
+          this.ctx.world.contactPair(col, c, (m) => { if (m.numContacts() > 0) found = c; });
+        });
+        if (found) return found;
+      }
+    }
+    return false;
+  }
+
+  impact(p, over, other) {
+    const { gore, sfx } = this.ctx;
+    this.impactMute = 0.2;                    // one landing, one injury
+    const head = p.name === 'head';
+    const dmg = over * 10 * (this.kind === 'zombie' ? 0.4 : 1);
+    const t = p.body.translation();
+    const sp = p.pv.length() || 1;
+    _v.copy(p.pv).multiplyScalar(1 / sp);     // the way it was going
+    sfx.thud(Math.min(1.6, 0.5 + dmg / 25));
+    if (dmg > 8) {
+      if (dmg > 16) sfx.crack();
+      gore.blood(t, _t.set(-_v.x * 0.3, 0.6, -_v.z * 0.3), Math.min(24, 4 + dmg * 0.5), 3, 1.3);
+      const b = other.parent();
+      if (!b || b.isFixed()) {
+        const hit = gore.castFixed(t.x, t.y, t.z, _v.x, _v.y, _v.z, 0.6);
+        if (hit) {
+          const at = { x: t.x + _v.x * hit.timeOfImpact, y: t.y + _v.y * hit.timeOfImpact, z: t.z + _v.z * hit.timeOfImpact };
+          gore.splat(at, hit.normal, Math.min(0.7, 0.12 + dmg * 0.012));
+          if (dmg > 20) gore.run(at, hit.normal);
+        }
+      }
+      if (head && dmg > 14) {                 // the scalp splits where it landed
+        this.split();
+        const r = p.body.rotation();
+        const lp = _v.clone().applyQuaternion(_q.set(r.x, r.y, r.z, r.w).invert()).multiplyScalar(0.11);
+        openWound(p, lp, Math.min(0.045, 0.015 + dmg * 0.0008), 0.07);
+        this.bleed(p, lp, 4, 0.4);
+      }
+    }
+    for (const n of CORE) { const q = this.parts[n]; if (!q.gone) { const v = q.body.linvel(); q.pv.set(v.x, v.y, v.z); } }
+    p.hp -= dmg * 0.5;
+    if (dmg > 3 && !this.dead) this.stun = Math.max(this.stun, 1 + Math.min(3, dmg / 15));
+    if (head && p.hp <= 0) this.die('impact');
+    else this.damage(dmg * (head ? 1.5 : 1), 'impact');
   }
 
   tryGetUp() {
@@ -963,6 +1270,7 @@ export class Ragdoll {
       this.captured[n].q.set(pr.x, pr.y, pr.z, pr.w);
     }
     this.getupT = 0;
+    this.squat = 1;
     this.setMode('getup');
   }
 
@@ -971,6 +1279,7 @@ export class Ragdoll {
   update(dt) {
     if (this.removed || dt <= 0) return;
     this.t += dt;
+    this.lastDt = dt;
     const gore = this.ctx.gore;
 
     // arterial spurts from stumps: pulsing, aimed out of the wound, fading with time
@@ -995,7 +1304,30 @@ export class Ragdoll {
         if (hit) gore.pool({ x: wp.x, y: wp.y + 0.1 - hit.timeOfImpact, z: wp.z }, hit.normal, rnd(0.5, 0.9));
       }
     }
-    if (this.bleedRate > 0 && !this.dead) this.damage(this.bleedRate * dt);
+    // open wounds drip (a trail, if their owner is moving) and drain health until they clot
+    const zombie = this.kind === 'zombie';
+    const pulse = this.dead ? Math.max(0, 1 - this.deadT / 9) : 1;      // no heartbeat, no pressure
+    let seep = 0;
+    for (let i = this.drips.length - 1; i >= 0; i--) {
+      const d = this.drips[i];
+      d.t += dt;
+      if (d.part.gone || d.t > 150 || pulse <= 0) { this.drips.splice(i, 1); continue; }
+      const clot = Math.exp(-d.t / (LIMBS.has(d.part.name) ? 35 : 140));
+      seep += d.hp * clot;
+      d.acc += d.rate * 0.6 * (0.2 + 0.8 * Math.exp(-d.t / 6)) * clot * pulse * dt;
+      if (d.acc >= 1) {
+        d.acc -= 1;
+        const v = d.part.body.linvel();
+        gore.drip(this.localToWorld(d.part, d.local), _v.set(v.x * 0.6, v.y * 0.6, v.z * 0.6));
+      }
+    }
+    // many holes do not empty a body many times faster: there is only so much pressure behind them
+    const loss = zombie ? 0 : this.sevBleed + Math.min(1.6, seep);
+    this.bleedRate = loss;
+    if (loss > 0 && !this.dead) this.damage(loss * dt, 'bled');
+    if (this.impactMute > 0) this.impactMute -= dt;
+    // too much blood gone to stay on your feet
+    if (this.mode !== 'ragdoll' && !this.dead && !zombie && this.health <= 20) this.goLimp(2);
 
     if (this.dead) {
       this.deadT += dt;
@@ -1005,14 +1337,14 @@ export class Ragdoll {
         this.reanimate();
       }
       // blood slowly pools under a body once it has come to rest
-      if (!this.pooled && this.deadT > 1.2) {
+      if (!this.pooled && this.bled && this.deadT > 1.2) {
         const tor = this.parts.torso.gone ? this.parts.pelvis : this.parts.torso;
         const v = tor.body.linvel();
         if (Math.hypot(v.x, v.y, v.z) < 0.25) {
           this.pooled = true;
           const t = tor.body.translation();
           const hit = gore.castFixed(t.x, t.y + 0.1, t.z, 0, -1, 0, 0.8);
-          if (hit) gore.pool({ x: t.x, y: t.y + 0.1 - hit.timeOfImpact, z: t.z }, hit.normal, rnd(0.8, 1.25));
+          if (hit) gore.pool({ x: t.x, y: t.y + 0.1 - hit.timeOfImpact, z: t.z }, hit.normal, rnd(0.8, 1.2) + Math.min(0.7, this.drips.length * 0.12));
         }
       }
     }
@@ -1023,19 +1355,33 @@ export class Ragdoll {
       if (this.mode !== 'anim') return; // went over a ledge
       this.computePose(dt);
       this.applyPose();
+      if (this.limp.size) this.muscles(dt, true);
       this.checkKnocks();
     } else if (this.mode === 'getup') {
+      // onto hands and knees first, then up
       this.getupT += dt;
-      const k = Math.min(1, this.getupT / 1.1);
+      const k = Math.min(1, this.getupT / 1.5);
+      this.squat = 1 - smooth(0.45, 1, k);
       this.computePose(dt);
-      this.applyPose(k * k * (3 - 2 * k));
+      this.applyPose(smooth(0, 0.6, k));
+      if (this.limp.size) this.muscles(dt, true);
       this.checkKnocks();
-      if (k >= 1 && this.mode === 'getup') this.mode = 'anim';
+      if (k >= 1 && this.mode === 'getup') { this.mode = 'anim'; this.squat = 0; }
     } else {
       this.muscles(dt);
+      this.trail();
       this.hitAccum = Math.max(0, this.hitAccum - dt * 320);
       if (this.stun > 0) this.stun -= dt;
       else if (!this.dead && !this.crippled && (this.health > 20 || this.kind === 'zombie')) this.tryGetUp();
+    }
+  }
+
+  /** Called right before the physics step, once everything has had its say about velocities. */
+  preStep() {
+    if (this.removed) return;
+    for (const n in this.parts) {
+      const p = this.parts[n];
+      p.vy0 = p.gone || !p.body.isDynamic() || p.body.isSleeping() ? 0 : p.body.linvel().y;
     }
   }
 
@@ -1044,11 +1390,19 @@ export class Ragdoll {
     for (const n in this.parts) {
       const p = this.parts[n];
       if (p.gone) continue;
+      if (p.vy0 < -1.5) {
+        // Flesh does not bounce. A part that was coming down and left the step going up was thrown
+        // back by the solver (a heavy torso landing on a light head does it); take that energy out.
+        const v = p.body.linvel();
+        const most = 0.25 - p.vy0 * 0.06;
+        if (v.y > most) p.body.setLinvel({ x: v.x, y: most, z: v.z }, true);
+      }
       const t = p.body.translation();
       const r = p.body.rotation();
       p.mesh.position.set(t.x, t.y, t.z);
       p.mesh.quaternion.set(r.x, r.y, r.z, r.w);
     }
+    if (this.mode === 'ragdoll') this.impacts();
   }
 
   destroy() {
@@ -1056,7 +1410,7 @@ export class Ragdoll {
     this.removed = true;
     for (const n in this.parts) {
       const p = this.parts[n];
-      this.ctx.owners.delete(p.collider.handle);
+      for (const c of p.colliders) this.ctx.owners.delete(c.handle);
       if (!p.gone) {
         this.ctx.world.removeRigidBody(p.body);
         this.ctx.scene.remove(p.mesh);
@@ -1064,6 +1418,7 @@ export class Ragdoll {
       }
       if (p.skeleton) p.skeleton.dispose();
     }
+    if (this.whole) for (const m of this.whole) this.ctx.scene.remove(m);
     if (this.skeleton) this.skeleton.dispose();
   }
 }
