@@ -9,24 +9,27 @@ export const SLOTS = ['Sidearms', 'SMGs', 'Shotguns', 'Rifles', 'Heavy', 'Blades
 // Guns: pierce = how many bodies one round passes through, zoom = how far the view narrows when aimed,
 //   rec = [up, sideways] recoil per shot in radians (the view kicks, and part of it stays: bursts climb),
 //   drift = how much the sideways part leans one way, shell = spent cases hit the ground,
-//   mag/reload = shots before a pause, spin = seconds of wind-up, bolt = leaves a bolt where it hits,
+//   mag = rounds it holds, reload = seconds to refill it (R), shells = loaded one at a time (reload is per shell,
+//   and firing interrupts it), selfLoad = reloads itself when empty, jam = chance per shot that the action
+//   stops (F clears it). Automatic guns switch between auto and single shots with B.
+//   spin = seconds of wind-up, bolt = leaves a bolt where it hits,
 //   quiet = nobody hears it.
 // Melee is weak on purpose: a hit staggers, it takes several to bring someone down, and a limb only
 // comes off once its health is gone. blunt = breaks instead of cuts.
 export const WEAPONS = [
-  { name: 'Pistol',   slot: 0, type: 'gun', auto: false, rate: 0.20,  dmg: 34,  impulse: 140, pellets: 1,  spread: 0.003, sound: 'pistol',   kick: 0.07,  hole: 0.034, rec: [0.020, 0.006], shell: true },
-  { name: 'Revolver', slot: 0, type: 'gun', auto: false, rate: 0.50,  dmg: 70,  impulse: 260, pellets: 1,  spread: 0.002, sound: 'revolver', kick: 0.17,  hole: 0.046, rec: [0.055, 0.012] },
-  { name: 'SMG',      slot: 1, type: 'gun', auto: true,  rate: 0.055, dmg: 11,  impulse: 60,  pellets: 1,  spread: 0.020, sound: 'smg',      kick: 0.022, hole: 0.022, rec: [0.0075, 0.004], shell: true },
-  { name: 'Uzi',      slot: 1, type: 'gun', auto: true,  rate: 0.048, dmg: 9,   impulse: 50,  pellets: 1,  spread: 0.034, sound: 'uzi',      kick: 0.026, hole: 0.022, rec: [0.0095, 0.0065], shell: true },
-  { name: 'Shotgun',  slot: 2, type: 'gun', auto: false, rate: 0.85,  dmg: 15,  impulse: 110, pellets: 10, spread: 0.055, sound: 'shotgun',  kick: 0.16,  hole: 0.027, rec: [0.065, 0.015], shell: true },
-  { name: 'Double Barrel', slot: 2, type: 'gun', auto: false, rate: 0.22, dmg: 16, impulse: 120, pellets: 12, spread: 0.075, sound: 'dbarrel', kick: 0.2, hole: 0.028, mag: 2, reload: 1.5, rec: [0.085, 0.02] },
-  { name: 'Rifle',    slot: 3, type: 'gun', auto: true,  rate: 0.075, dmg: 17,  impulse: 95,  pellets: 1,  spread: 0.010, sound: 'rifle',    kick: 0.035, hole: 0.03, rec: [0.015, 0.007], drift: 0.25, shell: true },
-  { name: 'AR-15',    slot: 3, type: 'gun', auto: true,  rate: 0.072, dmg: 15,  impulse: 80,  pellets: 1,  spread: 0.006, sound: 'ar15',     kick: 0.03,  hole: 0.027, rec: [0.011, 0.0045], shell: true },
-  { name: 'Sniper',   slot: 3, type: 'gun', auto: false, rate: 1.30,  dmg: 150, impulse: 420, pellets: 1,  spread: 0,     sound: 'sniper',   kick: 0.22,  hole: 0.05, pierce: 3, zoom: 0.82, rec: [0.085, 0.01], shell: true },
-  { name: 'Crossbow', slot: 3, type: 'gun', auto: false, rate: 1.25,  dmg: 85,  impulse: 180, pellets: 1,  spread: 0.001, sound: 'twang',    kick: 0.05,  hole: 0.02, bolt: true, quiet: true, zoom: 0.45, rec: [0.01, 0.002] },
-  { name: 'Rocket',   slot: 4, type: 'rocket', auto: false, rate: 1.40, sound: 'rocket', kick: 0.13 },
-  { name: 'Minigun',  slot: 4, type: 'gun', auto: true,  rate: 0.028, dmg: 12,  impulse: 70,  pellets: 1,  spread: 0.030, sound: 'minigun',  kick: 0.018, hole: 0.026, spin: 0.7, hipOnly: true, rec: [0.0045, 0.004], shell: true },
-  { name: 'Flamethrower', slot: 4, type: 'flame', range: 7.5, dmg: 5, heat: 0.13 },
+  { name: 'Pistol',   slot: 0, type: 'gun', auto: false, rate: 0.20,  dmg: 34,  impulse: 140, pellets: 1,  spread: 0.003, sound: 'pistol',   kick: 0.07,  hole: 0.034, rec: [0.020, 0.006], shell: true, mag: 17, reload: 1.5, jam: 0.004 },
+  { name: 'Revolver', slot: 0, type: 'gun', auto: false, rate: 0.50,  dmg: 70,  impulse: 260, pellets: 1,  spread: 0.002, sound: 'revolver', kick: 0.17,  hole: 0.046, rec: [0.055, 0.012], mag: 6, reload: 2.6 },
+  { name: 'SMG',      slot: 1, type: 'gun', auto: true,  rate: 0.055, dmg: 11,  impulse: 60,  pellets: 1,  spread: 0.020, sound: 'smg',      kick: 0.022, hole: 0.022, rec: [0.0075, 0.004], shell: true, mag: 30, reload: 1.9, jam: 0.007 },
+  { name: 'Uzi',      slot: 1, type: 'gun', auto: true,  rate: 0.048, dmg: 9,   impulse: 50,  pellets: 1,  spread: 0.034, sound: 'uzi',      kick: 0.026, hole: 0.022, rec: [0.0095, 0.0065], shell: true, mag: 32, reload: 1.8, jam: 0.011 },
+  { name: 'Shotgun',  slot: 2, type: 'gun', auto: false, rate: 0.85,  dmg: 15,  impulse: 110, pellets: 10, spread: 0.055, sound: 'shotgun',  kick: 0.16,  hole: 0.027, rec: [0.065, 0.015], shell: true, mag: 6, reload: 0.5, shells: true, jam: 0.006 },
+  { name: 'Double Barrel', slot: 2, type: 'gun', auto: false, rate: 0.22, dmg: 16, impulse: 120, pellets: 12, spread: 0.075, sound: 'dbarrel', kick: 0.2, hole: 0.028, mag: 2, reload: 1.5, selfLoad: true, rec: [0.085, 0.02] },
+  { name: 'Rifle',    slot: 3, type: 'gun', auto: true,  rate: 0.075, dmg: 17,  impulse: 95,  pellets: 1,  spread: 0.010, sound: 'rifle',    kick: 0.035, hole: 0.03, rec: [0.015, 0.007], drift: 0.25, shell: true, mag: 30, reload: 2.2, jam: 0.004 },
+  { name: 'AR-15',    slot: 3, type: 'gun', auto: true,  rate: 0.072, dmg: 15,  impulse: 80,  pellets: 1,  spread: 0.006, sound: 'ar15',     kick: 0.03,  hole: 0.027, rec: [0.011, 0.0045], shell: true, mag: 30, reload: 2.0, jam: 0.008 },
+  { name: 'Sniper',   slot: 3, type: 'gun', auto: false, rate: 1.30,  dmg: 150, impulse: 420, pellets: 1,  spread: 0,     sound: 'sniper',   kick: 0.22,  hole: 0.05, pierce: 3, zoom: 0.82, rec: [0.085, 0.01], shell: true, mag: 5, reload: 2.8 },
+  { name: 'Crossbow', slot: 3, type: 'gun', auto: false, rate: 1.25,  dmg: 85,  impulse: 180, pellets: 1,  spread: 0.001, sound: 'twang',    kick: 0.05,  hole: 0.02, bolt: true, quiet: true, zoom: 0.45, rec: [0.01, 0.002], mag: 1, reload: 1.1, selfLoad: true },
+  { name: 'Rocket',   slot: 4, type: 'rocket', auto: false, rate: 0.3, sound: 'rocket', kick: 0.13, mag: 1, reload: 1.4, selfLoad: true },
+  { name: 'Minigun',  slot: 4, type: 'gun', auto: true,  rate: 0.028, dmg: 12,  impulse: 70,  pellets: 1,  spread: 0.030, sound: 'minigun',  kick: 0.018, hole: 0.026, spin: 0.7, hipOnly: true, rec: [0.0045, 0.004], shell: true, mag: 200, reload: 4.5, jam: 0.002 },
+  { name: 'Flamethrower', slot: 4, type: 'flame', range: 7.5, dmg: 5, heat: 0.13, mag: 100, reload: 3.0 },
   { name: 'Knife',    slot: 5, type: 'knife', slice: { rate: 0.32, dmg: 8, impulse: 15, range: 1.9 }, stab: { rate: 0.55, dmg: 16, impulse: 25, range: 1.8 } },
   { name: 'Machete',  slot: 5, type: 'melee', rate: 0.60, dmg: 14, impulse: 60,  range: 1.7 },
   { name: 'Katana',   slot: 5, type: 'melee', rate: 0.55, dmg: 18, impulse: 50,  range: 1.9 },
@@ -175,7 +178,13 @@ export class Weapons {
     this.thrust = 0;       // knife: time left in a stab
     this.bloom = 0;        // how far sustained fire has opened the spread up
     this.kickSide = 0;     // the weapon twists a little differently with every shot
-    this.shots = 0;        // fired since the last reload (weapons with a magazine)
+    this.ammo = WEAPONS.map((w) => w.mag || 0);     // rounds in each weapon
+    this.jammed = WEAPONS.map(() => false);
+    this.single = WEAPONS.map(() => false);         // automatic weapons switched to one shot per pull
+    this.reloadT = 0;      // seconds left of the reload in hand (0 = not reloading)
+    this.clearT = 0;       // seconds left of clearing a jam
+    this.busy = 0;         // 0..1: how far the weapon is lowered while being worked on
+    this.ammoEl = document.getElementById('ammo');
     this.spin = 0;         // minigun barrels: 0 = stopped, 1 = up to speed
     this.tickT = 0;        // chainsaw / flamethrower: time to the next bite
 
@@ -281,13 +290,96 @@ export class Weapons {
     this.models.forEach((m, k) => (m.visible = k === i));
     this.cool = 0.12;
     this.ads = 0;
-    this.shots = 0;
+    this.reloadT = this.clearT = 0;       // putting it away abandons whatever you were doing to it
     this.spin = 0;
     this.thrust = 0;
     this.rig.visible = true;
     document.body.classList.remove('scoped');
     this.refreshBar();
     sfx.pop();
+  }
+
+  // ---- ammunition
+  /** One round gone. It may jam the action; an empty self-loading weapon starts its own reload. */
+  spend(w) {
+    if (!w.mag) return;
+    const i = this.index;
+    if (--this.ammo[i] > 0 && w.jam && Math.random() < w.jam) {
+      this.jammed[i] = true;
+      sfx.tick();
+      this.ctx.toast('JAMMED - F to clear');
+    }
+    if (this.ammo[i] <= 0 && w.selfLoad) this.reload();
+  }
+
+  /** Can it fire right now? `pulled` = the trigger was pressed this frame (so an empty gun clicks once, not forever). */
+  ready(w, pulled) {
+    if (!w.mag) return true;
+    const i = this.index;
+    if (this.clearT > 0) return false;
+    if (this.reloadT > 0) {
+      if (!(w.shells && this.ammo[i] > 0)) return false;
+      this.reloadT = 0;                      // shells already in: stop loading and shoot
+    }
+    if (this.jammed[i] || this.ammo[i] <= 0) {
+      if (pulled) { sfx.tick(); this.ctx.toast(this.jammed[i] ? 'JAMMED - F to clear' : 'EMPTY - R to reload'); }
+      return false;
+    }
+    return true;
+  }
+
+  /** R: refill the magazine (or start feeding shells). */
+  reload() {
+    const w = this.current, i = this.index;
+    if (!w.mag || this.reloadT > 0 || this.clearT > 0 || this.jammed[i] || this.ammo[i] >= w.mag) return;
+    this.reloadT = w.reload;
+    this.ads = 0;
+    sfx.reload();
+  }
+
+  /** F: rack the action to clear a jam. Costs the round that was stuck. */
+  unjam() {
+    const i = this.index;
+    if (!this.jammed[i] || this.clearT > 0) return;
+    this.clearT = 0.7;
+    this.reloadT = 0;
+    sfx.reload();
+  }
+
+  /** B: automatic weapons between full auto and one shot per pull. */
+  toggleMode() {
+    const w = this.current;
+    if (w.type !== 'gun' || !w.auto || w.spin) return;
+    this.single[this.index] = !this.single[this.index];
+    sfx.tick();
+    this.ctx.toast(this.single[this.index] ? 'SEMI' : 'AUTO');
+  }
+
+  /** Run the reload / clearing in hand, and keep the counter on screen right. */
+  tickAmmo(dt) {
+    const w = this.current, i = this.index;
+    if (this.clearT > 0 && (this.clearT -= dt) <= 0) {
+      this.jammed[i] = false;
+      this.ammo[i] = Math.max(0, this.ammo[i] - 1);
+    }
+    if (this.reloadT > 0 && (this.reloadT -= dt) <= 0) {
+      if (w.shells) {
+        this.ammo[i]++;
+        if (this.ammo[i] < w.mag) { this.reloadT = w.reload; sfx.reload(); }      // next shell
+      } else {
+        this.ammo[i] = w.mag;
+        sfx.tick();
+      }
+    }
+    const working = this.reloadT > 0 || this.clearT > 0;
+    this.busy += ((working ? 1 : 0) - this.busy) * Math.min(1, dt * 10);
+    const text = !w.mag ? '' : this.clearT > 0 ? 'CLEARING' : this.jammed[i] ? 'JAMMED  [F]' : this.reloadT > 0 ? 'RELOADING'
+      : `${this.ammo[i]} / ${w.mag}` + (w.type === 'gun' && w.auto && !w.spin ? (this.single[i] ? '  SEMI' : '  AUTO') : '');
+    if (text !== this.ammoText) {
+      this.ammoText = text;
+      this.ammoEl.textContent = text;
+      this.ammoEl.classList.toggle('warn', this.jammed[i] || (w.mag > 0 && this.ammo[i] === 0));
+    }
   }
 
   /** Leave a crossbow bolt standing in what it hit. It goes where that thing goes. */
@@ -398,11 +490,7 @@ export class Weapons {
     const hold = RECOIL * (1 - 0.3 * this.ads);
     ctx.player.recoil(rec[0] * hold * rnd(0.85, 1.15), rec[1] * hold * (rnd(-1, 1) + (w.drift || 0) * 2));
     this.bloom = Math.min(1.5, this.bloom + rec[0] * 9);
-    if (w.mag && ++this.shots >= w.mag) {         // both barrels gone: break it open
-      this.shots = 0;
-      this.cool = w.reload;
-      ctx.later(w.reload * 0.35, () => sfx.reload());
-    }
+    this.spend(w);
   }
 
   fireRocket(w) {
@@ -423,6 +511,7 @@ export class Weapons {
     ctx.alert('shot', ctx.player.pos, 40);
     this.kick = w.kick;
     ctx.player.recoil(w.kick * 0.5);
+    this.spend(w);
   }
 
   /**
@@ -507,7 +596,7 @@ export class Weapons {
 
   /** Flamethrower: a jet of fire. What it washes over chars, and people it stays on catch light. */
   updateFlame(dt, input, w) {
-    if (!input.left) return;
+    if (!input.left || !this.ready(w, input.leftDown)) return;
     const ctx = this.ctx, fire = ctx.gore.fire;
     this.aim();
     const origin = _o.clone(), fwd = _d.clone(), right = _r.clone(), up = _u.clone();
@@ -524,6 +613,7 @@ export class Weapons {
     this.tickT -= dt;
     if (this.tickT > 0) return;
     this.tickT = 0.09;
+    this.ammo[this.index]--;                 // fuel
     sfx.flame();
     ctx.alert('violence', ctx.player.pos, 16);
     for (const ox of [0, 0.11, -0.11]) {
@@ -626,6 +716,13 @@ export class Weapons {
     );
     const twist = this.kick > 0 ? this.kickSide * (1 - 0.6 * a) : 0;
     this.rig.rotation.set(this.kick * (2.2 - 1.4 * a) + s * 0.4, s * 0.9 + twist * 0.9, s * -0.8 + (1 - a) * -0.03 + twist * 1.6);
+    if (this.busy > 0.01) {                      // reloading or clearing a jam: the weapon comes down and tips over
+      const b = this.busy * this.busy * (3 - 2 * this.busy);
+      this.rig.position.y -= 0.16 * b;
+      this.rig.position.x -= 0.03 * b;
+      this.rig.rotation.x += 0.45 * b;
+      this.rig.rotation.z += 0.5 * b;
+    }
     if (this.thrust > 0) {                       // a stab: straight out toward the middle of the view and back
       const t = Math.sin((1 - this.thrust / 0.24) * Math.PI);
       this.rig.position.x -= 0.12 * t;
@@ -639,13 +736,14 @@ export class Weapons {
     const w = this.current;
     const pl = this.ctx.player;
     this.cool -= dt;
+    this.tickAmmo(dt);
 
     if (input.wheel !== 0 && !this.grab) {
       this.select(this.index + (input.wheel > 0 ? 1 : -1));
     }
 
     // right mouse: aim down the sights (guns only; the grab gun uses it to throw)
-    const wantAds = (w.type === 'gun' || w.type === 'rocket') && !w.hipOnly && input.right ? 1 : 0;
+    const wantAds = (w.type === 'gun' || w.type === 'rocket') && !w.hipOnly && input.right && this.busy < 0.3 ? 1 : 0;
     this.ads += (wantAds - this.ads) * Math.min(1, dt * 11);
     if (Math.abs(wantAds - this.ads) < 0.002) this.ads = wantAds;
 
@@ -669,8 +767,8 @@ export class Weapons {
       if (input.left && Math.floor(was * 6) !== Math.floor(this.spin * 6)) sfx.whirr(this.spin);
     } else if (this.cool <= 0) {
       if (w.spin && !input.left) this.spin = 0.99;      // let go: they start to wind down
-      const trigger = w.auto ? input.left : input.leftDown;
-      if (trigger) {
+      const trigger = w.auto && !this.single[this.index] ? input.left : input.leftDown;
+      if (trigger && this.ready(w, input.leftDown)) {
         this.cool = w.rate;
         if (w.type === 'gun') this.fireGun(w);
         else if (w.type === 'melee') this.fireMelee(w);

@@ -439,6 +439,9 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyT') toggleSlowmo();
   if (e.code === 'KeyV') toggleHelmet();
   if (e.code === 'KeyG') toggleGraphics();
+  if (e.code === 'KeyR') ctx.weapons.reload();
+  if (e.code === 'KeyF') ctx.weapons.unjam();
+  if (e.code === 'KeyB') ctx.weapons.toggleMode();
   if (e.code === 'KeyX') deleteTarget();
   if (e.code === 'KeyC') { clearAll(); toast('CLEARED'); }
 });

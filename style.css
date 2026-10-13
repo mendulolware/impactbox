@@ -84,3 +84,8 @@ body.helmet #slowmo { right: 6%; top: 12%; }
     radial-gradient(circle at center, transparent 0, transparent 37.5vh, rgba(0,0,0,.55) 38vh, #000 39vh); }
 body.scoped #scope { display: block; }
 body.scoped #weapon-bar, body.scoped #help, body.scoped #health { opacity: 0; }
+
+/* ---- rounds left, or what is wrong with the gun ---- */
+#ammo { position: absolute; right: 28px; bottom: 110px; font-size: 26px; font-weight: 700; letter-spacing: 1px; text-shadow: 0 2px 6px #000; font-variant-numeric: tabular-nums; }
+#ammo.warn { color: #ff5a4a; }
+body.scoped #ammo { opacity: 0; }

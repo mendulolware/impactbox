@@ -21,6 +21,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | V | helmet cam on/off |
 | G | graphics: high / fast (turns the effects off on slow machines) |
 | 1-8 or wheel | pick a weapon group; press the same number again for the next weapon in it (table under Weapons) |
+| R / F / B | reload / clear a jam / switch auto and semi |
 | Q (or Tab) | spawn menu |
 | T | slow-mo |
 | X | delete what you're aiming at (or holding) |
@@ -149,6 +150,10 @@ Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of
   view springs back from, and leaves the rest where it landed, so a burst climbs and has to be pulled back down. Sustained
   fire also opens the spread up (`bloom`). Aiming down sights takes 30% off. `RECOIL` in `weapons.js` scales every gun at once.
 - **AR-15**: faster, flatter and more accurate than the Rifle, a little less damage per round.
+- **Ammunition.** Guns hold `mag` rounds. **R** reloads (`reload` seconds); the shotgun loads one shell at a time and firing
+  interrupts it. An empty gun clicks. Each shot has a small chance (`jam`) of stopping the action: **F** racks it clear, losing
+  the stuck round. **B** switches automatic weapons between auto and one shot per pull. The double barrel, crossbow and rocket
+  launcher reload themselves. The flamethrower's magazine is fuel. Counter and state show bottom right (`tickAmmo`).
 - **Double Barrel** fires twice, then takes a second and a half to break open and reload.
 - **Crossbow** is silent (nobody runs at the sound) and leaves its bolt standing in whatever it hit.
 - **Minigun** has to spin up for most of a second before it fires, and cannot be aimed down sights.
