@@ -22,8 +22,10 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | G | graphics: high / fast (turns the effects off on slow machines) |
 | 1-8 or wheel | pick a weapon group; press the same number again for the next weapon in it (table under Weapons) |
 | R / F / B | reload / clear a jam / switch auto and semi |
-| E | Ready or Not mode: shout for compliance, or arrest whoever has given up in front of you |
-| Q (or Tab) | spawn menu |
+| F | Ready or Not mode: shout for compliance, or arrest whoever has given up in front of you |
+| Q / E | lean left / right (hold) |
+| N / L | night on the current map / flashlight |
+| Tab | spawn menu |
 | T | slow-mo |
 | X | delete what you're aiming at (or holding) |
 | C | clear everything |
@@ -132,6 +134,20 @@ Skin, shirt, trouser and hair colours are chosen per NPC.
 An untouched NPC is drawn joined up, one mesh per material (10 draw calls); `split()` swaps in the per-part pieces at the first injury.
 
 Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted after one of its joints was cut.
+
+## Realism pass
+
+- **Stumbling** (`ragdoll.js`, `stumbleT`): a hard hit that does not kill no longer always drops someone. Most reel backward with their arms out and feet scrabbling, and then either catch themselves or go down; leg hits always end on the ground.
+- **Rounds carry on** (`fireGun` in `weapons.js`, `ctx.exitPoint` in `main.js`): each gun has `pen`, the metres of wall, door or crate it goes through (0.1 for a pistol, 0.3 to 0.35 for rifles, 0.7 for the sniper). A round that comes out the far side keeps 60% of its damage; one that only grazes a surface skips off it at half strength.
+- **Armour**: the soldier's vest and helmet stop anything with `pen` under 0.25 (pistols, SMGs, buckshot, the revolver) as a bruise, until they have soaked up 120 damage. Rifles go through.
+- **Reloading** drops the old magazine, and it stays where it lands (the last twelve do).
+- **Ears** (`deafen()` in `audio.js`): a nearby blast, or gunfire in the warehouse and the kill house, dulls everything and leaves a ringing that fades over a few seconds.
+- **Suppression**: a suspect's shot that misses drains the colour, closes the edges of the picture in and shakes the view (`uSupp` in `post.js`).
+- **Leaning** (Q / E): the head goes 0.42 m out to the side, as far as there is room, and shots leave from there.
+- **Cover** (`findCover`, `findPost` in `brain.js`): frightened people freeze (15%), get behind something and peek out (most, when there is something), or run. Armed suspects pick a hiding place with a firing spot a step to one side and go back and forth between them.
+- **Casualties**: once calm again, bystanders walk over to a body and crouch by it before it sinks in, and they take hold of anyone who is down and cannot walk and drag them away from where it happened.
+- **Night** (N, or the button on the start screen): any map under a moon, with a shadow-casting flashlight (L). People see less than half as far in the dark.
+- **Recorded run** (`assets/run.json`, made from a Mixamo clip by `models/import_anim.py`): flat-out running blends from the worked-out stride to motion capture. Walking and everything else is still worked out in `computePose`.
 
 ## First person
 

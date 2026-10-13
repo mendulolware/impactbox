@@ -82,6 +82,18 @@ const MODEL_OF = {
 const REST = { spine: 0, neck: 0, shoulderL: 0.25, shoulderR: 0.25, elbowL: 0.45, elbowR: 0.45, hipL: 0.2, hipR: 0.2, kneeL: -0.35, kneeR: -0.35 };
 const BRACE = { spine: -0.3, neck: -0.35, shoulderL: 1.35, shoulderR: 1.35, elbowL: 0.6, elbowR: 0.6, hipL: 0.7, hipR: 0.7, kneeL: -1.0, kneeR: -1.0 };
 const TWIST = { spine: 0.5, neck: 0.9, shoulderL: 1.2, shoulderR: 1.2, hipL: 0.7, hipR: 0.7 };
+// A recorded run (assets/run.json, made by models/import_anim.py): a rotation per joint per frame, one loop.
+// Flat-out running blends from the worked-out stride to this; without the file the worked-out one is all there is.
+let RUN_CLIP = null;
+fetch('assets/run.json').then((r) => r.json()).then((j) => { RUN_CLIP = j; }).catch(() => {});
+const _c0 = new THREE.Quaternion(), _c1 = new THREE.Quaternion();
+/** The clip's rotation for one joint at a point in the walk cycle. */
+function clipAt(name, phase, out) {
+  const rows = RUN_CLIP.joints[name], n = RUN_CLIP.frames;
+  const u = (((phase / (Math.PI * 2)) % 1) + 1) % 1 * n, i = Math.floor(u) % n;
+  return out.fromArray(rows[i]).slerp(_c1.fromArray(rows[(i + 1) % n]), u - Math.floor(u));
+}
+
 const FLINCH = 0.45, PUNCH = 0.35, LUNGE = 0.5, STUMBLE = 0.9;
 
 const PARENT = {};
@@ -1004,10 +1016,20 @@ export class Ragdoll {
     L('shoulderR', shRx, shRy, shRz);
     L('elbowL', elL);
     L('elbowR', elR);
+    // running: the recorded stride takes over, as far as nothing else (a gesture, a bad leg, a stumble) wants the body
+    const rec = RUN_CLIP && !z ? run * w * (1 - clamp(up + cw + ft + kn + sq + cl + fl + Math.max(lameL, lameR) + (this.stumbleT > 0 ? 1 : 0), 0, 1)) : 0;
+    if (rec > 0.01) {
+      for (const name in this.joints) {
+        if (name === 'neck' && this.look) continue;                         // the head is busy looking at something
+        if (am > 0.01 && (name.startsWith('shoulder') || name.startsWith('elbow'))) continue;   // the arms are busy with a gun
+        this.joints[name].local.slerp(clipAt(name, this.phase, _c0), rec);
+      }
+    }
 
     // forward kinematics from the pelvis, placed at the origin first
     const pel = this.pose.pelvis;
     pel.q.setFromEuler(_e.set(-0.03 * w - 0.07 * run, this.heading + 0.1 * s * w, roll, 'YXZ'));
+    if (rec > 0.01) pel.q.slerp(_q.setFromEuler(_e.set(0, this.heading, 0, 'YXZ')).multiply(clipAt('pelvis', this.phase, _c0)), rec);
     pel.p.set(0, 0, 0);
     for (const j of JOINTS) {
       const jd = this.joints[j.name];
