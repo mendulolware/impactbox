@@ -183,6 +183,9 @@ export class Ragdoll {
     this.impactMute = 0.3;      // no landing damage while this runs (after hits, grabs and mode changes)
     this.trailAt = new THREE.Vector3(pos.x, -99, pos.z);
     this.mass = 0;
+    this.voice = (opts.kind === 'zombie' || opts.zombie ? 0.7 : 0.8) + Math.random() * 0.5;   // whose throat it is
+    this.voiceT = 0;            // no more noise out of it before this time
+    this.wasState = 'calm';
     this.heat = 0;              // how much fire it has taken
     this.burnT = 0;             // seconds left alight
     this.lastDt = 1 / 60;
@@ -439,12 +442,21 @@ export class Ragdoll {
 
   die(cause) {
     if (this.dead) return;
+    if (cause !== 'headshot') { this.voiceT = 0; this.cry(this.kind === 'zombie' ? 'growl' : 'deathcry', 9); }   // (a head shot is over before any sound)
     this.dead = true;
     this.goLimp(1e9);
     this.tone = Math.min(this.tone, cause === 'headshot' ? 0.05 : 0.2);   // nothing holds the body up any more: it drops
     this.twitch = cause === 'headshot' ? 1.3 : 0.6;   // nerves fire for a moment after death
     this.ctx.onKill(this, cause);
     this.ctx.alert('death', this.center(_c), 16);
+  }
+
+  /** Make a noise: 'grunt' | 'scream' | 'deathcry' | 'growl'. Quieter with distance; `gap` = seconds before the next. */
+  cry(kind, gap = 0.5) {
+    if (this.t < this.voiceT || this.parts.head.gone || this.severed.has('head')) return;
+    this.voiceT = this.t + gap;
+    const d = this.center(_c).distanceTo(this.ctx.player.pos);
+    this.ctx.sfx[kind](1 / (1 + d * d / 60), this.voice);
   }
 
   /** Apply a hit to a single part. opts: { blade, light, stab, bite, explosion, heat, hole, normal, from } */
@@ -474,6 +486,7 @@ export class Ragdoll {
       this.goLimp(0.9 + Math.min(2.6, impulse / 110 + dmg / 60));
     }
     this.brain.notice('hurt', opts.from || this.ctx.player.pos);
+    if (dmg > 0 && !this.dead) this.cry(zombie ? 'growl' : dmg > 25 || opts.explosion || opts.blade ? 'scream' : 'grunt');
 
     if (impulse > 0 && this.mode === 'ragdoll') {
       _v.copy(dir).multiplyScalar(impulse);
@@ -1365,6 +1378,7 @@ export class Ragdoll {
     if (this.burnT > 0) {
       this.burnT -= dt;
       if (!this.dead) {
+        this.cry(this.kind === 'zombie' ? 'growl' : 'scream', 0.9);
         this.damage(9 * dt, 'burned');
         if (this.brain.state !== 'flee' && this.kind !== 'zombie') { this.brain.state = 'flee'; this.brain.fear = 1; }
       }
@@ -1405,6 +1419,11 @@ export class Ragdoll {
 
     if (this.mode === 'anim') {
       this.brain.update(dt);
+      // people scream when they start to run; the dead moan when they have someone to go for
+      const state = this.brain.state;
+      if (state === 'flee' && this.wasState !== 'flee' && Math.random() < 0.6) this.cry('scream', 1.5);
+      else if (zombie && this.brain.target && Math.random() < dt * 0.3) this.cry('growl', 2.5);
+      this.wasState = state;
       this.move(dt);
       if (this.mode !== 'anim') return; // went over a ledge
       this.computePose(dt);

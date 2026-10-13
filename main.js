@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { initAudio, sfx } from './audio.js';
+import { initAudio, sfx, setSpace } from './audio.js';
 import { Gore } from './gore.js';
 import { Ragdoll, selfCollide } from './ragdoll.js';
 import { tickWounds } from './wounds.js';
@@ -81,6 +81,7 @@ try { startMap = startMap || localStorage.getItem('impactbox.map'); } catch (e) 
 buildWorld(ctx, MAPS[startMap] ? startMap : 'yard');
 ctx.player = new Player(ctx, ctx.map.spawn);
 ctx.player.yaw = ctx.player.camYaw = ctx.map.yaw;
+setSpace(ctx.map.id);
 ctx.weapons = new Weapons(ctx);
 
 ctx.later = (sec, fn) => ctx.timers.push({ t: sec, fn });
@@ -108,7 +109,7 @@ ctx.applyHit = (hit, point, dir, dmg, impulse, opts = {}) => {
     const n = new THREE.Vector3(hit.normal.x, hit.normal.y, hit.normal.z);
     ctx.gore.sparks(point, n, 5);
     ctx.gore.bulletHole(point, n);
-    sfx.thud(0.5);
+    sfx.impact();
   }
 };
 
@@ -451,6 +452,7 @@ function setMap(id) {
   loadMap(ctx, id);
   ctx.player.teleport(ctx.map.spawn, ctx.map.yaw);
   ctx.map.populate();
+  setSpace(ctx.map.id);
   try { localStorage.setItem('impactbox.map', ctx.map.id); } catch (e) { /* private window: just don't remember */ }
   for (const el of document.querySelectorAll('#maps button')) el.classList.toggle('on', el.dataset.map === ctx.map.id);
   toast(ctx.map.name.toUpperCase());
@@ -476,6 +478,7 @@ const statsEl = $('stats');
 let statsT = 0;
 
 let crashed = false;
+let lastStep = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   if (crashed) return;
@@ -521,6 +524,12 @@ function tick(now) {
   const active = gameActive() && !ctx.player.dead;
   ctx.player.update(sdt, input, active, dt);
   if (active) ctx.weapons.update(dt, input);
+  // footsteps: one for every half turn of the walk cycle
+  const stepN = Math.floor(ctx.player.bob / Math.PI);
+  if (stepN !== lastStep) {
+    lastStep = stepN;
+    if (active && ctx.player.grounded) sfx.step(input.keys.has('ShiftLeft') || input.keys.has('ShiftRight'));
+  }
 
   // timers (run in sim time so slow-mo stretches fuses and chain reactions)
   for (let i = ctx.timers.length - 1; i >= 0; i--) {

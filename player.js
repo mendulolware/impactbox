@@ -34,7 +34,10 @@ export class Player {
     this.camPitch = 0;
     this.aimOff = { yaw: 0, pitch: 0 };       // aim minus camera: the weapon rig turns by this
     this.aimQuat = new THREE.Quaternion();    // true aim direction, used for shooting
-    this.kickPitch = 0;
+    this.kickPitch = 0;       // recoil: how far the view is kicked off the aim right now...
+    this.kickYaw = 0;
+    this.recV = 0;            // ...and how fast that is changing
+    this.recW = 0;
     this.shake = 0;
     this.sens = 1;
     this.fov = FOV;
@@ -58,6 +61,7 @@ export class Player {
     this.vel.set(0, 0, 0);
     this.yaw = this.camYaw = yaw;
     this.pitch = this.camPitch = 0;
+    this.kickPitch = this.kickYaw = this.recV = this.recW = 0;
     this.health = 100;
     this.dead = false;
   }
@@ -68,6 +72,7 @@ export class Player {
     this.health -= amount;
     this.sinceHurt = 0;
     this.hurtFlash = 1;
+    this.ctx.sfx?.playerHurt();
     this.shake = Math.min(1, this.shake + 0.7);
     if (from) { // shoved away from the attacker
       const dx = this.pos.x - from.x, dz = this.pos.z - from.z, l = Math.hypot(dx, dz) || 1;
@@ -82,9 +87,16 @@ export class Player {
     this.pitch = THREE.MathUtils.clamp(this.pitch - dy * s, -1.5, 1.5);
   }
 
-  recoil(k) {
-    this.kickPitch += k;
-    this.shake = Math.min(1, this.shake + k * 4);
+  /**
+   * A shot going off. `up` and `side` are radians. Most of it is a kick the view springs back from;
+   * the rest stays where it landed, so a long burst climbs and has to be pulled back down.
+   */
+  recoil(up, side = 0) {
+    this.recV += up * 24;
+    this.recW += side * 24;
+    this.pitch = THREE.MathUtils.clamp(this.pitch + up * 0.3, -1.5, 1.5);
+    this.yaw += side * 0.3;
+    this.shake = Math.min(1, this.shake + up * 6);
   }
 
   /** dt is game time (slow-mo scaled); rdt is real time, used for camera smoothing. */
@@ -146,28 +158,33 @@ export class Player {
 
     const moving = this.grounded && l > 0;
     if (moving) this.bob += dt * speed * 1.6;
-    this.kickPitch *= Math.max(0, 1 - dt * 9);
+    // the kick is a spring: out fast, back without bouncing
+    const h = Math.min(dt, 1 / 30);
+    this.recV += (-169 * this.kickPitch - 26 * this.recV) * h;
+    this.kickPitch += this.recV * h;
+    this.recW += (-169 * this.kickYaw - 26 * this.recW) * h;
+    this.kickYaw += this.recW * h;
     this.shake *= Math.max(0, 1 - rdt * 7);
 
     // ---- camera
-    const aimPitch = this.pitch + this.kickPitch;
+    const aimPitch = this.pitch + this.kickPitch, aimYaw = this.yaw + this.kickYaw;
     if (helmet) {
       // a head-mounted camera follows the aim with a slight delay; the weapon leads it
       const c = 1 - Math.exp(-rdt * 15);
-      let dy = this.yaw - this.camYaw;
+      let dy = aimYaw - this.camYaw;
       dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       this.camYaw += dy * c;
       this.camPitch += (aimPitch - this.camPitch) * c;
-      let off = this.yaw - this.camYaw;
+      let off = aimYaw - this.camYaw;
       this.aimOff.yaw = Math.atan2(Math.sin(off), Math.cos(off));
       this.aimOff.pitch = aimPitch - this.camPitch;
     } else {
-      this.camYaw = this.yaw;
+      this.camYaw = aimYaw;
       this.camPitch = aimPitch;
       this.aimOff.yaw = 0;
       this.aimOff.pitch = 0;
     }
-    this.aimQuat.setFromEuler(_e.set(aimPitch, this.yaw, 0, 'YXZ'));
+    this.aimQuat.setFromEuler(_e.set(aimPitch, aimYaw, 0, 'YXZ'));
 
     const steady = 1 - 0.7 * ads;
     const bobAmp = (helmet ? 0.05 : 0.025) * steady * (this.grounded ? 1 : 0);

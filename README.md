@@ -44,7 +44,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | `world.js` | sky with clouds, sun, fog and time of day; `MapBuilder`, which turns a map description into colliders and a few merged meshes |
 | `textures.js` | asphalt, concrete, timber, brick and sheet metal generated in code, each with colour, normal and roughness maps |
 | `post.js` | picture pipeline: ambient occlusion, bloom, colour grade |
-| `audio.js` | procedural sound effects |
+| `audio.js` | every sound, made from noise and oscillators: layered gunshots, echo per map, voices, footsteps, ambience |
 | `viewer.html` | a turntable for looking at any model under the game's own sky and lighting (not part of the game) |
 
 ## Maps
@@ -132,19 +132,23 @@ the pipeline off.
 
 ## Weapons
 
-Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of `weapons.js`. There are 22, in eight groups:
+Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of `weapons.js`. There are 23, in eight groups:
 
 | Key | Group | Weapons |
 | --- | --- | --- |
 | 1 | Sidearms | Pistol, Revolver |
 | 2 | SMGs | SMG, Uzi |
 | 3 | Shotguns | Shotgun, Double Barrel |
-| 4 | Rifles | Rifle, Sniper, Crossbow |
+| 4 | Rifles | Rifle, AR-15, Sniper, Crossbow |
 | 5 | Heavy | Rocket, Minigun, Flamethrower |
 | 6 | Blades | Knife, Machete, Katana, Axe, Chainsaw |
 | 7 | Blunt | Bat, Crowbar, Sledgehammer |
 | 8 | Gear | Grenade, Grab Gun |
 
+- **Recoil.** Every gun has `rec: [up, sideways]` in radians per shot. `Player.recoil()` turns most of that into a kick the
+  view springs back from, and leaves the rest where it landed, so a burst climbs and has to be pulled back down. Sustained
+  fire also opens the spread up (`bloom`). Aiming down sights takes 30% off. `RECOIL` in `weapons.js` scales every gun at once.
+- **AR-15**: faster, flatter and more accurate than the Rifle, a little less damage per round.
 - **Double Barrel** fires twice, then takes a second and a half to break open and reload.
 - **Crossbow** is silent (nobody runs at the sound) and leaves its bolt standing in whatever it hit.
 - **Minigun** has to spin up for most of a second before it fires, and cannot be aimed down sights.
@@ -160,6 +164,15 @@ Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of
 - **Knife**: left button slices (a quick sideways cut that opens a gash running the way the blade travelled), right button
   stabs (a thrust: slower, shorter reach, twice the damage, a puncture). Both are in `updateKnife`; numbers are on the Knife's
   line in `WEAPONS`.
+
+## Sound
+
+There are no audio files; `audio.js` builds everything. A gunshot (`shot()`) is layers: the crack, the body of the blast, a low
+thump, the action cycling, and for the AR-15 the ring of its buffer spring; each gun mixes them differently. Sounds are sent into
+a generated echo, and `setSpace()` sets how much of it each map has (a lot in the warehouse, little on the rooftops) along with a
+quiet background bed: wind, room hum or city. People have voices (`voice()`: a buzzing source through vowel filters): grunts and
+screams when hit, a cry when they die, screams when they run or burn, growls from zombies, all quieter with distance. Also:
+spent cases landing, rounds hitting concrete (some whine off), footsteps, and the double barrel being broken open.
 
 ## Gore
 
@@ -184,7 +197,7 @@ Explosions burn and pepper bodies rather than launching them out of the arena, a
 
 ## Models
 
-Every model is built by code in Blender and exported to `assets/models.glb` (59 models, about 215,000 triangles), which `models.js`
+Every model is built by code in Blender and exported to `assets/models.glb` (60 models, about 220,000 triangles), which `models.js`
 loads at startup. If the file is missing the game falls back to primitive shapes. Pictures of everything are in `models/previews/`.
 
 To rebuild: open `models/impactbox-models.blend` and run `models/build_models.py` from the Scripting tab, or from a terminal

@@ -7,22 +7,25 @@ export const SLOTS = ['Sidearms', 'SMGs', 'Shotguns', 'Rifles', 'Heavy', 'Blades
 
 // type: gun (hitscan) | rocket | flame | melee (a swing) | saw | knife (slice and stab) | grenade | grab
 // Guns: pierce = how many bodies one round passes through, zoom = how far the view narrows when aimed,
+//   rec = [up, sideways] recoil per shot in radians (the view kicks, and part of it stays: bursts climb),
+//   drift = how much the sideways part leans one way, shell = spent cases hit the ground,
 //   mag/reload = shots before a pause, spin = seconds of wind-up, bolt = leaves a bolt where it hits,
 //   quiet = nobody hears it.
 // Melee is weak on purpose: a hit staggers, it takes several to bring someone down, and a limb only
 // comes off once its health is gone. blunt = breaks instead of cuts.
 export const WEAPONS = [
-  { name: 'Pistol',   slot: 0, type: 'gun', auto: false, rate: 0.20,  dmg: 34,  impulse: 140, pellets: 1,  spread: 0.003, sound: 'pistol',   kick: 0.07,  hole: 0.034 },
-  { name: 'Revolver', slot: 0, type: 'gun', auto: false, rate: 0.50,  dmg: 70,  impulse: 260, pellets: 1,  spread: 0.002, sound: 'revolver', kick: 0.17,  hole: 0.046 },
-  { name: 'SMG',      slot: 1, type: 'gun', auto: true,  rate: 0.055, dmg: 11,  impulse: 60,  pellets: 1,  spread: 0.020, sound: 'smg',      kick: 0.022, hole: 0.022 },
-  { name: 'Uzi',      slot: 1, type: 'gun', auto: true,  rate: 0.048, dmg: 9,   impulse: 50,  pellets: 1,  spread: 0.034, sound: 'smg',      kick: 0.026, hole: 0.022 },
-  { name: 'Shotgun',  slot: 2, type: 'gun', auto: false, rate: 0.85,  dmg: 15,  impulse: 110, pellets: 10, spread: 0.055, sound: 'shotgun',  kick: 0.16,  hole: 0.027 },
-  { name: 'Double Barrel', slot: 2, type: 'gun', auto: false, rate: 0.22, dmg: 16, impulse: 120, pellets: 12, spread: 0.075, sound: 'shotgun', kick: 0.2, hole: 0.028, mag: 2, reload: 1.5 },
-  { name: 'Rifle',    slot: 3, type: 'gun', auto: true,  rate: 0.075, dmg: 17,  impulse: 95,  pellets: 1,  spread: 0.010, sound: 'rifle',    kick: 0.035, hole: 0.03 },
-  { name: 'Sniper',   slot: 3, type: 'gun', auto: false, rate: 1.30,  dmg: 150, impulse: 420, pellets: 1,  spread: 0,     sound: 'sniper',   kick: 0.22,  hole: 0.05, pierce: 3, zoom: 0.82 },
-  { name: 'Crossbow', slot: 3, type: 'gun', auto: false, rate: 1.25,  dmg: 85,  impulse: 180, pellets: 1,  spread: 0.001, sound: 'twang',    kick: 0.05,  hole: 0.02, bolt: true, quiet: true, zoom: 0.45 },
+  { name: 'Pistol',   slot: 0, type: 'gun', auto: false, rate: 0.20,  dmg: 34,  impulse: 140, pellets: 1,  spread: 0.003, sound: 'pistol',   kick: 0.07,  hole: 0.034, rec: [0.020, 0.006], shell: true },
+  { name: 'Revolver', slot: 0, type: 'gun', auto: false, rate: 0.50,  dmg: 70,  impulse: 260, pellets: 1,  spread: 0.002, sound: 'revolver', kick: 0.17,  hole: 0.046, rec: [0.055, 0.012] },
+  { name: 'SMG',      slot: 1, type: 'gun', auto: true,  rate: 0.055, dmg: 11,  impulse: 60,  pellets: 1,  spread: 0.020, sound: 'smg',      kick: 0.022, hole: 0.022, rec: [0.0075, 0.004], shell: true },
+  { name: 'Uzi',      slot: 1, type: 'gun', auto: true,  rate: 0.048, dmg: 9,   impulse: 50,  pellets: 1,  spread: 0.034, sound: 'uzi',      kick: 0.026, hole: 0.022, rec: [0.0095, 0.0065], shell: true },
+  { name: 'Shotgun',  slot: 2, type: 'gun', auto: false, rate: 0.85,  dmg: 15,  impulse: 110, pellets: 10, spread: 0.055, sound: 'shotgun',  kick: 0.16,  hole: 0.027, rec: [0.065, 0.015], shell: true },
+  { name: 'Double Barrel', slot: 2, type: 'gun', auto: false, rate: 0.22, dmg: 16, impulse: 120, pellets: 12, spread: 0.075, sound: 'shotgun', kick: 0.2, hole: 0.028, mag: 2, reload: 1.5, rec: [0.085, 0.02] },
+  { name: 'Rifle',    slot: 3, type: 'gun', auto: true,  rate: 0.075, dmg: 17,  impulse: 95,  pellets: 1,  spread: 0.010, sound: 'rifle',    kick: 0.035, hole: 0.03, rec: [0.015, 0.007], drift: 0.25, shell: true },
+  { name: 'AR-15',    slot: 3, type: 'gun', auto: true,  rate: 0.072, dmg: 15,  impulse: 80,  pellets: 1,  spread: 0.006, sound: 'ar15',     kick: 0.03,  hole: 0.027, rec: [0.011, 0.0045], shell: true },
+  { name: 'Sniper',   slot: 3, type: 'gun', auto: false, rate: 1.30,  dmg: 150, impulse: 420, pellets: 1,  spread: 0,     sound: 'sniper',   kick: 0.22,  hole: 0.05, pierce: 3, zoom: 0.82, rec: [0.085, 0.01], shell: true },
+  { name: 'Crossbow', slot: 3, type: 'gun', auto: false, rate: 1.25,  dmg: 85,  impulse: 180, pellets: 1,  spread: 0.001, sound: 'twang',    kick: 0.05,  hole: 0.02, bolt: true, quiet: true, zoom: 0.45, rec: [0.01, 0.002] },
   { name: 'Rocket',   slot: 4, type: 'rocket', auto: false, rate: 1.40, sound: 'rocket', kick: 0.13 },
-  { name: 'Minigun',  slot: 4, type: 'gun', auto: true,  rate: 0.028, dmg: 12,  impulse: 70,  pellets: 1,  spread: 0.030, sound: 'rifle',    kick: 0.018, hole: 0.026, spin: 0.7, hipOnly: true },
+  { name: 'Minigun',  slot: 4, type: 'gun', auto: true,  rate: 0.028, dmg: 12,  impulse: 70,  pellets: 1,  spread: 0.030, sound: 'minigun',  kick: 0.018, hole: 0.026, spin: 0.7, hipOnly: true, rec: [0.0045, 0.004], shell: true },
   { name: 'Flamethrower', slot: 4, type: 'flame', range: 7.5, dmg: 5, heat: 0.13 },
   { name: 'Knife',    slot: 5, type: 'knife', slice: { rate: 0.32, dmg: 8, impulse: 15, range: 1.9 }, stab: { rate: 0.55, dmg: 16, impulse: 25, range: 1.8 } },
   { name: 'Machete',  slot: 5, type: 'melee', rate: 0.60, dmg: 14, impulse: 60,  range: 1.7 },
@@ -50,6 +53,7 @@ export const WEAPONS = [
 //   melee  - held in the fist, business end up and forward; tilt = how far it leans forward
 //   knife  - held point-forward in its own hand, with a sleeve running back off screen
 const RIG_SCALE = 0.8;
+const RECOIL = 1.6;        // one dial for how hard every gun kicks
 const HELMET_DROP = 0.1;   // how far the eyes are below the helmet camera (matches player.js)
 const VIEW = [
   { model: 'Pistol',  hip: [0.19, -0.19, -0.50], sight: 0.053, adsZ: -0.42, muzzle: [0, 0.034, -0.106],
@@ -66,6 +70,8 @@ const VIEW = [
     handR: [0, -0.045, 0.115, -0.7], handL: [0, -0.036, -0.18, 0] },
   { model: 'Rifle',   hip: [0.19, -0.2, -0.42], sight: 0.067, adsZ: -0.44, muzzle: [0, 0.006, -0.665],
     handR: [0, -0.072, 0.095, -0.3], handL: [0, -0.030, -0.235, 0] },
+  { model: 'AR15',    hip: [0.19, -0.21, -0.40], sight: 0.088, adsZ: -0.40, muzzle: [0, 0.034, -0.545],
+    handR: [0, -0.066, 0.045, -0.3], handL: [0, 0.010, -0.255, 0] },
   { model: 'Sniper',  hip: [0.19, -0.2, -0.42], sight: 0.072, adsZ: -0.30, muzzle: [0, 0.02, -0.795], scope: true,
     handR: [0, -0.050, 0.128, -0.6], handL: [0, -0.040, -0.2, 0] },
   { model: 'Crossbow', hip: [0.19, -0.21, -0.42], sight: 0.082, adsZ: -0.40, muzzle: [0, 0.0405, -0.43],
@@ -167,6 +173,8 @@ export class Weapons {
     this.swayPitch = 0;
 
     this.thrust = 0;       // knife: time left in a stab
+    this.bloom = 0;        // how far sustained fire has opened the spread up
+    this.kickSide = 0;     // the weapon twists a little differently with every shot
     this.shots = 0;        // fired since the last reload (weapons with a magazine)
     this.spin = 0;         // minigun barrels: 0 = stopped, 1 = up to speed
     this.tickT = 0;        // chainsaw / flamethrower: time to the next bite
@@ -351,7 +359,7 @@ export class Weapons {
     const right = _r.clone();
     const up = _u.clone();
     const muzzle = this.muzzlePoint(new THREE.Vector3());
-    const spread = w.spread * (1 - 0.65 * this.ads); // steadier down the sights
+    const spread = (w.spread + this.bloom * 0.014) * (1 - 0.65 * this.ads); // steadier down the sights, wilder the longer you hold it
 
     for (let i = 0; i < w.pellets; i++) {
       const d = fwd.clone()
@@ -372,7 +380,9 @@ export class Weapons {
       if (!w.bolt && (i < 3 || w.pellets === 1)) this.tracer(muzzle, end);
     }
     sfx[w.sound]();
+    if (w.shell && (!w.auto || Math.random() < 0.5)) sfx.shell();
     this.kick = w.kick;
+    this.kickSide = (Math.random() - 0.5) * 2 * w.kick;
     if (!w.quiet) {
       ctx.alert('shot', ctx.player.pos, 40);
       this.muzzle.position.copy(muzzle);
@@ -383,11 +393,15 @@ export class Weapons {
       this.flash.visible = true;
       this.muzzleT = 0.05;
     }
-    ctx.player.recoil(w.kick * (0.6 - 0.2 * this.ads));
+    // recoil: up, and a little to one side or the other; less with the stock in your shoulder
+    const rec = w.rec || [w.kick * 0.25, 0];
+    const hold = RECOIL * (1 - 0.3 * this.ads);
+    ctx.player.recoil(rec[0] * hold * rnd(0.85, 1.15), rec[1] * hold * (rnd(-1, 1) + (w.drift || 0) * 2));
+    this.bloom = Math.min(1.5, this.bloom + rec[0] * 9);
     if (w.mag && ++this.shots >= w.mag) {         // both barrels gone: break it open
       this.shots = 0;
       this.cool = w.reload;
-      ctx.later(w.reload * 0.6, () => sfx.tick());
+      ctx.later(w.reload * 0.35, () => sfx.reload());
     }
   }
 
@@ -610,7 +624,8 @@ export class Weapons {
       THREE.MathUtils.lerp(hipY, adsY, a) + Math.sin(bob * 2) * 0.005 * bobK - s * 0.05,
       THREE.MathUtils.lerp(hipZ, adsZ, a) + this.kick * (1.4 - 0.7 * a)
     );
-    this.rig.rotation.set(this.kick * (2.2 - 1.4 * a) + s * 0.4, s * 0.9, s * -0.8 + (1 - a) * -0.03);
+    const twist = this.kick > 0 ? this.kickSide * (1 - 0.6 * a) : 0;
+    this.rig.rotation.set(this.kick * (2.2 - 1.4 * a) + s * 0.4, s * 0.9 + twist * 0.9, s * -0.8 + (1 - a) * -0.03 + twist * 1.6);
     if (this.thrust > 0) {                       // a stab: straight out toward the middle of the view and back
       const t = Math.sin((1 - this.thrust / 0.24) * Math.PI);
       this.rig.position.x -= 0.12 * t;
@@ -666,6 +681,7 @@ export class Weapons {
 
     // viewmodel animation
     this.kick = Math.max(0, this.kick - dt * 1.2);
+    this.bloom = Math.max(0, this.bloom - dt * 2.6);
     this.swing = Math.max(0, this.swing - dt);
     this.thrust = Math.max(0, this.thrust - dt);
     const s = this.swing > 0 ? Math.sin((1 - this.swing / 0.28) * Math.PI) : 0;

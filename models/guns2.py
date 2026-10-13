@@ -260,3 +260,66 @@ def _(m):
     trigger(m, -0.0440, -0.0365, GlowOrange, h=0.022)
     m.box((0.0420, 0.0900, 0.0120), (0, 0.0750, -0.0380), Polymer, bevel=0.005, seg=2)
     REF['GrabGun'] = dict(muzzle=(0.370, AZ), handR=(-0.100, -0.088, -0.25), handL=(0.075, -0.045, 0.0))
+
+
+# ================================================================== AR-15 (5.56 mm carbine, free-float handguard)
+@model('AR15', 'Weapons', (12.2, -1.5, WZ))
+def _(m):
+    BZ = 0.034                                                                    # bore
+    # lower receiver with its magazine well, and the flat-top upper on it
+    m.prism([(-0.078, -0.024), (-0.078, 0.014), (0.094, 0.014), (0.094, -0.058), (0.042, -0.064), (0.036, -0.024)], 0.0240,
+            (0, 0, 0), Anodized, bevel=0.002, seg=2)
+    m.prism([(-0.080, 0.014), (-0.080, 0.050), (-0.070, 0.056), (0.104, 0.056), (0.108, 0.050), (0.108, 0.014)], 0.0270,
+            (0, 0, 0), Anodized, bevel=0.0025, seg=2)
+    m.rail(-0.074, 0.104, 0.064, Anodized)
+    pin(m, -0.062, 0.006, 0.0125)                                                 # take-down pin
+    pin(m, 0.084, 0.004, 0.0125)                                                  # pivot pin
+    m.box((0.0020, 0.0600, 0.0130), (0.0140, 0.0400, 0.0330), Bore, wear=0)       # ejection port
+    m.box((0.0022, 0.0580, 0.0060), (0.0146, 0.0400, 0.0235), Anodized, bevel=0.0008, seg=1)        # dust cover, dropped open
+    m.prism([(-0.014, 0.024), (-0.014, 0.044), (-0.002, 0.046), (0.006, 0.034), (0.002, 0.024)], 0.0060,
+            (0.0155, 0, 0), Anodized, bevel=0.001, seg=1)                         # brass deflector
+    m.cyl(0.0050, 0.0160, (0.0175, -0.0340, 0.0400), Anodized, rot=AXIS_X, seg=10, bevel=0.001)     # forward assist
+    m.box((0.0300, 0.0140, 0.0080), (0, -0.0860, 0.0500), Anodized, bevel=0.002, seg=1)             # charging handle
+    m.cyl(0.0050, 0.0030, (-0.0130, -0.0340, 0.0040), Steel, rot=AXIS_X, seg=10)                    # selector
+    m.box((0.0020, 0.0180, 0.0050), (-0.0140, -0.0260, 0.0040), Steel, bevel=0.0006, seg=1)
+    m.cyl(0.0045, 0.0030, (0.0130, 0.0540, -0.0040), Steel, rot=AXIS_X, seg=10)                     # magazine release
+    m.box((0.0030, 0.0120, 0.0200), (-0.0140, 0.0560, 0.0220), Anodized, bevel=0.001, seg=1)        # bolt catch
+    # barrel, barrel nut, free-float handguard with slots, flash hider
+    barrel(m, 0.0090, 0.0029, 0.100, 0.500, BZ, Gunmetal)
+    m.cyl(0.0175, 0.0200, (0, 0.1170, BZ), Anodized, rot=AXIS_YF, seg=16, bevel=0.0015)
+    m.tube(0.0215, 0.0185, 0.3000, (0, 0.2740, BZ), Anodized, rot=AXIS_YF, seg=20, chamfer=0.0015)
+    m.rail(0.126, 0.422, 0.064, Anodized)
+    for y in (0.165, 0.215, 0.265, 0.315, 0.365):
+        for sx in (-1, 1):
+            m.box((0.0020, 0.0320, 0.0070), (sx * 0.0212, y, BZ), Bore, wear=0)
+        m.box((0.0070, 0.0320, 0.0020), (0, y, BZ - 0.0212), Bore, wear=0)
+    m.cyl(0.0125, 0.0260, (0, 0.4050, BZ), Gunmetal, rot=AXIS_YF, seg=14, bevel=0.001)              # gas block, inside the tube
+    m.tube(0.0110, 0.0046, 0.0450, (0, 0.5225, BZ), Parkerized, rot=AXIS_YF, chamfer=0.001)
+    for i in range(5):
+        a = (i - 2) * 0.62
+        m.box((0.0030, 0.0220, 0.0030), (sin(a) * 0.0105, 0.5260, BZ + cos(a) * 0.0105), Bore, rot=(0, a, 0), wear=0)
+    # buffer tube, castle nut, collapsing stock with a rubber pad
+    m.cyl(0.0148, 0.1850, (0, -0.1720, 0.0360), Anodized, rot=AXIS_YF, seg=16)
+    m.cyl(0.0185, 0.0120, (0, -0.0860, 0.0360), Parkerized, rot=AXIS_YF, seg=12, bevel=0.001)
+    m.shaped([(-0.140, 0.0300, 0.0400, 0.0460), (-0.205, 0.0140, 0.0420, 0.0780), (-0.262, -0.0020, 0.0440, 0.1120),
+              (-0.275, -0.0040, 0.0440, 0.1160)], Polymer, n=20, power=3.2, ends=0.5)
+    m.shaped([(-0.275, -0.0040, 0.0445, 0.1170), (-0.284, -0.0050, 0.0440, 0.1150)], Rubber, n=20, power=3.2, ends=0.9)
+    m.box((0.0120, 0.0400, 0.0080), (0, -0.2000, -0.0260), Polymer, rot=(0.24, 0, 0), bevel=0.002, seg=1)   # stock latch
+    # pistol grip, trigger group, magazine
+    m.shaped([(-0.0300, -0.0260, 0.0260, 0.0360), (-0.0400, -0.0580, 0.0270, 0.0400), (-0.0540, -0.0960, 0.0280, 0.0420),
+              (-0.0600, -0.1120, 0.0270, 0.0400)], PolymerGrip, n=18, power=2.8, ends=0.7)
+    guard(m, [(0.0340, -0.0260), (0.0300, -0.0520), (0.0200, -0.0580), (-0.0120, -0.0580), (-0.0200, -0.0400)],
+          Anodized, w=0.0120, t=0.0030)
+    trigger(m, 0.0060, -0.0240, Steel, h=0.022)
+    path = [(0, 0.0660, -0.0400), (0, 0.0690, -0.1050), (0, 0.0790, -0.1600), (0, 0.0940, -0.2080)]
+    m.sweep(path, 1.0, Gunmetal, profile=rect_profile(0.0225, 0.0460, 0.004), up=(1, 0, 0), smooth=2)
+    m.box((0.0245, 0.0520, 0.0050), (0, 0.0960, -0.2110), Polymer, rot=(-0.30, 0, 0), bevel=0.0012, seg=1)
+    # folding sights: rear aperture, front post between ears
+    m.box((0.0220, 0.0160, 0.0100), (0, -0.0580, 0.0690), Anodized, bevel=0.0015, seg=1)
+    m.box((0.0140, 0.0040, 0.0220), (0, -0.0580, 0.0840), Anodized, bevel=0.001, seg=1)
+    m.cyl(0.0032, 0.0046, (0, -0.0580, 0.0880), Bore, rot=AXIS_YF, seg=10, wear=0)
+    m.box((0.0220, 0.0160, 0.0100), (0, 0.4000, 0.0690), Anodized, bevel=0.0015, seg=1)
+    for sx in (-1, 1):
+        m.box((0.0030, 0.0060, 0.0220), (sx * 0.0075, 0.4000, 0.0840), Anodized, bevel=0.0008, seg=1)
+    m.cyl(0.0012, 0.0200, (0, 0.4000, 0.0820), Steel, seg=8, wear=0.2)
+    REF['AR15'] = dict(sight=0.088, muzzle=(0.545, BZ), handR=(-0.045, -0.066, -0.30), handL=(0.255, 0.010, 0.0))
