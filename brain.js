@@ -65,6 +65,7 @@ export class Brain {
     const r = this.npc.root;
     const dx = p.x - r.x, dz = p.z - r.z;
     const dist = Math.hypot(dx, dz);
+    if (this.ctx.night) range *= 0.45;          // nobody sees far in the dark
     if (dist > range) return false;
     if (dist > 4 && Math.abs(wrap(headingTo(dx, dz) - this.npc.heading)) > 1.9) return false;
     return this.los(p);

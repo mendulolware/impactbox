@@ -52,6 +52,7 @@ const SKIES = {
   noon:     { sun: [12, 60, 20],   sunCol: [1.0, 0.95, 0.85], light: 0xfff4e0, power: 3.6, fill: 0.3,  zenith: [0.07, 0.22, 0.64], horizon: [0.60, 0.74, 0.90], cloud: [1, 1, 1],          cover: [0.64, 0.92], fog: 0.005 },
   overcast: { sun: [20, 50, 14],   sunCol: [0.5, 0.5, 0.5],   light: 0xdfe6f0, power: 1.3, fill: 0.85, zenith: [0.44, 0.48, 0.54], horizon: [0.66, 0.69, 0.72], cloud: [0.72, 0.74, 0.78], cover: [0.16, 0.5],  fog: 0.009 },
   golden:   { sun: [-44, 13, 24],  sunCol: [1.0, 0.62, 0.3],  light: 0xffa560, power: 3.4, fill: 0.32, zenith: [0.13, 0.22, 0.48], horizon: [0.95, 0.6, 0.36],  cloud: [1.0, 0.72, 0.55],  cover: [0.44, 0.8],  fog: 0.006 },
+  night:    { sun: [-20, 42, 30],  sunCol: [0.22, 0.26, 0.4], light: 0x8fa8ff, power: 0.16, fill: 0.07, zenith: [0.003, 0.005, 0.016], horizon: [0.012, 0.018, 0.04], cloud: [0.04, 0.05, 0.08], cover: [0.5, 0.85], fog: 0.014 },   // the 'sun' is the moon
   dusk:     { sun: [-30, 7, -44],  sunCol: [0.55, 0.3, 0.3],  light: 0x8fa2e0, power: 0.75, fill: 0.5, zenith: [0.025, 0.04, 0.12], horizon: [0.34, 0.22, 0.3], cloud: [0.2, 0.17, 0.24],  cover: [0.46, 0.85], fog: 0.011 },
 };
 
@@ -123,7 +124,7 @@ export function buildWorld(ctx, mapId = 'yard') {
 export function loadMap(ctx, id) {
   const def = MAPS[id] || MAPS.yard;
   if (ctx.map) ctx.map.builder.dispose();
-  ctx.setSky(def.sky);
+  ctx.setSky(ctx.night ? 'night' : def.sky);
   const builder = new MapBuilder(ctx);
   def.build(builder);
   builder.finish();

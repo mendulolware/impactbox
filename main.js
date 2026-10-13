@@ -389,6 +389,26 @@ function blockFaces() {
   for (; n < faces.length; n++) faces[n].z = 0;
 }
 
+// N: any map after dark. L: the flashlight (it comes on by itself when night falls).
+const torch = new THREE.SpotLight(0xfff1dc, 700, 50, 0.4, 0.6, 1.6);
+torch.position.set(0.08, -0.08, -0.6);     // out by the muzzle, so it does not light up your own hands
+torch.target.position.set(0.08, -0.08, -1.6);
+torch.castShadow = true;
+torch.shadow.mapSize.set(1024, 1024);
+torch.shadow.camera.near = 0.4;
+torch.shadow.bias = -0.0008;
+torch.visible = false;
+camera.add(torch, torch.target);
+ctx.torch = torch;
+ctx.night = false;
+function toggleNight() {
+  ctx.night = !ctx.night;
+  ctx.setSky(ctx.night ? 'night' : ctx.map.sky);
+  torch.visible = ctx.night;
+  $('night').classList.toggle('on', ctx.night);
+  toast(ctx.night ? 'NIGHT - L flashlight' : 'DAY');
+}
+
 // G: switch the effects pipeline off on slow machines (plain rendering, no occlusion or bloom)
 function toggleGraphics() {
   post.enabled = !post.enabled;
@@ -474,6 +494,8 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyT') toggleSlowmo();
   if (e.code === 'KeyV') toggleHelmet();
   if (e.code === 'KeyG') toggleGraphics();
+  if (e.code === 'KeyN') toggleNight();
+  if (e.code === 'KeyL') { torch.visible = !torch.visible; sfx.tick(); }
   if (e.code === 'Enter' && ctx.mission.over) ctx.mission.start();
   if (e.code === 'KeyR') ctx.weapons.reload();
   if (e.code === 'KeyF') { ctx.weapons.unjam(); ctx.mission.act(); }
@@ -511,6 +533,7 @@ for (const m of MAP_LIST) {
 ctx.map.populate();
 ctx.mission = new Mission(ctx);
 $('swat').addEventListener('click', () => { ctx.mission.start(); $('swat').classList.add('on'); });
+$('night').addEventListener('click', toggleNight);
 
 // ------------------------------------------------------------------ main loop
 let last = performance.now();
