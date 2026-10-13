@@ -72,14 +72,24 @@ export async function loadModels(url = 'assets/models.glb') {
   await loadFile(url);
   // downloaded models (models/import_guns.py): anything in here replaces the built model of the same name
   if (url === 'assets/models.glb') await loadFile('assets/weapons.glb');
+  // downloaded people (models/import_characters.py): <Name>_<part> pieces; NPCs wear these if there are any
+  if (url === 'assets/models.glb') await loadFile('assets/characters.glb', true);
 }
 
-async function loadFile(url) {
+async function loadFile(url, people = false) {
   try {
     const gltf = await new GLTFLoader().loadAsync(url);
     gltf.scene.traverse((o) => {
       if (!o.isMesh) return;
       addSkin(o.geometry);
+      if (people && o.material.transparent) {
+        // hair cards and lashes: cut out by their texture instead of blended, so they sort and shadow properly
+        // (only the hair: some bodies are marked see-through too, with nothing in their alpha)
+        o.material.transparent = false;
+        o.material.depthWrite = true;
+        o.material.alphaTest = /hair/i.test(o.material.name) ? 0.4 : 0;
+        o.material.side = THREE.DoubleSide;
+      }
       if (materials.has(o.material.name)) return;
       enhance(o.material);
       materials.set(o.material.name, o.material);
@@ -99,8 +109,8 @@ export const modelNames = () => [...library.keys()];
  * The skinned pieces of one ragdoll body ('torso', 'uarmL', ...): [{ geometry, material }].
  * Their vertices are in the character's rest pose, feet at the origin; the caller binds them to bones.
  */
-export function bodyPieces(part) {
-  const src = library.get('Body_' + part);
+export function bodyPieces(part, look = 'Body') {
+  const src = library.get(look + '_' + part);
   if (!src) return null;
   const out = [];
   src.traverse((o) => { if (o.isMesh) out.push({ geometry: o.geometry, material: o.material }); });
@@ -108,25 +118,29 @@ export function bodyPieces(part) {
 }
 
 const CAPS = new Set(['Flesh', 'BoneEnd']);    // the hidden ends that close each cut: only ever seen once a joint parts
-let whole = null;
+const whole = new Map();
 /**
  * The same figure as bodyPieces(), joined up: one skinned geometry per material for the whole body,
  * without the hidden joint caps. An untouched NPC is drawn with these (10 meshes instead of 47).
  */
-export function bodyWhole(parts) {
-  if (whole) return whole;
+export function bodyWhole(parts, look = 'Body') {
+  if (whole.has(look)) return whole.get(look);
   const by = new Map();
   for (const p of parts) {
-    for (const piece of bodyPieces(p) || []) {
+    for (const piece of bodyPieces(p, look) || []) {
       const name = piece.material.name;
       if (CAPS.has(name)) continue;
       if (!by.has(name)) by.set(name, { material: piece.material, list: [] });
       by.get(name).list.push(piece.geometry);
     }
   }
-  whole = [...by.values()].map(({ material, list }) => ({ material, geometry: list.length > 1 ? mergeGeometries(list) : list[0] }));
-  return whole;
+  const out = [...by.values()].map(({ material, list }) => ({ material, geometry: list.length > 1 ? mergeGeometries(list) : list[0] }));
+  whole.set(look, out);
+  return out;
 }
+
+/** The downloaded people there are to choose from ('Ch17', ...). Empty if there are none: NPCs then use the built 'Body'. */
+export const looks = () => [...library.keys()].filter((k) => k.endsWith('_pelvis') && k !== 'Body_pelvis').map((k) => k.slice(0, -7));
 export const isCap = (materialName) => CAPS.has(materialName);
 
 /** The shared material with this Blender name (clone it before changing it). */

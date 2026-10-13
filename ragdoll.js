@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { getModel, bodyPieces, bodyWhole, isCap, tintedMaterial } from './models.js';
+import { getModel, bodyPieces, bodyWhole, isCap, looks, tintedMaterial } from './models.js';
 import { openWound, burn, makeStump } from './wounds.js';
 import { Brain } from './brain.js';
 
@@ -110,6 +110,7 @@ const REST_INV = Object.values(PARTS).map((d) => new THREE.Matrix4().makeTransla
 const IDENT = new THREE.Matrix4();
 const BODY_MATS = new Set(['Skin', 'Shirt', 'Pants']);   // what has flesh behind it
 
+const ZOMBIE = 0x9fc98a;     // what the dead look like when they are a downloaded person (a tint over their texture)
 const SKIN = [0xf1c8a0, 0xe0ac86, 0xc68a62, 0x9a6444, 0x6b4430];
 const HAIR = [0x17100b, 0x2a1a10, 0x4a3018, 0x6b4a26, 0x8a7a66, 0x101012];
 const SHIRT = [0xc0392b, 0x2e86c1, 0x27ae60, 0xf1c40f, 0x7d3c98, 0xecf0f1, 0xe67e22, 0x2c3e50];
@@ -232,8 +233,12 @@ export class Ragdoll {
       shirt: this.kind === 'thug' ? 0x1a1a1c : SHIRT[Math.floor(Math.random() * SHIRT.length)],
       pants: PANTS[Math.floor(Math.random() * PANTS.length)],
     };
-    this.skinned = !!bodyPieces('pelvis');
-    const tint = this.skinned
+    // who this is: one of the downloaded people if there are any, else the built figure in random colours
+    const people = looks();
+    this.model = people.length ? people[(Math.random() * people.length) | 0] : 'Body';
+    this.real = this.model !== 'Body';
+    this.skinned = !!bodyPieces('pelvis', this.model);
+    const tint = this.real ? {} : this.skinned
       ? {
         Skin: tintedMaterial('Skin', colors.skin), Shirt: tintedMaterial('Shirt', colors.shirt),
         Pants: tintedMaterial('Pants', colors.pants), Hair: tintedMaterial('Hair', HAIR[Math.floor(Math.random() * HAIR.length)]),
@@ -293,7 +298,7 @@ export class Ragdoll {
         }
       }
       scene.add(mesh);
-      const hat = name === 'head' && pickHat(this.kind);
+      const hat = name === 'head' && !this.real && pickHat(this.kind);
       // the meshes bullets can punch holes in; "body" ones (skin, shirt, trousers) have flesh behind them
       const bodyMats = new Set(Object.values(tint));
       const skin = [];
@@ -321,7 +326,8 @@ export class Ragdoll {
       // Untouched, the figure is drawn as one mesh per material. The first injury splits it into
       // a set of meshes per body part (split()), which is what wounds, burns and cuts work on.
       this.whole = [];
-      for (const piece of bodyWhole(Object.keys(PARTS))) {
+      if (this.real && this.kind === 'zombie') this.sicken();
+      for (const piece of bodyWhole(Object.keys(PARTS), this.model)) {
         if (piece.material.name === 'Hair' && this.bald) continue;
         this.whole.push(this.skinMesh(piece, this.skeleton));
       }
@@ -361,6 +367,11 @@ export class Ragdoll {
 
   get alive() { return !this.dead && !this.removed; }
 
+  /** A downloaded person as a zombie: every one of their materials gets a sickly cast. */
+  sicken() {
+    for (const piece of bodyWhole(Object.keys(PARTS), this.model)) this.tint[piece.material.name] = tintedMaterial(piece.material.name, ZOMBIE);
+  }
+
   skinMesh(piece, skeleton) {
     const sm = new THREE.SkinnedMesh(piece.geometry, this.tint[piece.material.name] || piece.material);
     sm.bind(skeleton, IDENT);
@@ -378,12 +389,12 @@ export class Ragdoll {
     this.whole = null;
     for (const name in PARTS) {
       const part = this.parts[name];
-      for (const piece of bodyPieces(name)) {
+      for (const piece of bodyPieces(name, this.model)) {
         const mn = piece.material.name;
         if (isCap(mn) || (mn === 'Hair' && this.bald)) continue;     // the caps come with the cut (detach)
         const sm = this.skinMesh(piece, this.skeleton);
         part.skinned.push(sm);
-        part.skin.push({ mesh: sm, body: BODY_MATS.has(mn), isSkin: mn === 'Skin' });
+        part.skin.push({ mesh: sm, body: this.real || BODY_MATS.has(mn), isSkin: mn === 'Skin' });
       }
     }
   }
@@ -688,6 +699,13 @@ export class Ragdoll {
     this.gutShot = false;
     this.stun = 0.6;
     this.twitch = 1;
+    if (this.real) {
+      // a downloaded person has no separate skin to turn green: the whole of them goes off-colour
+      this.sicken();
+      const turn = (m) => { if (m.material.onBeforeCompile && m.material.customProgramCacheKey) m.material.color.set(ZOMBIE); else if (this.tint[m.material.name]) m.material = this.tint[m.material.name]; };
+      for (const m of this.whole || []) turn(m);
+      for (const n in this.parts) for (const s of this.parts[n].skin) turn(s.mesh);
+    }
     const green = this.skinned ? tintedMaterial('Skin', 0x8fbf6a) : mat(0x8fbf6a);
     if (this.whole) for (const m of this.whole) if (m.material === this.tint.Skin) m.material = green;
     if (this.tint) this.tint.Skin = green;
@@ -788,7 +806,7 @@ export class Ragdoll {
         p.skeleton = new THREE.Skeleton(this.skeleton.bones, REST_INV);
         for (const m of p.skinned) m.bind(p.skeleton, IDENT);
         // now that an end of it is open, it needs the flesh and bone that close its cuts
-        for (const piece of bodyPieces(self)) if (isCap(piece.material.name)) p.skinned.push(this.skinMesh(piece, p.skeleton));
+        for (const piece of bodyPieces(self, this.model)) if (isCap(piece.material.name)) p.skinned.push(this.skinMesh(piece, p.skeleton));
       }
       const a = PARTS[other].pos, b = PARTS[self].pos;
       const standIn = new THREE.Object3D();

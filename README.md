@@ -261,6 +261,17 @@ convention, moves it so its trigger is where the built model's was (so the hands
 built model of the same name; delete the file to go back to the built guns. The script prints each gun's muzzle and sight
 height for `VIEW`. To swap in another model, add a line to `GUNS` in that script.
 
+**Downloaded people.** NPCs wear rigged characters from [Mixamo](https://www.mixamo.com) (a construction worker, a man in a
+hoodie and a soldier) instead of the built body. `models/import_characters.py` takes any Mixamo-rigged FBX, stands it in the
+game's rest pose with its joints on the ragdoll's, cuts it into the eleven ragdoll pieces with a flesh cap on every cut, and
+writes `assets/characters.glb` (7.5 MB):
+
+    blender -b -P models/import_characters.py -- assets/characters.glb one.fbx two.fbx ...
+
+Each NPC picks one at random; wounds, severing, gibs, burning and the zombie tint work on them as on the built body. They keep
+their own clothes, so the random clothes colours and hats are not used. Delete the file to go back to the built body.
+Mixamo characters are free to use in games, but Adobe's terms do not allow handing out the character files on their own.
+
 ## Tuning knobs
 
 - Body part HP and layout: `PARTS` at the top of `ragdoll.js`. Joint limits: `JOINTS`. Landing damage: `IMPACT` and `impact()`. Crawl strength: `CRAWL_PULL`.
