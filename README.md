@@ -233,6 +233,8 @@ Hole size per weapon is `hole` in the `WEAPONS` table; a part holds up to 12 wou
 or shin, spine and windpipe for a neck), ragged skin round the edge, and gut hanging out of a body cut in half. `ragdoll.js` adds the pulsing arterial spray.
 Explosions burn and pepper bodies rather than launching them out of the arena, and only destroy the parts that were right on top of the blast.
 
+- **Second gore pass:** blood from a hit within 2.4 m lands on the lens and runs down it (`lens()` in `gore.js`, the `#lens` overlay); anyone who walks through a pool, you included, prints the next nine steps (`wetAt`, `footprint`); a killing head shot takes skull and brain out the back; a torso shot down to its last third opens up and spills (`gutted`); pieces of meat now lie for a minute or two instead of twenty seconds.
+
 ## Models
 
 Every model is built by code in Blender and exported to `assets/models.glb` (60 models, about 220,000 triangles), which `models.js`

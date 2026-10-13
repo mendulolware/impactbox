@@ -95,3 +95,11 @@ body.scoped #ammo { opacity: 0; }
 #modes button { padding: 8px 14px; border-radius: 6px; border: 1px solid #44444e; background: rgba(20,26,40,.85); color: #cfd8ff; font-size: 13px; cursor: pointer; }
 #modes button:hover, #modes button.on { border-color: #6f8cff; background: #1c2a55; color: #fff; }
 body.scoped #mission { opacity: 0; }
+
+/* ---- blood on the lens ---- */
+#lens { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+#lens i { position: absolute; border-radius: 50% 44% 56% 48%; filter: blur(1.4px);
+  background: radial-gradient(circle at 36% 30%, rgba(120,4,4,.6), rgba(60,0,0,.55) 55%, rgba(40,0,0,0) 72%);
+  animation: lensrun 7s ease-in forwards; }
+@keyframes lensrun { 0% { transform: scale(.3); opacity: 0; } 3% { transform: scale(1); opacity: .85; } 60% { opacity: .6; }
+  100% { transform: translateY(90px) scaleY(1.7); opacity: 0; } }

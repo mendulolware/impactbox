@@ -608,7 +608,17 @@ function tick(now) {
   const stepN = Math.floor(ctx.player.bob / Math.PI);
   if (stepN !== lastStep) {
     lastStep = stepN;
-    if (active && ctx.player.grounded) sfx.step(input.keys.has('ShiftLeft') || input.keys.has('ShiftRight'));
+    if (active && ctx.player.grounded) {
+      sfx.step(input.keys.has('ShiftLeft') || input.keys.has('ShiftRight'));
+      // your own boots track blood too
+      const pl = ctx.player, feet = { x: pl.pos.x, y: pl.pos.y - 0.85, z: pl.pos.z };
+      if (ctx.gore.wetAt(feet)) pl.bloody = 9;
+      else if (pl.bloody > 0) {
+        const fx = -Math.sin(pl.yaw), fz = -Math.cos(pl.yaw), side = stepN % 2 ? 0.1 : -0.1;
+        feet.x -= fz * side; feet.z += fx * side;
+        ctx.gore.footprint(feet, { x: fx, y: 0, z: fz }, pl.bloody-- / 9);
+      }
+    }
   }
 
   // timers (run in sim time so slow-mo stretches fuses and chain reactions)

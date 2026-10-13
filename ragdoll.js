@@ -601,6 +601,14 @@ export class Ragdoll {
           this.bleed(p, out, 3, 0);
         }
         gore.blood(point, dir, 14, 7, 0.35);              // exit spray carries on past the body
+        if (name === 'torso' && !this.gutted && p.hp - dmg < p.def.hp * 0.3) {
+          // shot to pieces: the front of the body opens and what was inside comes out
+          this.gutted = true;
+          openWound(p, lp, 0.07, maxR, null, ld, 0.09);
+          this.bleed(p, lp, 10, 1.2);
+          gore.chunks(point, 5, 1.6, { x: -dir.x * 1.2, y: 0.4, z: -dir.z * 1.2 }, 'torso');
+          gore.gush(point, _t.set(-dir.x, 0.2, -dir.z), 36, 4);
+        }
         _t.copy(dir).multiplyScalar(-0.4); _t.y += 0.3;
         gore.blood(point, _t, 5, 2.5, 0.8);                // a little comes back out the front
         gore.mist(point, dir, name === 'head' ? 7 : 4, name === 'head' ? 1.5 : 1);
@@ -635,7 +643,15 @@ export class Ragdoll {
       } else if (name === 'head') {
         if (opts.blade || opts.explosion) this.sever('head', dir);
         else if (p.hp < -26) this.gib('head');   // overkill: the head pops
-        else this.die(opts.blunt ? 'beaten' : 'headshot');
+        else {
+          if (!opts.blunt) {
+            // the back of the skull goes with the round
+            gore.chunks(point, 3, 3, { x: dir.x * 4, y: dir.y * 4 + 1, z: dir.z * 4 }, 'head');
+            gore.gush(point, dir, 30, 7);
+            gore.wallSplatter(point, dir, 7);
+          }
+          this.die(opts.blunt ? 'beaten' : 'headshot');
+        }
       } else if (LIMBS.has(name)) {
         if (opts.blunt) {
           // clubs break limbs, they do not take them off
@@ -1119,6 +1135,17 @@ export class Ragdoll {
     const run = clamp((this.speed - 1.7) / 2.0, 0, 1);
     const cycle = THREE.MathUtils.lerp(this.kind === 'zombie' ? 1.3 : 1.9, 3.3, run); // metres per two steps
     this.phase += this.speed * dt * (Math.PI * 2) / cycle;
+    // each footfall: stepping in blood wets the soles, and the next few steps print it
+    const stepN = Math.floor(this.phase / Math.PI);
+    if (stepN !== this.stepN) {
+      this.stepN = stepN;
+      const gore = this.ctx.gore;
+      if (gore.wetAt(this.root)) this.bloody = 9;
+      else if (this.bloody > 0) {
+        const side = stepN % 2 ? 0.1 : -0.1;
+        gore.footprint({ x: this.root.x - _fwd.z * side, y: this.root.y, z: this.root.z + _fwd.x * side }, _fwd, this.bloody-- / 9);
+      }
+    }
   }
 
   /** Something heavy and fast touching an animated NPC knocks it over. */

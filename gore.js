@@ -552,12 +552,14 @@ export class Gore {
       })(),
     }));
     this.growing = []; // pools still spreading, drips still running
+    this.pools = [];   // where there is blood to step in (the newest forty)
+    this.lensEl = document.getElementById('lens');
 
     // physical pieces
     this.chunkGeo = chunkGeometries();
     this.chunkMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42 });
     this.chunkList = [];
-    this.maxChunks = 90;
+    this.maxChunks = 150;
 
     this.ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
 
@@ -571,6 +573,9 @@ export class Gore {
   // ------------------------------------------------------------ emitters
   /** Spray of blood. dir = general direction of travel. */
   blood(p, dir, count = 12, speed = 4, spread = 0.9) {
+    // a hit this close puts some of it on the camera
+    const cam = this.ctx.camera.position, near = Math.hypot(p.x - cam.x, p.y - cam.y, p.z - cam.z);
+    if (near < 2.4 && count >= 12) this.lens(Math.ceil((2.4 - near) * 2.5));
     count = Math.ceil(count * 1.5);
     for (let k = 0; k < count; k++) {
       const s = speed * rnd(0.25, 1.15);
@@ -581,6 +586,30 @@ export class Gore {
         big ? rnd(0.016, 0.026) : rnd(0.006, 0.014), rnd(1.5, 2.6), 9.8,
         rnd(0.09, 0.17), 0.003, 0.003, BLOOD);
     }
+  }
+
+  /** Blood on the lens: drops that hang there, run down the glass and fade. */
+  lens(n) {
+    const el = this.lensEl;
+    if (!el) return;
+    for (let k = 0; k < Math.min(n, 3) && el.childElementCount < 14; k++) {
+      const d = document.createElement('i');
+      const size = rnd(5, 15) * (Math.random() < 0.15 ? 2.5 : 1);
+      d.style.cssText = `left:${rnd(0, 96)}%;top:${rnd(0, 90)}%;width:${size}px;height:${size * rnd(1, 1.5)}px;animation-duration:${rnd(5, 10)}s`;
+      d.addEventListener('animationend', () => d.remove());
+      el.appendChild(d);
+    }
+  }
+
+  /** Is this spot in a pool of blood? */
+  wetAt(p) {
+    return this.pools.some((o) => Math.abs(o.y - p.y) < 1.3 && Math.hypot(o.x - p.x, o.z - p.z) < o.r);
+  }
+
+  /** One bloody footprint under p, pointing along dir. k = how much is left on the sole, 1..0. */
+  footprint(p, dir, k) {
+    const hit = this.castFixed(p.x, p.y + 0.3, p.z, 0, -1, 0, 1.6);
+    if (hit) this.smear({ x: p.x, y: p.y + 0.3 - hit.timeOfImpact, z: p.z }, hit.normal, dir, 0.1 * (0.5 + 0.5 * k), 0.24);
   }
 
   /** One slow drop falling from a wound. v = how the wound itself is moving. */
@@ -740,6 +769,8 @@ export class Gore {
     const set = pick(this.sets.pool);
     const i = set.add(_p, _q, size * 0.12, size * 0.12, rnd(0.1, 0.15), 0.003, 0.003);
     this.growing.push({ set, i, pos: _p.clone(), quat: _q.clone(), from: size * 0.12, to: size, t: 0, dur: rnd(6, 11) });
+    this.pools.push({ x: _p.x, y: _p.y, z: _p.z, r: size * 0.42 });
+    if (this.pools.length > 40) this.pools.shift();
   }
 
   /** Blood starts running down a wall from p. */
@@ -822,7 +853,7 @@ export class Gore {
       mesh.castShadow = true;
       scene.add(mesh);
       owners.set(col.handle, { kind: 'chunk', body });
-      this.chunkList.push({ body, col, mesh, life: rnd(16, 26), drip: def.drip, size: mesh.scale.x, vy: 0, marks: 3 });
+      this.chunkList.push({ body, col, mesh, life: rnd(70, 120), drip: def.drip, size: mesh.scale.x, vy: 0, marks: 3 });
     }
   }
 
@@ -841,6 +872,8 @@ export class Gore {
     this.holes.clear();
     this.scorch.clear();
     this.growing.length = 0;
+    this.pools.length = 0;
+    this.lensEl?.replaceChildren();
     while (this.chunkList.length) this._removeChunk(0);
   }
 
