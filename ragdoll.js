@@ -461,7 +461,7 @@ export class Ragdoll {
     this.hitAccum += impulse;
     const standing = this.mode !== 'ragdoll';
     // (hand weapons are the exception: a swing staggers, wherever it lands, until the blows add up)
-    const melee = opts.blunt || (opts.blade && opts.light);
+    const melee = opts.melee || opts.blunt || (opts.blade && opts.light);
     const heavy = (opts.blade && !opts.light) || opts.explosion || (!melee && (name === 'head' || LEGS.has(name)))
       || this.hitAccum > (zombie ? 480 : 250) || (!zombie && this.health - dmg < 40);
     if (standing && !heavy && !this.dead) {

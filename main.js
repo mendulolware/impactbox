@@ -404,9 +404,7 @@ document.addEventListener('pointerlockerror', () => { lockFallback = true; });
 document.addEventListener('mousemove', (e) => {
   if (!gameActive()) return;
   if (document.pointerLockElement === canvas || lockFallback) {
-    // knife out with a button held: the mouse is your arm, not your head
-    if (ctx.weapons.handMode) ctx.weapons.handMove(e.movementX, e.movementY);
-    else ctx.player.look(e.movementX, e.movementY);
+    ctx.player.look(e.movementX, e.movementY);
     input.mx += e.movementX;
     input.my += e.movementY;
   }

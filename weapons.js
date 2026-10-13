@@ -5,7 +5,7 @@ import { getModel } from './models.js';
 // Number keys pick a group; pressing the same key again steps through the group.
 export const SLOTS = ['Sidearms', 'SMGs', 'Shotguns', 'Rifles', 'Heavy', 'Blades', 'Blunt', 'Gear'];
 
-// type: gun (hitscan) | rocket | flame | melee (a swing) | saw | vrknife | grenade | grab
+// type: gun (hitscan) | rocket | flame | melee (a swing) | saw | knife (slice and stab) | grenade | grab
 // Guns: pierce = how many bodies one round passes through, zoom = how far the view narrows when aimed,
 //   mag/reload = shots before a pause, spin = seconds of wind-up, bolt = leaves a bolt where it hits,
 //   quiet = nobody hears it.
@@ -24,7 +24,7 @@ export const WEAPONS = [
   { name: 'Rocket',   slot: 4, type: 'rocket', auto: false, rate: 1.40, sound: 'rocket', kick: 0.13 },
   { name: 'Minigun',  slot: 4, type: 'gun', auto: true,  rate: 0.028, dmg: 12,  impulse: 70,  pellets: 1,  spread: 0.030, sound: 'rifle',    kick: 0.018, hole: 0.026, spin: 0.7, hipOnly: true },
   { name: 'Flamethrower', slot: 4, type: 'flame', range: 7.5, dmg: 5, heat: 0.13 },
-  { name: 'Knife',    slot: 5, type: 'vrknife' },
+  { name: 'Knife',    slot: 5, type: 'knife', slice: { rate: 0.32, dmg: 8, impulse: 15, range: 1.9 }, stab: { rate: 0.55, dmg: 16, impulse: 25, range: 1.8 } },
   { name: 'Machete',  slot: 5, type: 'melee', rate: 0.60, dmg: 14, impulse: 60,  range: 1.7 },
   { name: 'Katana',   slot: 5, type: 'melee', rate: 0.55, dmg: 18, impulse: 50,  range: 1.9 },
   { name: 'Axe',      slot: 5, type: 'melee', rate: 0.90, dmg: 22, impulse: 110, range: 1.6 },
@@ -48,7 +48,7 @@ export const WEAPONS = [
 // sight, muzzle and the hand positions come out of the model build (REF in models/guns.py, extras.py).
 //   scope  - aiming swaps the weapon for a full-screen scope picture
 //   melee  - held in the fist, business end up and forward; tilt = how far it leans forward
-//   vr     - hand-driven: the mouse moves the hand itself (see updateKnife)
+//   knife  - held point-forward in its own hand, with a sleeve running back off screen
 const RIG_SCALE = 0.8;
 const HELMET_DROP = 0.1;   // how far the eyes are below the helmet camera (matches player.js)
 const VIEW = [
@@ -76,7 +76,7 @@ const VIEW = [
     handR: [0, -0.060, 0.068, -0.2], handL: [0, 0.107, -0.10, 0] },
   { model: 'Flamethrower', hip: [0.22, -0.26, -0.3], muzzle: [0, 0.03, -0.69],
     handR: [0, -0.040, 0.014, -0.2], handL: [0, -0.030, -0.414, 0] },
-  { model: 'Knife',   hip: [0.22, -0.2, -0.45], vr: true },
+  { model: 'Knife',   hip: [0.2, -0.2, -0.42], knife: true },
   { model: 'Machete', hip: [0.3, -0.3, -0.5], melee: true },
   { model: 'Katana',  hip: [0.3, -0.32, -0.5], melee: true, tilt: 0.75 },
   { model: 'Axe',     hip: [0.3, -0.3, -0.5], melee: true, tilt: 0.7, grip: -0.18 },
@@ -90,15 +90,8 @@ const VIEW = [
     handR: [0, -0.088, 0.1, -0.25], handL: [0, -0.045, -0.075, 0] },
 ];
 
-// ---- hand-driven knife (all in camera space: +x right, +y up, -z forward)
-const HAND_REST = new THREE.Vector3(0.22, -0.2, -0.45);
-const HAND_MIN = new THREE.Vector3(-0.5, -0.45, -0.95);
-const HAND_MAX = new THREE.Vector3(0.6, 0.35, -0.28);
-const ELBOW = new THREE.Vector3(0.37, -0.37, -0.14);       // where the forearm disappears off screen (hand at rest)
 const SLEEVE_LEN = 0.3;                                    // length of the SleeveArm model
-const BACK = new THREE.Vector3(0, 0, 1);
 const WRIST = new THREE.Vector3(0.0035, 0.060, 0.102);     // on the KnifeHand model (REF.KnifeHand.wrist)
-const BLADE = [new THREE.Vector3(0, 0, -0.07), new THREE.Vector3(0, 0, -0.18), new THREE.Vector3(0, 0, -0.285)]; // base, middle, tip
 
 const _o = new THREE.Vector3();
 const _d = new THREE.Vector3();
@@ -107,13 +100,7 @@ const _u = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _m = new THREE.Vector3();
 const _q = new THREE.Quaternion();
-const _x = new THREE.Vector3();
-const _y = new THREE.Vector3();
-const _z = new THREE.Vector3();
-const _mat = new THREE.Matrix4();
-const _roll = new THREE.Quaternion();
 const FWD = new THREE.Vector3(0, 0, -1);
-const UPV = new THREE.Vector3(0, 1, 0);
 
 function hand(name, [x, y, z, pitch]) {
   const h = getModel(name, null, false);
@@ -128,10 +115,19 @@ function buildViewmodel(v) {
   const g = new THREE.Group();
   const model = getModel(v.model, null, false)
     || new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.3), new THREE.MeshStandardMaterial({ color: 0x4a4a52 }));
-  if (v.vr) {
+  if (v.knife) {
+    // blade forward, tipped up and in a little; the arm runs back and down out of the picture
     g.add(model);
     const h = hand('KnifeHand', [0, 0, 0, 0]);
     if (h) g.add(h);
+    const arm = getModel('SleeveArm', null, false);
+    if (arm) {
+      arm.position.copy(WRIST);
+      arm.rotation.set(0.5, 0.35, 0);
+      arm.scale.z = 0.6 / SLEEVE_LEN;
+      g.add(arm);
+    }
+    g.rotation.set(0.22, 0.3, -0.25);
   } else if (v.melee) {
     // fist at the origin, blade standing up out of it and tipped forward
     // (grip slides the fist along a long handle, toward the butt end)
@@ -170,14 +166,7 @@ export class Weapons {
     this.swayYaw = 0;
     this.swayPitch = 0;
 
-    // hand-driven knife
-    this.handTarget = HAND_REST.clone();   // where the mouse has put the hand
-    this.handPos = HAND_REST.clone();      // where the hand actually is (follows with a little weight)
-    this.handVel = new THREE.Vector3();
-    this.bladePrev = null;                 // last frame's blade points in the world, for the cut sweep
-    this.cutCool = new Map();              // collider -> time of the last cut, so one pass is one cut
-    this.clock = 0;
-    this.swishT = 0;
+    this.thrust = 0;       // knife: time left in a stab
     this.shots = 0;        // fired since the last reload (weapons with a magazine)
     this.spin = 0;         // minigun barrels: 0 = stopped, 1 = up to speed
     this.tickT = 0;        // chainsaw / flamethrower: time to the next bite
@@ -201,17 +190,6 @@ export class Weapons {
     );
     this.flash.visible = false;
     ctx.scene.add(this.flash);
-
-    // the knife arm: a sleeve stretched from the wrist back to the elbow as the hand moves
-    // (the SleeveArm model runs 0.3 m from its origin along +Z; a plain tube stands in if it is missing)
-    this.forearm = getModel('SleeveArm', null, false);
-    if (!this.forearm) {
-      const g = new THREE.CylinderGeometry(0.045, 0.04, SLEEVE_LEN, 10);
-      g.rotateX(Math.PI / 2).translate(0, 0, SLEEVE_LEN / 2);
-      this.forearm = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x2c3321, roughness: 0.9 }));
-    }
-    this.forearm.visible = false;
-    ctx.camera.add(this.forearm);
 
     // tracer pool
     this.tracers = [];
@@ -252,22 +230,6 @@ export class Weapons {
   get view() { return VIEW[this.index]; }
   /** How much the view narrows at full aim (0.3 = a little, 0.82 = sniper scope). */
   get zoom() { return this.current.zoom || 0.3; }
-
-  /** Knife out and a mouse button held: the mouse drives the hand, not the camera. */
-  get handMode() {
-    const i = this.ctx.input;
-    return this.current.type === 'vrknife' && (i.left || i.right) && !this.ctx.player.dead;
-  }
-
-  /** Mouse movement while in hand mode. Left button: move the hand up/down/sideways.
-   *  Right button: push the mouse forward to thrust, pull back to draw the hand in. */
-  handMove(dx, dy) {
-    const t = this.handTarget;
-    t.x += dx * 0.0016;
-    if (this.ctx.input.right) t.z += dy * 0.0022;
-    else t.y -= dy * 0.0016;
-    t.clamp(HAND_MIN, HAND_MAX);
-  }
 
   buildBar() {
     const bar = document.getElementById('weapon-bar');
@@ -313,10 +275,7 @@ export class Weapons {
     this.ads = 0;
     this.shots = 0;
     this.spin = 0;
-    this.bladePrev = null;
-    this.handTarget.copy(HAND_REST);
-    this.handPos.copy(HAND_REST);
-    this.forearm.visible = false;
+    this.thrust = 0;
     this.rig.visible = true;
     document.body.classList.remove('scoped');
     this.refreshBar();
@@ -453,70 +412,30 @@ export class Weapons {
   }
 
   /**
-   * The knife is held, not fired. The hand follows the mouse; the blade is swept through the
-   * world every frame and whatever it passes through gets cut. How fast the blade was moving
-   * decides how deep, and moving point-first makes it a stab rather than a slash.
+   * Knife: left button slices (a quick sideways cut that opens a gash), right button stabs
+   * (a thrust: slower, shorter, deeper).
    */
-  updateKnife(dt, input) {
-    const ctx = this.ctx, cam = ctx.camera, pl = ctx.player;
-    this.clock += dt;
-    this.swishT -= dt;
-    if (!input.left && !input.right) this.handTarget.lerp(HAND_REST, Math.min(1, dt * 7)); // let go: hand comes home
-
-    _p.copy(this.handPos);
-    this.handPos.lerp(this.handTarget, Math.min(1, dt * 26));
-    this.handVel.copy(this.handPos).sub(_p).multiplyScalar(1 / Math.max(dt, 1e-4));
-
-    // the blade points out from the body, more so the further the hand is from rest
-    _z.set((this.handPos.x - HAND_REST.x) * 1.1, 0.12 + (this.handPos.y - HAND_REST.y) * 0.9, -1).normalize();
-    _x.crossVectors(_z, UPV).normalize();          // right
-    _y.crossVectors(_x, _z);                        // up
-    _mat.makeBasis(_x, _y, _z.clone().negate());    // model's -Z along the blade direction
-    this.rig.position.copy(this.handPos);
-    this.rig.quaternion.setFromRotationMatrix(_mat);
-    // the wrist rolls into a sideways slash
-    _roll.setFromAxisAngle(FWD, THREE.MathUtils.clamp(this.handVel.x * 0.13, -0.8, 0.8));
-    this.rig.quaternion.multiply(_roll);
-    this.pivot.rotation.set(pl.aimOff.pitch, pl.aimOff.yaw, 0);
-
-    // forearm from the wrist back to the elbow
-    cam.updateMatrixWorld(true);
-    const model = this.models[this.index];
-    const wrist = cam.worldToLocal(model.localToWorld(_m.copy(WRIST)));
-    _o.copy(this.handPos).sub(HAND_REST).multiplyScalar(0.55).add(ELBOW);   // the elbow follows the hand part of the way
-    const len = wrist.distanceTo(_o);
-    this.forearm.position.copy(wrist);
-    this.forearm.scale.set(1, 1, len / SLEEVE_LEN);
-    this.forearm.quaternion.setFromUnitVectors(BACK, _o.sub(wrist).normalize());
-    this.forearm.visible = true;
-
-    // sweep the blade through the world
-    const pts = BLADE.map((b) => model.localToWorld(b.clone()));
-    const bladeDir = pts[2].clone().sub(pts[0]).normalize();
-    if (this.bladePrev && dt > 0) {
-      let fastest = 0;
-      for (let k = 1; k < 3; k++) {                 // middle and tip of the blade
-        const v = pts[k].clone().sub(this.bladePrev[k]);
-        const dist = v.length();
-        const speed = dist / dt;
-        fastest = Math.max(fastest, speed);
-        if (speed < 0.9 || dist < 0.003) continue;  // resting against something does not cut
-        v.multiplyScalar(1 / dist);
-        const hit = ctx.raycast(this.bladePrev[k], v, dist + 0.03);
-        if (!hit) continue;
-        const h = hit.collider.handle;
-        if (this.clock - (this.cutCool.get(h) || -9) < 0.14) continue;
-        this.cutCool.set(h, this.clock);
-        const point = this.bladePrev[k].clone().addScaledVector(v, hit.timeOfImpact);
-        const stab = v.dot(bladeDir) > 0.6;
-        if (stab) ctx.applyHit(hit, point, v, THREE.MathUtils.clamp(speed * 2.2, 3, 14), 20, { stab: true });
-        else ctx.applyHit(hit, point, v, THREE.MathUtils.clamp(speed * 1.3, 2, 9), 12 + speed * 2, { blade: true, light: true });
-        if (ctx.owners.get(h)?.kind === 'part') { sfx.chop(); ctx.alert('violence', pl.pos, 12); }
-      }
-      if (fastest > 4.5 && this.swishT <= 0) { sfx.slash(); this.swishT = 0.28; }
+  updateKnife(input, w) {
+    if (this.cool > 0) return;
+    const stab = input.rightDown, slice = !stab && input.left;
+    if (!stab && !slice) return;
+    const ctx = this.ctx, k = stab ? w.stab : w.slice;
+    this.cool = k.rate;
+    if (stab) this.thrust = 0.24; else this.swing = 0.28;
+    sfx.slash();
+    this.aim();
+    const origin = _o.clone(), fwd = _d.clone(), right = _r.clone();
+    // a slice travels across the target (right to left), so the cut it leaves runs that way too
+    const travel = stab ? fwd : fwd.clone().multiplyScalar(0.55).addScaledVector(right, -0.85).normalize();
+    for (const ox of stab ? [0] : [0, 0.14, -0.14]) {
+      const d = fwd.clone().addScaledVector(right, ox).normalize();
+      const hit = ctx.raycast(origin, d, k.range);
+      if (!hit) continue;
+      const pt = origin.clone().addScaledVector(d, hit.timeOfImpact);
+      ctx.applyHit(hit, pt, travel, k.dmg, k.impulse, stab ? { stab: true, melee: true } : { blade: true, light: true });
+      if (ctx.owners.get(hit.collider.handle)?.kind === 'part') { sfx.chop(); ctx.alert('violence', ctx.player.pos, 12); }
+      break;
     }
-    this.bladePrev = pts;
-    if (this.cutCool.size > 200) this.cutCool.clear();
   }
 
   /** One swing of a hand weapon: a short, narrow arc in front of you. */
@@ -677,7 +596,6 @@ export class Weapons {
   /** Position the rig between the hip pose and the aimed pose. */
   placeRig(s) {
     const v = this.view, pl = this.ctx.player;
-    if (v.vr) return; // the knife places its own hand
     const helmet = this.ctx.helmet ? 1 : 0;
     const a = this.ads * this.ads * (3 - 2 * this.ads); // ease in and out of the sights
     const bob = pl ? pl.bob : 0;
@@ -693,6 +611,13 @@ export class Weapons {
       THREE.MathUtils.lerp(hipZ, adsZ, a) + this.kick * (1.4 - 0.7 * a)
     );
     this.rig.rotation.set(this.kick * (2.2 - 1.4 * a) + s * 0.4, s * 0.9, s * -0.8 + (1 - a) * -0.03);
+    if (this.thrust > 0) {                       // a stab: straight out toward the middle of the view and back
+      const t = Math.sin((1 - this.thrust / 0.24) * Math.PI);
+      this.rig.position.x -= 0.12 * t;
+      this.rig.position.y += 0.05 * t;
+      this.rig.position.z -= 0.3 * t;
+      this.rig.rotation.y += 0.25 * t;
+    }
   }
 
   update(dt, input) {
@@ -714,8 +639,8 @@ export class Weapons {
     this.rig.visible = !scoped;
     document.body.classList.toggle('scoped', scoped);
 
-    if (w.type === 'vrknife') {
-      this.updateKnife(dt, input);
+    if (w.type === 'knife') {
+      this.updateKnife(input, w);
     } else if (w.type === 'grab') {
       this.updateGrab(dt, input);
     } else if (w.type === 'saw') {
@@ -742,6 +667,7 @@ export class Weapons {
     // viewmodel animation
     this.kick = Math.max(0, this.kick - dt * 1.2);
     this.swing = Math.max(0, this.swing - dt);
+    this.thrust = Math.max(0, this.thrust - dt);
     const s = this.swing > 0 ? Math.sin((1 - this.swing / 0.28) * Math.PI) : 0;
     this.placeRig(s);
 
@@ -751,7 +677,7 @@ export class Weapons {
     this.swayPitch = THREE.MathUtils.clamp(this.swayPitch - (input.my || 0) * 0.0007 * k, -0.07, 0.07);
     const decay = Math.exp(-dt * 9);
     this.swayYaw *= decay; this.swayPitch *= decay;
-    if (w.type !== 'vrknife') this.pivot.rotation.set(pl.aimOff.pitch + this.swayPitch, pl.aimOff.yaw + this.swayYaw, 0);
+    this.pivot.rotation.set(pl.aimOff.pitch + this.swayPitch, pl.aimOff.yaw + this.swayYaw, 0);
 
     if (this.muzzleT > 0) {
       this.muzzleT -= dt;
