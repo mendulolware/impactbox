@@ -208,7 +208,7 @@ export class Ragdoll {
     this.wantSpeed = 0;
     this.phase = Math.random() * 6;
     this.gesture = 'none';      // 'handsUp' | 'cower' | 'fight'
-    this.gw = { handsUp: 0, cower: 0, fight: 0, aim: 0 };   // eased gesture weights
+    this.gw = { handsUp: 0, cower: 0, fight: 0, aim: 0, kneel: 0 };   // eased gesture weights
     this.look = null;           // world point the head turns toward
     this.lookYaw = 0;
     this.lookPitch = 0;
@@ -872,7 +872,7 @@ export class Ragdoll {
     // gestures ease in and out; one-shot moves follow a half-sine
     const G = this.gw;
     for (const k in G) G[k] += ((this.gesture === k ? 1 : 0) - G[k]) * Math.min(1, dt * 7);
-    const up = G.handsUp, cw = G.cower, ft = G.fight;
+    const up = G.handsUp, cw = G.cower, ft = G.fight, kn = G.kneel;
     const fl = this.flinchT > 0 ? Math.sin(Math.PI * (1 - this.flinchT / FLINCH)) : 0;
     const pn = this.punchT > 0 ? Math.sin(Math.PI * (1 - this.punchT / PUNCH)) : 0;
     const lg = this.lungeT > 0 ? Math.sin(Math.PI * (1 - this.lungeT / LUNGE)) : 0;
@@ -899,6 +899,8 @@ export class Ragdoll {
     hipR += 0.09 * Math.max(0, -shift); kneeR -= 0.16 * Math.max(0, -shift);
     hipL = mix(hipL, 1.9, cw); hipR = mix(hipR, 1.9, cw);                 // squat right down
     kneeL = mix(kneeL, -2.3, cw); kneeR = mix(kneeR, -2.3, cw);
+    hipL = mix(hipL, 1.65, kn); hipR = mix(hipR, 1.65, kn);               // down on the haunches: over a body, or behind cover
+    kneeL = mix(kneeL, -2.15, kn); kneeR = mix(kneeR, -2.15, kn);
     hipL += 0.12 * ft; kneeL -= 0.25 * ft + 0.3 * fl;                    // fighting crouch / buckling
     hipR += 0.12 * ft; kneeR -= 0.25 * ft + 0.3 * fl;
     hipL = mix(hipL, 1.75, sq); hipR = mix(hipR, 1.75, sq);               // getting up starts from a crouch
@@ -934,6 +936,7 @@ export class Ragdoll {
     shLx = mix(shLx, 2.5, cw); shRx = mix(shRx, 2.5, cw);
     shLz = mix(shLz, -0.25, cw); shRz = mix(shRz, 0.25, cw);
     elL = mix(elL, 2.2, cw); elR = mix(elR, 2.2, cw);
+    spX = mix(spX, -0.55, kn); shLx = mix(shLx, 0.9, kn * (1 - G.aim)); elL = mix(elL, 0.5, kn * (1 - G.aim));   // (kneeling: a hand reaching down)
     // fight: guard up, right arm fires out on a punch
     shLx = mix(shLx, 1.0, ft); elL = mix(elL, 1.9, ft);
     shRx = mix(shRx, mix(0.95, 1.55, pn), ft); elR = mix(elR, mix(1.9, 0.12, pn), ft);
