@@ -123,8 +123,9 @@ def build_hand(m, M, curls, thumb, mirror=False, skin=None, scale=1.0, guard=Tru
     return P
 
 
-def sleeve(m, wrist, elbow, mat=None, r0=0.040, r1=0.056):
-    """A jacket sleeve from the wrist back to the elbow, bunched into folds near the cuff."""
+def sleeve(m, wrist, elbow, mat=None, r0=0.046, r1=0.070):
+    """A jacket sleeve from the wrist back to the elbow, bunched into folds near the cuff,
+    over a forearm with some muscle on it: thickest two thirds of the way to the elbow."""
     w, e = Vector(wrist), Vector(elbow)
     axis = (e - w).normalized()
     side = axis.cross(Vector((0, 0, 1))).normalized()
@@ -135,13 +136,13 @@ def sleeve(m, wrist, elbow, mat=None, r0=0.040, r1=0.056):
     for j in range(rows + 1):
         t = j / rows
         s = -0.03 + 1.03 * t                                   # starts a little inside the glove
-        base = lerp(r0, r1, clamp(s)) * (0.82 if j == 0 else 1.0)
+        base = lerp(r0, r1, clamp(s)) * (0.82 if j == 0 else 1.0) * (1 + 0.10 * sin(pi * clamp(s) ** 1.6) ** 2)
         fade = 0.25 + 0.75 * (1 - clamp(s * 1.6)) ** 1.5       # folds are deepest at the cuff
         ring = []
         for i in range(n):
             a = 2 * pi * i / n
             fold = sin(s * L * 62 + 2.4 * sin(a + s * 7.0)) * 0.5 + sin(s * L * 31 - a * 2 + 1.3) * 0.5
-            r = base * (1 + 0.075 * fade * fold)
+            r = base * (1 + 0.085 * fade * fold)
             ring.append(w + axis * (s * L) + (side * cos(a) + up * (0.86 * sin(a))) * r)
         rings.append(ring)
     m.loft(rings, (0, 0, 0), mat or Sleeve, uv='box')
@@ -221,4 +222,4 @@ def _(m):
 # 0.3 m of sleeve from the origin back along -Y. The game stretches it between the wrist and the elbow.
 @model('SleeveArm', 'Hands', (2.4, -2.6, 1.0))
 def _(m):
-    sleeve(m, (0, 0, 0), (0, -0.30, 0), r0=0.040, r1=0.050)
+    sleeve(m, (0, 0, 0), (0, -0.30, 0), r0=0.046, r1=0.062)
