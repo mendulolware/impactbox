@@ -22,6 +22,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | G | graphics: high / fast (turns the effects off on slow machines) |
 | 1-8 or wheel | pick a weapon group; press the same number again for the next weapon in it (table under Weapons) |
 | R / F / B | reload / clear a jam / switch auto and semi |
+| E | Ready or Not mode: shout for compliance, or arrest whoever has given up in front of you |
 | Q (or Tab) | spawn menu |
 | T | slow-mo |
 | X | delete what you're aiming at (or holding) |
@@ -33,6 +34,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | --- | --- |
 | `main.js` | renderer, game loop, input, spawn menu, map switching, explosions, hit routing |
 | `maps.js` | the maps: what each is built from and what it starts with |
+| `mission.js` | Ready or Not mode: suspects and civilians, shouting, arrests, rules of engagement, the grade |
 | `ragdoll.js` | 11-body ragdoll under one skinned figure: procedural animation, active ragdoll, injuries that show (limp arms, limping, crawling, bleeding out), fall damage, severing, gibbing |
 | `brain.js` | NPC AI: senses, civilian / thug / zombie behaviour, steering |
 | `weapons.js` | weapon definitions, firing, melee, grenades, grab gun, viewmodels |
@@ -66,6 +68,21 @@ Every box gets a collider on one fixed body, and the visible boxes are joined in
 pieces is a handful of draw calls. `loadMap()` removes the old map (meshes, materials, colliders) and builds the next.
 Times of day are `SKIES` in `world.js`: sun direction and colour, sky colours, cloud cover, fog.
 To add a map, add an entry to `MAPS`; both menus list it automatically.
+
+## Ready or Not mode
+
+Start it from the start screen or under **Modes** in the spawn menu; **Sandbox** there turns it off. It runs on whichever map
+you are in (the Kill House suits it best). You are a SWAT officer: the map's people are split into armed suspects and civilians,
+and the mission ends when every one of them is in custody or dead.
+
+- **E** shouts for compliance ("Police! Hands up!", spoken by the browser's own voice). Civilians obey and stay put with their
+  hands up. A suspect gives up with a chance that rises each time you shout, if they are hurt, and if you are aiming at them.
+  About one in seven of those is faking, and goes for the gun again once you stop covering them.
+- **E** on someone who has given up, or is down, within arm's reach arrests them.
+- Suspects (`suspect()` in `brain.js`, `arm()` / `shoot()` in `ragdoll.js`) carry a pistol, aim when they see you and fire about
+  once a second, hitting less the further away you are. One who loses the use of the gun arm stops being a shooter.
+- **The grade** starts at 100: a suspect shot while a threat costs 5, a suspect shot after surrendering (or unarmed) costs 25
+  as unauthorized use of deadly force, a dead civilian costs 30. S is 95 and up. Getting killed fails the mission. **Enter** restarts.
 
 ## How NPCs work
 

@@ -89,3 +89,10 @@ body.scoped #weapon-bar, body.scoped #help, body.scoped #health { opacity: 0; }
 #ammo { position: absolute; right: 28px; bottom: 110px; font-size: 26px; font-weight: 700; letter-spacing: 1px; text-shadow: 0 2px 6px #000; font-variant-numeric: tabular-nums; }
 #ammo.warn { color: #ff5a4a; }
 body.scoped #ammo { opacity: 0; }
+
+/* ---- Ready or Not mode: objectives top right, and its button on the start screen ---- */
+#mission { position: absolute; right: 16px; top: 12px; text-align: right; font: 14px/1.6 Consolas, monospace; text-shadow: 0 1px 3px #000; white-space: pre; }
+#modes { margin: -8px 0 20px; }
+#modes button { padding: 8px 14px; border-radius: 6px; border: 1px solid #44444e; background: rgba(20,26,40,.85); color: #cfd8ff; font-size: 13px; cursor: pointer; }
+#modes button:hover, #modes button.on { border-color: #6f8cff; background: #1c2a55; color: #fff; }
+body.scoped #mission { opacity: 0; }

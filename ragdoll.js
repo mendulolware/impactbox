@@ -207,7 +207,7 @@ export class Ragdoll {
     this.wantSpeed = 0;
     this.phase = Math.random() * 6;
     this.gesture = 'none';      // 'handsUp' | 'cower' | 'fight'
-    this.gw = { handsUp: 0, cower: 0, fight: 0 };   // eased gesture weights
+    this.gw = { handsUp: 0, cower: 0, fight: 0, aim: 0 };   // eased gesture weights
     this.look = null;           // world point the head turns toward
     this.lookYaw = 0;
     this.lookPitch = 0;
@@ -624,6 +624,30 @@ export class Ragdoll {
     this.damage(dmg, 'burned');
   }
 
+  /** Hand this NPC a pistol: from now on it is an armed suspect (see suspect() in brain.js). */
+  arm() {
+    this.armed = true;
+    this.gun = getModel('Pistol');
+    if (!this.gun) return;
+    this.gun.position.set(0, -0.2, -0.03);       // in the hand at the end of the forearm, barrel along it
+    this.gun.rotation.x = -Math.PI / 2;
+    this.parts.farmR.mesh.add(this.gun);
+  }
+
+  /** Fire the pistol at the player. The further away, the more it misses. */
+  shoot(pl) {
+    const arm = this.parts.farmR;
+    if (arm.gone || this.isFree('farmR') || this.limp.has('farmR')) { this.armed = false; return; }   // no gun hand: no longer a shooter
+    const from = this.localToWorld(arm, { x: 0, y: -0.3, z: -0.03 });
+    const to = new THREE.Vector3(pl.pos.x, pl.pos.y + 0.3, pl.pos.z);
+    const d = from.distanceTo(to);
+    const hit = Math.random() < clamp(0.8 - d * 0.03, 0.12, 0.8);
+    if (!hit) to.add(_v.set(rnd(-1, 1), rnd(-0.3, 0.8), rnd(-1, 1)).multiplyScalar(0.25 + d * 0.06)).addScaledVector(_t.copy(to).sub(from).normalize(), 4);
+    this.ctx.weapons.tracer(from, to);
+    this.ctx.sfx.pistol();
+    if (hit) pl.hurt(rnd(14, 24), this.root);
+  }
+
   /** An open wound: it drips, and costs health until it clots (limbs) or kills (body wounds). */
   bleed(part, local, rate, hp) {
     this.bled = true;
@@ -857,6 +881,10 @@ export class Ragdoll {
     shLx = mix(shLx, 1.0, ft); elL = mix(elL, 1.9, ft);
     shRx = mix(shRx, mix(0.95, 1.55, pn), ft); elR = mix(elR, mix(1.9, 0.12, pn), ft);
     spY += (0.2 - 0.6 * pn) * ft;
+    // aim: pistol arm straight out, the other hand up under it
+    const am = G.aim;
+    shRx = mix(shRx, 1.5, am); elR = mix(elR, 0.08, am); shRz = mix(shRz, 0.12, am);
+    shLx = mix(shLx, 1.25, am); elL = mix(elL, 0.6, am); shLz = mix(shLz, -0.3, am);
     // zombie lunge, and recoiling from a hit
     spX += -0.4 * lg + 0.32 * fl;
     shLx += 0.3 * lg; shRx += 0.3 * lg;
@@ -1309,7 +1337,7 @@ export class Ragdoll {
     this.targetHeading = this.heading;
     this.speed = 0;
     this.wantSpeed = 0;
-    this.gw.handsUp = this.gw.cower = this.gw.fight = 0;
+    this.gw.handsUp = this.gw.cower = this.gw.fight = this.gw.aim = 0;
     for (const n in this.parts) {
       const p = this.parts[n];
       if (p.gone) continue;

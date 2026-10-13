@@ -139,8 +139,42 @@ export class Brain {
     this.goal.speed = this.walking ? (this.kind === 'zombie' ? 0.7 : WALK) : 0;
   }
 
+  /** The player has ordered everyone to give up (mission.js). People do; armed suspects might. */
+  shouted() {
+    const n = this.npc;
+    if (this.kind === 'zombie' || n.arrested || this.gaveUp) return;
+    if (!n.armed) { this.comply = true; return; }
+    this.pleas = (this.pleas || 0) + 1;      // every shout wears them down a little
+    const chance = 0.25 + 0.12 * this.pleas + (n.health < 60 ? 0.3 : 0) + (this.playerAimingAtMe() ? 0.15 : 0);
+    if (Math.random() < chance) {
+      this.gaveUp = true;
+      this.fake = Math.random() < 0.15;      // some only pretend, and go for the gun when you look away
+      this.fakeT = rnd(3, 6);
+    }
+  }
+
+  /** An armed suspect: shoots at the player on sight, unless talked (or frightened) into giving up. */
+  suspect(dt, scan) {
+    const n = this.npc, g = this.goal, pl = this.ctx.player;
+    g.mode = 'stop';
+    if (this.gaveUp) {
+      n.gesture = 'handsUp'; g.face = true; g.pos.copy(pl.pos); n.look = pl.eye;
+      if (this.fake && (this.fakeT -= dt) <= 0 && !this.playerAimingAtMe()) { this.gaveUp = this.fake = false; this.attackT = 0.4; }
+      return;
+    }
+    if (scan) this.sees = !pl.dead && this.canSee(pl.pos, 30);
+    if (!this.sees) { this.wander(dt); this.attackT = rnd(0.5, 1.1); return; }   // has not noticed you yet
+    g.face = true; g.pos.copy(pl.pos); n.look = pl.eye; n.gesture = 'aim';
+    if ((this.attackT -= dt) <= 0) { this.attackT = rnd(0.45, 0.95); n.shoot(pl); }
+  }
+
   civilian(dt, scan) {
     const n = this.npc, g = this.goal, pl = this.ctx.player;
+    if (this.comply) {                       // told to stay put with their hands up, and doing it
+      g.mode = 'stop'; g.face = true; g.pos.copy(pl.pos);
+      n.gesture = 'handsUp'; n.look = pl.eye;
+      return;
+    }
     if (scan) {
       this.aimed = this.playerAimingAtMe();
       // the undead are terrifying
@@ -348,7 +382,10 @@ export class Brain {
     this.goal.face = false;
     this.goal.speed = 0;
 
+    if (n.gun) n.gun.visible = !this.gaveUp && !n.arrested;
     if (this.kind === 'zombie') this.zombie(dt, scan);
+    else if (n.arrested) { this.goal.mode = 'stop'; n.gesture = 'cower'; }      // cuffed: stays down
+    else if (n.armed) this.suspect(dt, scan);
     else if (this.kind === 'thug') this.thug(dt, scan);
     else this.civilian(dt, scan);
 

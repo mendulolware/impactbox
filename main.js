@@ -11,6 +11,7 @@ import { buildWorld, loadMap } from './world.js';
 import { MAPS, MAP_LIST } from './maps.js';
 import { loadModels } from './models.js';
 import { Post } from './post.js';
+import { Mission } from './mission.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_RAGDOLLS = 36;
@@ -199,6 +200,7 @@ const KILL_TEXT = {
 ctx.onKill = (rag, cause) => {
   ctx.kills++;
   toast(KILL_TEXT[cause] || 'KILLED');
+  ctx.mission.onKill(rag);
 };
 
 ctx.toast = (msg) => toast(msg);
@@ -259,7 +261,9 @@ function deleteTarget() {
 }
 
 const SPAWN_ITEMS = [
-  ...MAP_LIST.map((m) => ({ cat: 'Maps', label: m.name, icon: m.icon, small: m.blurb, run: () => { setMap(m.id); setMenu(false); } })),
+  { cat: 'Modes', label: 'Ready or Not', icon: '🚨', small: 'SWAT: arrest, do not execute', run: () => { ctx.mission.start(); setMenu(false); } },
+  { cat: 'Modes', label: 'Sandbox', icon: '🧪', small: 'no rules', run: () => { ctx.mission.stop(); toast('SANDBOX'); setMenu(false); } },
+  ...MAP_LIST.map((m) => ({ cat: 'Maps', label: m.name, icon: m.icon, small: m.blurb, run: () => { ctx.mission.stop(); setMap(m.id); setMenu(false); } })),
   { cat: 'NPCs', label: 'Civilian', icon: '🧍', small: 'flees, surrenders', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER()) },
   { cat: 'NPCs', label: 'Thug', icon: '🥊', small: 'fights back', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER(), { kind: 'thug' }) },
   { cat: 'NPCs', label: 'Zombie', icon: '🧟', small: 'hunts and infects', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER(), { kind: 'zombie' }) },
@@ -439,6 +443,8 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyT') toggleSlowmo();
   if (e.code === 'KeyV') toggleHelmet();
   if (e.code === 'KeyG') toggleGraphics();
+  if (e.code === 'KeyE') ctx.mission.act();
+  if (e.code === 'Enter' && ctx.mission.over) ctx.mission.start();
   if (e.code === 'KeyR') ctx.weapons.reload();
   if (e.code === 'KeyF') ctx.weapons.unjam();
   if (e.code === 'KeyB') ctx.weapons.toggleMode();
@@ -469,10 +475,12 @@ for (const m of MAP_LIST) {
   el.innerHTML = `<span>${m.icon}</span>${m.name}`;
   el.title = m.blurb;
   el.classList.toggle('on', m.id === ctx.map.id);
-  el.addEventListener('click', () => { if (m.id !== ctx.map.id) setMap(m.id); });
+  el.addEventListener('click', () => { if (m.id !== ctx.map.id) { ctx.mission.stop(); setMap(m.id); } });
   $('maps').appendChild(el);
 }
 ctx.map.populate();
+ctx.mission = new Mission(ctx);
+$('swat').addEventListener('click', () => { ctx.mission.start(); $('swat').classList.add('on'); });
 
 // ------------------------------------------------------------------ main loop
 let last = performance.now();
@@ -557,6 +565,7 @@ function tick(now) {
   if (ctx.props.some((p) => p.removed)) ctx.props = ctx.props.filter((p) => !p.removed);
 
   ctx.gore.update(sdt);
+  ctx.mission.update(dt);
   tickWounds(sdt);
 
   // shadow camera follows the player
