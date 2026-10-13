@@ -68,10 +68,13 @@ body.helmet #slowmo { right: 6%; top: 12%; }
 #health-fill { height: 100%; width: 100%; background: #d9d9d9; transition: width .15s; }
 #health.low #health-fill { background: #e23; }
 
-/* ---- eleven weapons: tighter slots ---- */
+/* ---- weapon groups: one slot per number key, the open group lists what is in it ---- */
 #weapon-bar { gap: 4px; }
-.slot { min-width: 58px; padding: 5px 6px; font-size: 11px; }
-.slot b { font-size: 10px; }
+.slot { position: relative; min-width: 78px; padding: 5px 8px; font-size: 12px; }
+.slot b { font-size: 10px; white-space: nowrap; }
+.slot .list { position: absolute; left: 0; right: 0; bottom: 100%; margin-bottom: 4px; }
+.slot .list i { display: block; font-style: normal; font-size: 11px; padding: 3px 4px; margin-top: 2px; border-radius: 4px; background: rgba(0,0,0,.5); opacity: .6; }
+.slot .list i.cur { opacity: 1; background: rgba(150,20,20,.75); }
 
 /* ---- sniper scope ---- */
 #scope { display: none; position: absolute; inset: 0;

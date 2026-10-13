@@ -6,7 +6,7 @@ import { Ragdoll, selfCollide } from './ragdoll.js';
 import { tickWounds } from './wounds.js';
 import { Prop, PROP_TYPES } from './props.js';
 import { Player } from './player.js';
-import { Weapons, WEAPONS } from './weapons.js';
+import { Weapons } from './weapons.js';
 import { buildWorld, loadMap } from './world.js';
 import { MAPS, MAP_LIST } from './maps.js';
 import { loadModels } from './models.js';
@@ -193,7 +193,7 @@ ctx.explode = (p, radius = 7, power = 1) => {
 
 const KILL_TEXT = {
   headshot: 'HEADSHOT', decap: 'DECAPITATED', bisect: 'BISECTED', gib: 'OBLITERATED', torso: 'TORSO SHOT', pelvis: 'GUT SHOT',
-  bled: 'BLED OUT', impact: 'SKULL CRACKED',
+  bled: 'BLED OUT', impact: 'SKULL CRACKED', burned: 'BURNED', beaten: 'BEATEN TO DEATH',
 };
 ctx.onKill = (rag, cause) => {
   ctx.kills++;
@@ -228,6 +228,7 @@ const FACE_PLAYER = () => ctx.player.yaw + Math.PI;
 
 function clearAll() {
   ctx.weapons.releaseGrab();
+  ctx.weapons.clearBolts();
   for (const r of ctx.ragdolls) r.destroy();
   for (const p of ctx.props) p.remove();
   ctx.ragdolls.length = 0;
@@ -434,10 +435,8 @@ document.addEventListener('keydown', (e) => {
   input.keys.add(e.code);
   if (e.code.startsWith('Digit')) {
     const n = parseInt(e.code.slice(5), 10);
-    const slot = n === 0 ? 9 : n - 1;           // 1-9, then 0 is the tenth
-    if (slot < WEAPONS.length) ctx.weapons.select(slot);
+    if (n >= 1) ctx.weapons.selectSlot(n - 1);  // a group of weapons; press again for the next one in it
   }
-  if (e.code === 'Minus' && WEAPONS.length > 10) ctx.weapons.select(10);
   if (e.code === 'KeyT') toggleSlowmo();
   if (e.code === 'KeyV') toggleHelmet();
   if (e.code === 'KeyG') toggleGraphics();

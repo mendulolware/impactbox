@@ -20,7 +20,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | RMB | aim down the sights (guns); throw the held object (Grab Gun) |
 | V | helmet cam on/off |
 | G | graphics: high / fast (turns the effects off on slow machines) |
-| 1-9, 0, - or wheel | Pistol, Revolver, SMG, Shotgun, Rifle, Sniper, Rocket, Machete, Knife, Grenade, Grab Gun |
+| 1-8 or wheel | pick a weapon group; press the same number again for the next weapon in it (table under Weapons) |
 | Q (or Tab) | spawn menu |
 | T | slow-mo |
 | X | delete what you're aiming at (or holding) |
@@ -132,7 +132,28 @@ the pipeline off.
 
 ## Weapons
 
-Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of `weapons.js`.
+Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of `weapons.js`. There are 22, in eight groups:
+
+| Key | Group | Weapons |
+| --- | --- | --- |
+| 1 | Sidearms | Pistol, Revolver |
+| 2 | SMGs | SMG, Uzi |
+| 3 | Shotguns | Shotgun, Double Barrel |
+| 4 | Rifles | Rifle, Sniper, Crossbow |
+| 5 | Heavy | Rocket, Minigun, Flamethrower |
+| 6 | Blades | Knife, Machete, Katana, Axe, Chainsaw |
+| 7 | Blunt | Bat, Crowbar, Sledgehammer |
+| 8 | Gear | Grenade, Grab Gun |
+
+- **Double Barrel** fires twice, then takes a second and a half to break open and reload.
+- **Crossbow** is silent (nobody runs at the sound) and leaves its bolt standing in whatever it hit.
+- **Minigun** has to spin up for most of a second before it fires, and cannot be aimed down sights.
+- **Flamethrower** throws a jet of fire about 7 m. What it washes over chars; a person who takes enough of it catches light,
+  runs, and burns for several seconds (`scorch()` and `burnT` in `ragdoll.js`).
+- **Chainsaw** bites a little at a time while the trigger is held.
+- **Hand weapons are weak on purpose.** A swing is one click, reaches under 2 m and hits one thing. It staggers rather than
+  drops, kills in roughly 5 to 12 swings, wears a body part down at half the rate a bullet would, and only takes a limb off
+  once that part has no health left. Blunt weapons never cut: they break arms (which then hang) and legs (which then limp).
 
 - **Sniper** rounds pass through up to three bodies; aiming swaps the weapon for a full-screen scope.
 - **Rocket** is a physical projectile (`flyRocket` in `props.js`) that explodes on whatever is in front of it.
@@ -175,7 +196,7 @@ To rebuild: open `models/impactbox-models.blend` and run `models/build_models.py
 | `kit.py` | the modelling kit: boxes, lathed profiles, extruded outlines, swept tubes, lofts, rounded grips and stocks, blades, knurled knobs |
 | `materials.py` | every material, with what the game should lay over it and what shows through when it wears |
 | `guns.py`, `guns2.py`, `melee.py` | the weapons in the game: pistol, revolver, SMG, pump shotgun, rifle, scoped sniper, rocket launcher, grenade, grab gun, knife, machete |
-| `extras.py` | built but not wired in yet: axe, bat, crowbar, katana, chainsaw, sledgehammer, double-barrel, Uzi, minigun, crossbow, flamethrower |
+| `extras.py` | axe, bat, crowbar, katana, chainsaw, sledgehammer, double-barrel, Uzi, minigun, crossbow, flamethrower |
 | `hands.py` | the first-person hands, and the hand builder the NPCs share |
 | `props.py`, `car.py` | crate, drums, concrete block, plank, chair, table, cone, propane tank, pallet, dumpster, street lamp, sandbags, toilet, ball, car |
 | `character.py` | the NPC body (see "How NPCs work") |

@@ -2,19 +2,38 @@ import * as THREE from 'three';
 import { sfx } from './audio.js';
 import { getModel } from './models.js';
 
+// Number keys pick a group; pressing the same key again steps through the group.
+export const SLOTS = ['Sidearms', 'SMGs', 'Shotguns', 'Rifles', 'Heavy', 'Blades', 'Blunt', 'Gear'];
+
+// type: gun (hitscan) | rocket | flame | melee (a swing) | saw | vrknife | grenade | grab
+// Guns: pierce = how many bodies one round passes through, zoom = how far the view narrows when aimed,
+//   mag/reload = shots before a pause, spin = seconds of wind-up, bolt = leaves a bolt where it hits,
+//   quiet = nobody hears it.
+// Melee is weak on purpose: a hit staggers, it takes several to bring someone down, and a limb only
+// comes off once its health is gone. blunt = breaks instead of cuts.
 export const WEAPONS = [
-  { name: 'Pistol',   type: 'gun',     auto: false, rate: 0.20,  dmg: 34,  impulse: 140, pellets: 1,  spread: 0.003, sound: 'pistol',   kick: 0.07,  hole: 0.034 },
-  { name: 'Revolver', type: 'gun',     auto: false, rate: 0.50,  dmg: 70,  impulse: 260, pellets: 1,  spread: 0.002, sound: 'revolver', kick: 0.17,  hole: 0.046 },
-  { name: 'SMG',      type: 'gun',     auto: true,  rate: 0.055, dmg: 11,  impulse: 60,  pellets: 1,  spread: 0.020, sound: 'smg',      kick: 0.022, hole: 0.022 },
-  { name: 'Shotgun',  type: 'gun',     auto: false, rate: 0.85,  dmg: 15,  impulse: 110, pellets: 10, spread: 0.055, sound: 'shotgun',  kick: 0.16,  hole: 0.027 },
-  { name: 'Rifle',    type: 'gun',     auto: true,  rate: 0.075, dmg: 17,  impulse: 95,  pellets: 1,  spread: 0.010, sound: 'rifle',    kick: 0.035, hole: 0.03 },
-  // pierce: how many bodies one round can pass through. zoom: how far the view narrows when aimed.
-  { name: 'Sniper',   type: 'gun',     auto: false, rate: 1.30,  dmg: 150, impulse: 420, pellets: 1,  spread: 0,     sound: 'sniper',   kick: 0.22,  hole: 0.05, pierce: 3, zoom: 0.82 },
-  { name: 'Rocket',   type: 'rocket',  auto: false, rate: 1.40,  sound: 'rocket', kick: 0.13 },
-  { name: 'Machete',  type: 'melee',   auto: true,  rate: 0.40,  dmg: 48, impulse: 220, range: 2.7 },
-  { name: 'Knife',    type: 'vrknife' },
-  { name: 'Grenade',  type: 'grenade', auto: false, rate: 0.7 },
-  { name: 'Grab Gun', type: 'grab' },
+  { name: 'Pistol',   slot: 0, type: 'gun', auto: false, rate: 0.20,  dmg: 34,  impulse: 140, pellets: 1,  spread: 0.003, sound: 'pistol',   kick: 0.07,  hole: 0.034 },
+  { name: 'Revolver', slot: 0, type: 'gun', auto: false, rate: 0.50,  dmg: 70,  impulse: 260, pellets: 1,  spread: 0.002, sound: 'revolver', kick: 0.17,  hole: 0.046 },
+  { name: 'SMG',      slot: 1, type: 'gun', auto: true,  rate: 0.055, dmg: 11,  impulse: 60,  pellets: 1,  spread: 0.020, sound: 'smg',      kick: 0.022, hole: 0.022 },
+  { name: 'Uzi',      slot: 1, type: 'gun', auto: true,  rate: 0.048, dmg: 9,   impulse: 50,  pellets: 1,  spread: 0.034, sound: 'smg',      kick: 0.026, hole: 0.022 },
+  { name: 'Shotgun',  slot: 2, type: 'gun', auto: false, rate: 0.85,  dmg: 15,  impulse: 110, pellets: 10, spread: 0.055, sound: 'shotgun',  kick: 0.16,  hole: 0.027 },
+  { name: 'Double Barrel', slot: 2, type: 'gun', auto: false, rate: 0.22, dmg: 16, impulse: 120, pellets: 12, spread: 0.075, sound: 'shotgun', kick: 0.2, hole: 0.028, mag: 2, reload: 1.5 },
+  { name: 'Rifle',    slot: 3, type: 'gun', auto: true,  rate: 0.075, dmg: 17,  impulse: 95,  pellets: 1,  spread: 0.010, sound: 'rifle',    kick: 0.035, hole: 0.03 },
+  { name: 'Sniper',   slot: 3, type: 'gun', auto: false, rate: 1.30,  dmg: 150, impulse: 420, pellets: 1,  spread: 0,     sound: 'sniper',   kick: 0.22,  hole: 0.05, pierce: 3, zoom: 0.82 },
+  { name: 'Crossbow', slot: 3, type: 'gun', auto: false, rate: 1.25,  dmg: 85,  impulse: 180, pellets: 1,  spread: 0.001, sound: 'twang',    kick: 0.05,  hole: 0.02, bolt: true, quiet: true, zoom: 0.45 },
+  { name: 'Rocket',   slot: 4, type: 'rocket', auto: false, rate: 1.40, sound: 'rocket', kick: 0.13 },
+  { name: 'Minigun',  slot: 4, type: 'gun', auto: true,  rate: 0.028, dmg: 12,  impulse: 70,  pellets: 1,  spread: 0.030, sound: 'rifle',    kick: 0.018, hole: 0.026, spin: 0.7, hipOnly: true },
+  { name: 'Flamethrower', slot: 4, type: 'flame', range: 7.5, dmg: 5, heat: 0.13 },
+  { name: 'Knife',    slot: 5, type: 'vrknife' },
+  { name: 'Machete',  slot: 5, type: 'melee', rate: 0.60, dmg: 14, impulse: 60,  range: 1.7 },
+  { name: 'Katana',   slot: 5, type: 'melee', rate: 0.55, dmg: 18, impulse: 50,  range: 1.9 },
+  { name: 'Axe',      slot: 5, type: 'melee', rate: 0.90, dmg: 22, impulse: 110, range: 1.6 },
+  { name: 'Chainsaw', slot: 5, type: 'saw',   rate: 0.08, dmg: 3,  impulse: 20,  range: 1.6 },
+  { name: 'Bat',      slot: 6, type: 'melee', rate: 0.60, dmg: 9,  impulse: 150, range: 1.7, blunt: true },
+  { name: 'Crowbar',  slot: 6, type: 'melee', rate: 0.60, dmg: 11, impulse: 120, range: 1.5, blunt: true },
+  { name: 'Sledgehammer', slot: 6, type: 'melee', rate: 1.20, dmg: 24, impulse: 320, range: 1.7, blunt: true },
+  { name: 'Grenade',  slot: 7, type: 'grenade', auto: false, rate: 0.7 },
+  { name: 'Grab Gun', slot: 7, type: 'grab' },
 ];
 
 // How each weapon sits in first person, in the same order as WEAPONS. All positions are in the
@@ -26,8 +45,9 @@ export const WEAPONS = [
 //   muzzle - where tracers and the flash come from
 //   handR / handL - [x, y, z, pitch] for the gripping / supporting hand
 //   handS  - pistols: the other hand closed round the gripping one (two-handed hold)
-// sight, muzzle and the hand positions come out of the model build (REF in models/guns.py).
+// sight, muzzle and the hand positions come out of the model build (REF in models/guns.py, extras.py).
 //   scope  - aiming swaps the weapon for a full-screen scope picture
+//   melee  - held in the fist, business end up and forward; tilt = how far it leans forward
 //   vr     - hand-driven: the mouse moves the hand itself (see updateKnife)
 const RIG_SCALE = 0.8;
 const HELMET_DROP = 0.1;   // how far the eyes are below the helmet camera (matches player.js)
@@ -38,16 +58,33 @@ const VIEW = [
     handR: [0, -0.048, 0.062, -0.35], handS: [0, -0.048, 0.062, -0.35] },
   { model: 'SMG',     hip: [0.19, -0.2, -0.42], sight: 0.0615, adsZ: -0.40, muzzle: [0, 0.006, -0.265],
     handR: [0, -0.072, 0.068, -0.25], handL: [0, -0.021, -0.125, 0] },
+  { model: 'Uzi',     hip: [0.19, -0.2, -0.46], sight: 0.059, adsZ: -0.40, muzzle: [0, 0.012, -0.23],
+    handR: [0, -0.066, 0.006, -0.12], handL: [0, -0.030, -0.098, 0] },
   { model: 'Shotgun', hip: [0.19, -0.2, -0.42], sight: 0.040, adsZ: -0.44, muzzle: [0, 0.016, -0.63],
     handR: [0, -0.038, 0.135, -0.7], handL: [0, -0.040, -0.27, 0] },
+  { model: 'DoubleBarrel', hip: [0.19, -0.2, -0.42], sight: 0.0378, adsZ: -0.44, muzzle: [0, 0.018, -0.58],
+    handR: [0, -0.045, 0.115, -0.7], handL: [0, -0.036, -0.18, 0] },
   { model: 'Rifle',   hip: [0.19, -0.2, -0.42], sight: 0.067, adsZ: -0.44, muzzle: [0, 0.006, -0.665],
     handR: [0, -0.072, 0.095, -0.3], handL: [0, -0.030, -0.235, 0] },
   { model: 'Sniper',  hip: [0.19, -0.2, -0.42], sight: 0.072, adsZ: -0.30, muzzle: [0, 0.02, -0.795], scope: true,
     handR: [0, -0.050, 0.128, -0.6], handL: [0, -0.040, -0.2, 0] },
+  { model: 'Crossbow', hip: [0.19, -0.21, -0.42], sight: 0.082, adsZ: -0.40, muzzle: [0, 0.0405, -0.43],
+    handR: [0, -0.070, 0.094, -0.3], handL: [0, -0.020, -0.18, 0] },
   { model: 'RocketLauncher', hip: [0.22, -0.13, -0.26], sight: 0.14, adsZ: -0.24, muzzle: [0, 0.07, -0.84],
     handR: [0, -0.03, 0.010, -0.15], handL: [0, 0.0445, -0.27, 0] },
-  { model: 'Machete', hip: [0.3, -0.3, -0.5], melee: true },
+  { model: 'Minigun', hip: [0.24, -0.3, -0.32], muzzle: [0, 0, -0.76],
+    handR: [0, -0.060, 0.068, -0.2], handL: [0, 0.107, -0.10, 0] },
+  { model: 'Flamethrower', hip: [0.22, -0.26, -0.3], muzzle: [0, 0.03, -0.69],
+    handR: [0, -0.040, 0.014, -0.2], handL: [0, -0.030, -0.414, 0] },
   { model: 'Knife',   hip: [0.22, -0.2, -0.45], vr: true },
+  { model: 'Machete', hip: [0.3, -0.3, -0.5], melee: true },
+  { model: 'Katana',  hip: [0.3, -0.32, -0.5], melee: true, tilt: 0.75 },
+  { model: 'Axe',     hip: [0.3, -0.3, -0.5], melee: true, tilt: 0.7, grip: -0.18 },
+  { model: 'Chainsaw', hip: [0.2, -0.3, -0.34], muzzle: [0.07, 0.005, -0.8],
+    handR: [0, 0, 0, -0.1], handL: [0, 0.185, -0.275, 0] },
+  { model: 'BaseballBat', hip: [0.3, -0.3, -0.5], melee: true, tilt: 0.7 },
+  { model: 'Crowbar', hip: [0.3, -0.3, -0.5], melee: true, tilt: 0.75, grip: -0.12 },
+  { model: 'SledgeHammer', hip: [0.3, -0.32, -0.5], melee: true, tilt: 0.6, grip: -0.2 },
   { model: 'Grenade', hip: [0.28, -0.3, -0.5], held: true },
   { model: 'GrabGun', hip: [0.21, -0.22, -0.45], muzzle: [0, 0.005, -0.37],
     handR: [0, -0.088, 0.1, -0.25], handL: [0, -0.045, -0.075, 0] },
@@ -97,11 +134,13 @@ function buildViewmodel(v) {
     if (h) g.add(h);
   } else if (v.melee) {
     // fist at the origin, blade standing up out of it and tipped forward
+    // (grip slides the fist along a long handle, toward the butt end)
     model.rotation.x = Math.PI / 2;
+    model.position.y = -(v.grip || 0);
     g.add(model);
     const h = hand('HandR', [0, 0, 0, 0]);
     if (h) g.add(h);
-    g.rotation.x = -0.9;
+    g.rotation.x = -(v.tilt ?? 0.9);
   } else if (v.held) {
     model.position.set(-0.004, 0.03, 0);
     g.add(model);
@@ -139,6 +178,9 @@ export class Weapons {
     this.cutCool = new Map();              // collider -> time of the last cut, so one pass is one cut
     this.clock = 0;
     this.swishT = 0;
+    this.shots = 0;        // fired since the last reload (weapons with a magazine)
+    this.spin = 0;         // minigun barrels: 0 = stopped, 1 = up to speed
+    this.tickT = 0;        // chainsaw / flamethrower: time to the next bite
 
     // pivot sits at the eye and turns the whole rig (aim lag, sway); rig holds the weapon
     this.pivot = new THREE.Group();
@@ -183,6 +225,18 @@ export class Weapons {
     }
     this.tracerI = 0;
 
+    // crossbow bolts left standing in whatever they hit
+    this.bolts = [];
+    const bg = new THREE.CylinderGeometry(0.006, 0.006, 0.44, 6).rotateX(Math.PI / 2);
+    const bm = new THREE.MeshStandardMaterial({ color: 0x2a2620, roughness: 0.6 });
+    for (let i = 0; i < 24; i++) {
+      const m = new THREE.Mesh(bg, bm);
+      m.castShadow = true;
+      m.visible = false;
+      this.bolts.push(m);
+    }
+    this.boltI = 0;
+
     // grab beam
     const lg = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
     this.beam = new THREE.Line(lg, new THREE.LineBasicMaterial({ color: 0x66ccff }));
@@ -218,10 +272,12 @@ export class Weapons {
   buildBar() {
     const bar = document.getElementById('weapon-bar');
     bar.innerHTML = '';
-    this.slots = WEAPONS.map((w, i) => {
+    this.inSlot = SLOTS.map((_, n) => WEAPONS.map((w, i) => i).filter((i) => WEAPONS[i].slot === n));
+    this.last = this.inSlot.map((list) => list[0]);       // the weapon each group was last left on
+    this.slots = SLOTS.map((label, n) => {
       const el = document.createElement('div');
       el.className = 'slot';
-      el.innerHTML = `<b>${i < 9 ? i + 1 : i === 9 ? 0 : '-'}</b>${w.name}`;
+      el.innerHTML = `<div class="list"></div><b>${n + 1} &middot; ${label}</b><span></span>`;
       bar.appendChild(el);
       return el;
     });
@@ -229,7 +285,21 @@ export class Weapons {
   }
 
   refreshBar() {
-    this.slots.forEach((s, i) => s.classList.toggle('on', i === this.index));
+    const slot = this.current.slot;
+    this.slots.forEach((el, n) => {
+      el.classList.toggle('on', n === slot);
+      el.querySelector('span').textContent = WEAPONS[this.last[n]].name;
+      el.querySelector('.list').innerHTML = n === slot && this.inSlot[n].length > 1
+        ? this.inSlot[n].map((i) => `<i class="${i === this.index ? 'cur' : ''}">${WEAPONS[i].name}</i>`).join('') : '';
+    });
+  }
+
+  /** A number key: go to that group's weapon, or step to the next one if already in the group. */
+  selectSlot(n) {
+    const list = this.inSlot[n];
+    if (!list) return;
+    if (this.current.slot === n) this.select(list[(list.indexOf(this.index) + 1) % list.length]);
+    else this.select(this.last[n]);
   }
 
   select(i) {
@@ -237,9 +307,12 @@ export class Weapons {
     if (i === this.index) return;
     this.releaseGrab();
     this.index = i;
+    this.last[WEAPONS[i].slot] = i;
     this.models.forEach((m, k) => (m.visible = k === i));
     this.cool = 0.12;
     this.ads = 0;
+    this.shots = 0;
+    this.spin = 0;
     this.bladePrev = null;
     this.handTarget.copy(HAND_REST);
     this.handPos.copy(HAND_REST);
@@ -248,6 +321,27 @@ export class Weapons {
     document.body.classList.remove('scoped');
     this.refreshBar();
     sfx.pop();
+  }
+
+  /** Leave a crossbow bolt standing in what it hit. It goes where that thing goes. */
+  stickBolt(hit, point, dir) {
+    const owner = this.ctx.owners.get(hit.collider.handle);
+    const parent = owner?.kind === 'part' ? owner.ragdoll.parts[owner.name].mesh
+      : owner?.kind === 'prop' ? owner.prop.mesh : this.ctx.scene;
+    if (!parent) return;
+    const b = this.bolts[this.boltI++ % this.bolts.length];
+    this.ctx.scene.add(b);                                  // place it in the world first...
+    b.position.copy(point).addScaledVector(dir, -0.1);
+    b.quaternion.setFromUnitVectors(FWD, dir);
+    b.visible = true;
+    b.updateMatrixWorld(true);
+    parent.updateMatrixWorld(true);
+    parent.attach(b);                                       // ...then hand it over without it moving
+  }
+
+  /** Take every bolt back (the sandbox was cleared, or the map changed). */
+  clearBolts() {
+    for (const b of this.bolts) { b.removeFromParent(); b.visible = false; }
   }
 
   releaseGrab() {
@@ -311,23 +405,31 @@ export class Weapons {
         const hit = ctx.raycast(from, d, 300);
         if (!hit) { end = from.clone().addScaledVector(d, 120); break; }
         end = from.clone().addScaledVector(d, hit.timeOfImpact);
-        ctx.applyHit(hit, end, d, w.dmg, w.impulse, { hole: w.hole });
+        ctx.applyHit(hit, end, d, w.dmg, w.impulse, w.bolt ? { hole: w.hole, stab: true } : { hole: w.hole });
+        if (w.bolt) { this.stickBolt(hit, end, d); break; }
         if (ctx.owners.get(hit.collider.handle)?.kind !== 'part') break; // walls and props stop it
         from = end.clone().addScaledVector(d, 0.45);
       }
-      if (i < 3 || w.pellets === 1) this.tracer(muzzle, end);
+      if (!w.bolt && (i < 3 || w.pellets === 1)) this.tracer(muzzle, end);
     }
     sfx[w.sound]();
-    ctx.alert('shot', ctx.player.pos, 40);
     this.kick = w.kick;
-    this.muzzle.position.copy(muzzle);
-    this.muzzle.intensity = 30;
-    this.flash.position.copy(muzzle).addScaledVector(fwd, 0.06);
-    this.flash.scale.setScalar(0.05 + w.kick * 0.5 + Math.random() * 0.03);
-    this.flash.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
-    this.flash.visible = true;
-    this.muzzleT = 0.05;
+    if (!w.quiet) {
+      ctx.alert('shot', ctx.player.pos, 40);
+      this.muzzle.position.copy(muzzle);
+      this.muzzle.intensity = 30;
+      this.flash.position.copy(muzzle).addScaledVector(fwd, 0.06);
+      this.flash.scale.setScalar(0.05 + w.kick * 0.5 + Math.random() * 0.03);
+      this.flash.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+      this.flash.visible = true;
+      this.muzzleT = 0.05;
+    }
     ctx.player.recoil(w.kick * (0.6 - 0.2 * this.ads));
+    if (w.mag && ++this.shots >= w.mag) {         // both barrels gone: break it open
+      this.shots = 0;
+      this.cool = w.reload;
+      ctx.later(w.reload * 0.6, () => sfx.tick());
+    }
   }
 
   fireRocket(w) {
@@ -407,8 +509,8 @@ export class Weapons {
         this.cutCool.set(h, this.clock);
         const point = this.bladePrev[k].clone().addScaledVector(v, hit.timeOfImpact);
         const stab = v.dot(bladeDir) > 0.6;
-        if (stab) ctx.applyHit(hit, point, v, THREE.MathUtils.clamp(speed * 7, 8, 48), 50, { stab: true });
-        else ctx.applyHit(hit, point, v, THREE.MathUtils.clamp(speed * 4.5, 4, 36), 35 + speed * 6, { blade: true, light: true });
+        if (stab) ctx.applyHit(hit, point, v, THREE.MathUtils.clamp(speed * 2.2, 3, 14), 20, { stab: true });
+        else ctx.applyHit(hit, point, v, THREE.MathUtils.clamp(speed * 1.3, 2, 9), 12 + speed * 2, { blade: true, light: true });
         if (ctx.owners.get(h)?.kind === 'part') { sfx.chop(); ctx.alert('violence', pl.pos, 12); }
       }
       if (fastest > 4.5 && this.swishT <= 0) { sfx.slash(); this.swishT = 0.28; }
@@ -417,31 +519,89 @@ export class Weapons {
     if (this.cutCool.size > 200) this.cutCool.clear();
   }
 
+  /** One swing of a hand weapon: a short, narrow arc in front of you. */
   fireMelee(w) {
     const ctx = this.ctx;
     this.aim();
     const origin = _o.clone();
     const fwd = _d.clone();
     const right = _r.clone();
-    const up = _u.clone();
     sfx.slash();
     this.swing = 0.28;
 
     const seen = new Set();
-    const offsets = [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.22], [0, -0.22], [0.5, 0.1], [-0.5, 0.1]];
     let hitSomething = false;
-    for (const [ox, oy] of offsets) {
-      const d = fwd.clone().addScaledVector(right, ox).addScaledVector(up, oy).normalize();
+    for (const ox of [0, 0.16, -0.16]) {
+      const d = fwd.clone().addScaledVector(right, ox).normalize();
       const hit = ctx.raycast(origin, d, w.range);
       if (!hit) continue;
       const h = hit.collider.handle;
       if (seen.has(h)) continue;
       seen.add(h);
       const pt = origin.clone().addScaledVector(d, hit.timeOfImpact);
-      ctx.applyHit(hit, pt, d, w.dmg, w.impulse, { blade: true });
+      ctx.applyHit(hit, pt, d, w.dmg, w.impulse, w.blunt ? { blunt: true } : { blade: true, light: true, chop: true });
       hitSomething = true;
+      break;                                   // one swing, one thing hit
     }
-    if (hitSomething) { sfx.chop(); ctx.player.recoil(0.02); ctx.alert('violence', ctx.player.pos, 12); }
+    if (hitSomething) {
+      if (w.blunt) sfx.thud(1.4); else sfx.chop();
+      ctx.player.recoil(0.02);
+      ctx.alert('violence', ctx.player.pos, 12);
+    }
+  }
+
+  /** Chainsaw: while the trigger is held the chain bites whatever is right in front of it, a little at a time. */
+  updateSaw(dt, input, w) {
+    if (!input.left) return;
+    const ctx = this.ctx;
+    this.kick = 0.012 + Math.random() * 0.012;           // it shakes in your hands
+    this.tickT -= dt;
+    if (this.tickT > 0) return;
+    this.tickT = w.rate;
+    sfx.saw();
+    this.aim();
+    const origin = _o.clone(), fwd = _d.clone(), right = _r.clone();
+    for (const ox of [0, 0.1, -0.1]) {
+      const d = fwd.clone().addScaledVector(right, ox).normalize();
+      const hit = ctx.raycast(origin, d, w.range);
+      if (!hit) continue;
+      const pt = origin.clone().addScaledVector(d, hit.timeOfImpact);
+      ctx.applyHit(hit, pt, d, w.dmg, w.impulse, { blade: true, light: true });
+      if (ctx.owners.get(hit.collider.handle)?.kind === 'part') ctx.alert('violence', ctx.player.pos, 16);
+      break;
+    }
+  }
+
+  /** Flamethrower: a jet of fire. What it washes over chars, and people it stays on catch light. */
+  updateFlame(dt, input, w) {
+    if (!input.left) return;
+    const ctx = this.ctx, fire = ctx.gore.fire;
+    this.aim();
+    const origin = _o.clone(), fwd = _d.clone(), right = _r.clone(), up = _u.clone();
+    const m = this.muzzlePoint(new THREE.Vector3());
+    for (let i = 0; i < 5; i++) {
+      const s = rnd(9, 14), hot = Math.random();
+      fire.emit(m.x, m.y, m.z,
+        fwd.x * s + right.x * rnd(-1.2, 1.2) + up.x * rnd(-1, 1), fwd.y * s + rnd(-1, 1.4), fwd.z * s + right.z * rnd(-1.2, 1.2) + up.z * rnd(-1, 1),
+        rnd(0.16, 0.42), rnd(0.32, 0.58), -2.2, 1, 0.35 + hot * 0.4, hot * 0.1, 0, 1.4);
+    }
+    this.muzzle.position.copy(m).addScaledVector(fwd, 1.6);
+    this.muzzle.intensity = 22 + Math.random() * 16;
+    this.muzzleT = 0.08;
+    this.tickT -= dt;
+    if (this.tickT > 0) return;
+    this.tickT = 0.09;
+    sfx.flame();
+    ctx.alert('violence', ctx.player.pos, 16);
+    for (const ox of [0, 0.11, -0.11]) {
+      const d = fwd.clone().addScaledVector(right, ox).normalize();
+      const hit = ctx.raycast(origin, d, w.range);
+      if (!hit) continue;
+      const owner = ctx.owners.get(hit.collider.handle);
+      const pt = origin.clone().addScaledVector(d, hit.timeOfImpact);
+      if (owner?.kind === 'part') owner.ragdoll.scorch(owner.name, w.heat, w.dmg, ctx.player.pos);
+      else if (owner?.kind === 'prop') owner.prop.hit(w.dmg, pt, d, 4, {});
+    }
   }
 
   throwGrenade() {
@@ -545,7 +705,7 @@ export class Weapons {
     }
 
     // right mouse: aim down the sights (guns only; the grab gun uses it to throw)
-    const wantAds = (w.type === 'gun' || w.type === 'rocket') && input.right ? 1 : 0;
+    const wantAds = (w.type === 'gun' || w.type === 'rocket') && !w.hipOnly && input.right ? 1 : 0;
     this.ads += (wantAds - this.ads) * Math.min(1, dt * 11);
     if (Math.abs(wantAds - this.ads) < 0.002) this.ads = wantAds;
 
@@ -558,7 +718,17 @@ export class Weapons {
       this.updateKnife(dt, input);
     } else if (w.type === 'grab') {
       this.updateGrab(dt, input);
+    } else if (w.type === 'saw') {
+      this.updateSaw(dt, input, w);
+    } else if (w.type === 'flame') {
+      this.updateFlame(dt, input, w);
+    } else if (w.spin && this.spin < 1) {
+      // the barrels have to come up to speed before anything leaves them
+      const was = this.spin;
+      this.spin = input.left ? Math.min(1, this.spin + dt / w.spin) : Math.max(0, this.spin - dt * 2);
+      if (input.left && Math.floor(was * 6) !== Math.floor(this.spin * 6)) sfx.whirr(this.spin);
     } else if (this.cool <= 0) {
+      if (w.spin && !input.left) this.spin = 0.99;      // let go: they start to wind down
       const trigger = w.auto ? input.left : input.leftDown;
       if (trigger) {
         this.cool = w.rate;

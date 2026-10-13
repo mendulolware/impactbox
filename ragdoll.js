@@ -183,6 +183,8 @@ export class Ragdoll {
     this.impactMute = 0.3;      // no landing damage while this runs (after hits, grabs and mode changes)
     this.trailAt = new THREE.Vector3(pos.x, -99, pos.z);
     this.mass = 0;
+    this.heat = 0;              // how much fire it has taken
+    this.burnT = 0;             // seconds left alight
     this.lastDt = 1 / 60;
     this.kind = opts.kind || (opts.zombie ? 'zombie' : 'civilian'); // 'civilian' | 'thug' | 'zombie'
     this.infected = false;      // bitten: rises as a zombie after dying
@@ -458,7 +460,9 @@ export class Ragdoll {
     const zombie = this.kind === 'zombie';
     this.hitAccum += impulse;
     const standing = this.mode !== 'ragdoll';
-    const heavy = (opts.blade && !opts.light) || opts.explosion || name === 'head' || LEGS.has(name)
+    // (hand weapons are the exception: a swing staggers, wherever it lands, until the blows add up)
+    const melee = opts.blunt || (opts.blade && opts.light);
+    const heavy = (opts.blade && !opts.light) || opts.explosion || (!melee && (name === 'head' || LEGS.has(name)))
       || this.hitAccum > (zombie ? 480 : 250) || (!zombie && this.health - dmg < 40);
     if (standing && !heavy && !this.dead) {
       this.flinchT = FLINCH;
@@ -500,17 +504,27 @@ export class Ragdoll {
       if (opts.blade) {
         // a gash: along the blade's travel for a swipe, any way across the body for a chop
         const ln = opts.normal ? new THREE.Vector3(opts.normal.x, opts.normal.y, opts.normal.z).applyQuaternion(_q).normalize() : ld.clone().negate();
-        const tan = opts.light ? ld.clone().addScaledVector(ln, -ld.dot(ln)) : new THREE.Vector3(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)).cross(ld);
+        const swipe = opts.light && !opts.chop;
+        const tan = swipe ? ld.clone().addScaledVector(ln, -ld.dot(ln)) : new THREE.Vector3(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)).cross(ld);
         if (tan.lengthSq() < 1e-6) tan.set(0, 1, 0);
         tan.normalize();
-        const half = opts.light ? 0.03 + Math.min(0.05, dmg * 0.0014) : rnd(0.07, 0.11);
+        const half = swipe ? 0.03 + Math.min(0.05, dmg * 0.0014) : opts.light ? rnd(0.035, 0.065) : rnd(0.07, 0.11);
         openWound(p, lp.clone().addScaledVector(tan, -half), opts.light ? 0.01 : 0.015, maxR, lp.clone().addScaledVector(tan, half),
-          opts.light ? ln.negate() : ld, opts.light ? 0.035 : 0.07);
+          swipe ? ln.negate() : ld, opts.light ? 0.035 : 0.07);
         this.bleed(p, lp, opts.light ? 4 : 8, opts.light ? 0.35 : 1.0);
         _t.copy(dir).multiplyScalar(0.5); _t.y += 0.5;
         gore.blood(point, _t, opts.light ? 12 : 26, 5, 1.0);
         gore.mist(point, _t, 3);
         gore.wallSplatter(point, dir, 2.5);
+      } else if (opts.blunt) {
+        // a blow: bruising, and split skin if it was a hard one
+        if (dmg >= 20) {
+          openWound(p, lp, 0.016, maxR, null, ld, 0.03);
+          this.bleed(p, lp, 3, 0.25);
+          sfx.crack();
+        }
+        _t.copy(dir).multiplyScalar(0.3); _t.y += 0.5;
+        gore.blood(point, _t, dmg >= 20 ? 10 : 3, 2.5, 1.0);
       } else if (opts.bite || opts.stab) {
         openWound(p, lp, opts.stab ? 0.02 : 0.024, maxR, null, opts.stab ? ld : null, 0.06);   // a puncture or a torn chunk, no exit wound
         this.bleed(p, lp, opts.stab ? 6 : 4, opts.stab ? 0.8 : 0.4);
@@ -541,8 +555,9 @@ export class Ragdoll {
     }
 
     // zombies only really go down to head trauma
-    const mult = name === 'head' ? 2.2 : (LIMBS.has(name) ? 0.55 : 1) * (zombie ? 0.3 : 1);
-    p.hp -= dmg;
+    // (a hand weapon to the head is bad, but it is not a bullet; and it wears a part down at half the rate)
+    const mult = name === 'head' ? (melee ? 1.4 : 2.2) : (LIMBS.has(name) ? 0.55 : 1) * (zombie ? 0.3 : 1);
+    p.hp -= melee ? dmg * 0.5 : dmg;
 
     // a badly hurt limb stops working before it comes off
     if (p.hp > 0 && dmg > 0) {
@@ -564,17 +579,35 @@ export class Ragdoll {
       } else if (name === 'head') {
         if (opts.blade || opts.explosion) this.sever('head', dir);
         else if (p.hp < -26) this.gib('head');   // overkill: the head pops
-        else this.die('headshot');
+        else this.die(opts.blunt ? 'beaten' : 'headshot');
       } else if (LIMBS.has(name)) {
-        this.sever(name, dir);
+        if (opts.blunt) {
+          // clubs break limbs, they do not take them off
+          p.hp = 1;
+          if (ARMS.has(name)) this.dangle(name); else this.lame[name.slice(-1)] = 1;
+          sfx.crack();
+        } else this.sever(name, dir);
       } else if (name === 'torso') {
         if (opts.blade || opts.explosion) this.sever('torso', dir);
-        if (!zombie || this.severed.has('torso')) this.die('torso');
+        if (!zombie || this.severed.has('torso')) this.die(opts.blunt ? 'beaten' : 'torso');
       } else if (name === 'pelvis') {
-        if (!zombie) this.die('pelvis');
+        if (!zombie) this.die(opts.blunt ? 'beaten' : 'pelvis');
       }
     }
     this.damage(dmg * mult);
+  }
+
+  /** Fire on a body part: it chars and hurts, and enough of it sets the whole NPC alight. */
+  scorch(name, heat, dmg, from) {
+    const p = this.parts[name];
+    if (!p || p.gone) return;
+    this.split();
+    p.heat = Math.min(1, (p.heat || 0) + heat);
+    burn(p, p.heat);
+    this.heat += heat;
+    if (this.heat > 0.5) this.burnT = Math.max(this.burnT, 7);
+    this.brain.notice('hurt', from);
+    this.damage(dmg, 'burned');
   }
 
   /** An open wound: it drips, and costs health until it clots (limbs) or kills (body wounds). */
@@ -613,6 +646,7 @@ export class Ragdoll {
     this.brain = new Brain(this, 'zombie');
     this.health = 70;
     this.bleedRate = this.sevBleed = 0;
+    this.burnT = 0;
     this.gutShot = false;
     this.stun = 0.6;
     this.twitch = 1;
@@ -1326,6 +1360,26 @@ export class Ragdoll {
     this.bleedRate = loss;
     if (loss > 0 && !this.dead) this.damage(loss * dt, 'bled');
     if (this.impactMute > 0) this.impactMute -= dt;
+
+    // alight: flames off every part, charring as it goes, and it does not last long
+    if (this.burnT > 0) {
+      this.burnT -= dt;
+      if (!this.dead) {
+        this.damage(9 * dt, 'burned');
+        if (this.brain.state !== 'flee' && this.kind !== 'zombie') { this.brain.state = 'flee'; this.brain.fear = 1; }
+      }
+      const names = Object.keys(this.parts);
+      for (let k = 0; k < 2; k++) {
+        const p = this.parts[names[(Math.random() * names.length) | 0]];
+        if (p.gone) continue;
+        const t = p.body.translation(), hot = Math.random();
+        gore.fire.emit(t.x + rnd(-0.08, 0.08), t.y + rnd(-0.1, 0.1), t.z + rnd(-0.08, 0.08), rnd(-0.4, 0.4), rnd(1.2, 2.6), rnd(-0.4, 0.4),
+          rnd(0.18, 0.4), rnd(0.3, 0.6), -1.5, 1, 0.35 + hot * 0.4, hot * 0.1, 0, 1);
+        if (Math.random() < 0.08) gore.smoke.emit(t.x, t.y + 0.3, t.z, rnd(-0.3, 0.3), rnd(1, 2), rnd(-0.3, 0.3), rnd(0.4, 0.8), rnd(1, 2), -0.4, 0.08, 0.08, 0.08, 0, 1.2);
+        p.heat = Math.min(1, (p.heat || 0) + dt * 0.5);
+        burn(p, p.heat);
+      }
+    }
     // too much blood gone to stay on your feet
     if (this.mode !== 'ragdoll' && !this.dead && !zombie && this.health <= 20) this.goLimp(2);
 
