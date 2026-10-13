@@ -358,6 +358,27 @@ function toggleHelmet() {
   sfx.tick();
 }
 
+// Bodycam: where the nearest faces are on the picture, for the lens shader to block out.
+const _face = new THREE.Vector3();
+function blockFaces() {
+  const faces = post.final.uniforms.uFaces.value;
+  let n = 0;
+  if (ctx.helmet) {
+    camera.updateMatrixWorld();
+    const near = ctx.ragdolls.filter((r) => !r.removed && !r.parts.head.gone)
+      .map((r) => [r, camera.position.distanceTo(r.parts.head.mesh.getWorldPosition(_face))])
+      .filter((e) => e[1] < 40).sort((a, b) => a[1] - b[1]);
+    for (const [r, dist] of near) {
+      if (n === faces.length) break;
+      if (!r.brain.los(camera.position)) continue;          // behind a wall: nothing to hide
+      r.parts.head.mesh.getWorldPosition(_face).project(camera);
+      if (_face.z > 1 || Math.abs(_face.x) > 1.2 || Math.abs(_face.y) > 1.2) continue;
+      faces[n++].set(_face.x * 0.5 + 0.5, _face.y * 0.5 + 0.5, 0.17 * camera.projectionMatrix.elements[5] / dist * 0.5);
+    }
+  }
+  for (; n < faces.length; n++) faces[n].z = 0;
+}
+
 // G: switch the effects pipeline off on slow machines (plain rendering, no occlusion or bloom)
 function toggleGraphics() {
   post.enabled = !post.enabled;
@@ -524,6 +545,21 @@ ctx.debugView = (from, at, fov = 40) => {
   camera.updateProjectionMatrix();
 };
 
+/** A launched drone: the view rides on it, it goes where you look (Shift = faster), and it blows up on what it meets. */
+function flyDrone(now) {
+  const d = ctx.drone;
+  if (!d) return;
+  if (d.removed || ctx.player.dead) { if (!d.removed) d.life = 0; ctx.drone = null; ctx.weapons.pivot.visible = true; return; }
+  const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(ctx.player.aimQuat);
+  const sp = input.keys.has('ShiftLeft') || input.keys.has('ShiftRight') ? 26 : 13;
+  d.body.setLinvel({ x: dir.x * sp, y: dir.y * sp, z: dir.z * sp }, true);
+  const t = d.body.translation();
+  camera.position.set(t.x, t.y, t.z);
+  camera.quaternion.copy(ctx.player.aimQuat);
+  camera.rotateZ(Math.sin(now * 0.031) * 0.004);            // rotor buzz
+  ctx.weapons.pivot.visible = false;
+}
+
 function tick(now) {
   const dt = Math.min(Math.max((now - last) / 1000, 0), 0.05);
   last = now;
@@ -535,6 +571,7 @@ function tick(now) {
   const active = gameActive() && !ctx.player.dead;
   ctx.player.update(sdt, input, active, dt);
   if (active) ctx.weapons.update(dt, input);
+  flyDrone(now);
   // footsteps: one for every half turn of the walk cycle
   const stepN = Math.floor(ctx.player.bob / Math.PI);
   if (stepN !== lastStep) {
@@ -609,6 +646,7 @@ function tick(now) {
     }
   }
   ctx.sky.material.uniforms.uTime.value = now / 1000;   // clouds drift
+  blockFaces();
   post.render(scene, camera, ctx.helmet);
 }
 

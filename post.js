@@ -4,7 +4,7 @@ import * as THREE from 'three';
 // then through three effects that do most of the work of making it look photographed:
 //   ambient occlusion - soft darkening in creases and where things meet the ground
 //   bloom             - bright things (sun, fire, muzzle flash) glow into their surroundings
-//   grade             - contrast, a slight vignette, and the washed-out helmet-cam look
+//   grade             - contrast, a slight vignette, and the bodycam look (bent lens, colour fringes, blocked-out faces)
 // Everything here is self-contained shader code; nothing is loaded from outside.
 
 const VERT = `varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
@@ -59,16 +59,30 @@ const BLUR_FRAG = `
 
 const FINAL_FRAG = `
   uniform sampler2D tScene; uniform sampler2D tAO; uniform sampler2D tBloom;
-  uniform vec2 uAoTexel; uniform float uHelmet; varying vec2 vUv;
+  uniform vec2 uAoTexel; uniform float uHelmet; uniform float uAspect; uniform vec3 uFaces[8]; varying vec2 vUv;
   void main() {
-    vec3 col = texture2D(tScene, vUv).rgb;
+    // bodycam lens: the middle of the picture is magnified and the edges squeezed in (corners stay put)
+    vec2 lc = vUv * 2.0 - 1.0;
+    float bend = 0.3 * uHelmet;
+    vec2 uv = 0.5 + 0.5 * lc * (1.0 + bend * dot(lc, lc)) / (1.0 + bend * 2.0);
+    // faces are blocked out the way released footage is. uFaces: where on the picture, and how big (0 = unused)
+    for (int i = 0; i < 8; i++) {
+      vec3 f = uFaces[i];
+      vec2 d = (uv - f.xy) * vec2(uAspect, 1.0);
+      if (f.z > 0.0 && dot(d, d) < f.z * f.z) {
+        vec2 cell = vec2(f.z / uAspect, f.z) * 0.3;
+        uv = f.xy + (floor((uv - f.xy) / cell) + 0.5) * cell;
+      }
+    }
+    vec2 fringe = lc * dot(lc, lc) * 0.0035 * uHelmet;      // a cheap lens splits colours toward the edges
+    vec3 col = vec3(texture2D(tScene, uv + fringe).r, texture2D(tScene, uv).g, texture2D(tScene, uv - fringe).b);
     float ao = 0.0;
     for (int x = 0; x < 4; x++) for (int y = 0; y < 4; y++) {
-      ao += texture2D(tAO, vUv + (vec2(float(x), float(y)) - 1.5) * uAoTexel).r;
+      ao += texture2D(tAO, uv + (vec2(float(x), float(y)) - 1.5) * uAoTexel).r;
     }
     ao /= 16.0;
     col *= mix(1.0, ao, 0.85);
-    col += texture2D(tBloom, vUv).rgb * 0.7;
+    col += texture2D(tBloom, uv).rgb * 0.7;
 
     float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
     col = mix(vec3(l), col, mix(1.06, 0.84, uHelmet));                       // helmet cam is flatter and colder
@@ -100,7 +114,8 @@ export class Post {
     this.blur.toneMapped = false;
     this.final = mat(FINAL_FRAG, {
       tScene: { value: this.target.texture }, tAO: { value: this.aoTarget.texture }, tBloom: { value: this.bloomA.texture },
-      uAoTexel: { value: new THREE.Vector2() }, uHelmet: { value: 0 },
+      uAoTexel: { value: new THREE.Vector2() }, uHelmet: { value: 0 }, uAspect: { value: 1 },
+      uFaces: { value: Array.from({ length: 8 }, () => new THREE.Vector3()) },
     });
 
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.final);
@@ -117,6 +132,7 @@ export class Post {
     this.bloomB.setSize(qw, qh);
     this.final.uniforms.uAoTexel.value.set(1 / hw, 1 / hh);
     this.bloomStep = [1 / qw, 1 / qh];
+    this.final.uniforms.uAspect.value = w / h;
   }
 
   pass(material, target) {

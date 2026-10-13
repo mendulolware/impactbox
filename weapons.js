@@ -5,7 +5,7 @@ import { getModel } from './models.js';
 // Number keys pick a group; pressing the same key again steps through the group.
 export const SLOTS = ['Sidearms', 'SMGs', 'Shotguns', 'Rifles', 'Heavy', 'Blades', 'Blunt', 'Gear'];
 
-// type: gun (hitscan) | rocket | flame | melee (a swing) | saw | knife (slice and stab) | grenade | grab
+// type: gun (hitscan) | rocket | drone (a flying bomb you steer from its own camera) | flame | melee (a swing) | saw | knife (slice and stab) | grenade | grab
 // Guns: pierce = how many bodies one round passes through, zoom = how far the view narrows when aimed,
 //   rec = [up, sideways] recoil per shot in radians (the view kicks, and part of it stays: bursts climb),
 //   drift = how much the sideways part leans one way, shell = spent cases hit the ground,
@@ -40,6 +40,7 @@ export const WEAPONS = [
   { name: 'Sledgehammer', slot: 6, type: 'melee', rate: 1.20, dmg: 24, impulse: 320, range: 1.7, blunt: true },
   { name: 'Grenade',  slot: 7, type: 'grenade', auto: false, rate: 0.7 },
   { name: 'Grab Gun', slot: 7, type: 'grab' },
+  { name: 'Drone',    slot: 7, type: 'drone', auto: false, rate: 1.0 },
 ];
 
 // How each weapon sits in first person, in the same order as WEAPONS. All positions are in the
@@ -97,6 +98,7 @@ const VIEW = [
   { model: 'Grenade', hip: [0.28, -0.3, -0.5], held: true },
   { model: 'GrabGun', hip: [0.21, -0.22, -0.45], muzzle: [0, 0.005, -0.37],
     handR: [0, -0.088, 0.1, -0.25], handL: [0, -0.045, -0.075, 0] },
+  { model: 'Grenade', hip: [0.28, -0.3, -0.5], held: true },      // shortcut: the drone is a grenade in the hand, give it its own model when someone builds one
 ];
 
 const SLEEVE_LEN = 0.3;                                    // length of the SleeveArm model
@@ -627,6 +629,20 @@ export class Weapons {
     }
   }
 
+  launchDrone() {
+    const ctx = this.ctx;
+    this.aim();
+    const d = ctx.spawnProp('rocket', _o.clone().addScaledVector(_d, 1.0));
+    d.drone = true;
+    d.mesh.visible = false;                       // you are looking out of it
+    d.launch(_d, 13);
+    d.body.setGravityScale(0, true);
+    d.life = 40;                                  // battery
+    ctx.drone = d;
+    sfx.tick();
+    ctx.toast('DRONE: MOUSE STEERS - SHIFT FAST - CLICK DETONATES');
+  }
+
   throwGrenade() {
     const ctx = this.ctx;
     this.aim();
@@ -752,7 +768,9 @@ export class Weapons {
     this.rig.visible = !scoped;
     document.body.classList.toggle('scoped', scoped);
 
-    if (w.type === 'knife') {
+    if (this.ctx.drone) {
+      if (input.leftDown) this.ctx.drone.life = 0;          // flying: the trigger sets it off
+    } else if (w.type === 'knife') {
       this.updateKnife(input, w);
     } else if (w.type === 'grab') {
       this.updateGrab(dt, input);
@@ -774,6 +792,7 @@ export class Weapons {
         else if (w.type === 'melee') this.fireMelee(w);
         else if (w.type === 'grenade') this.throwGrenade();
         else if (w.type === 'rocket') this.fireRocket(w);
+        else if (w.type === 'drone') this.launchDrone();
       }
     }
 

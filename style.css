@@ -57,9 +57,8 @@ body.helmet #cam { display: block; }
 @keyframes rec { to { visibility: hidden; } }
 #cam-id { position: absolute; right: 6%; top: 7%; opacity: .85; }
 #cam-time { position: absolute; right: 6%; bottom: 9%; }
-body.helmet #stats { left: 6%; top: 12%; opacity: .6; }
-body.helmet #help { opacity: .3; }
-body.helmet #weapon-bar { opacity: .55; }
+/* footage has no game on it: no counters, no bars */
+body.helmet #stats, body.helmet #help, body.helmet #weapon-bar, body.helmet #ammo, body.helmet #health { display: none; }
 body.helmet #slowmo { right: 6%; top: 12%; }
 
 /* ---- player health ---- */

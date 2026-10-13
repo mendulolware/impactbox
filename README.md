@@ -18,7 +18,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | WASD / Shift / Space | move / sprint / jump |
 | LMB | fire / swing / throw / grab |
 | RMB | aim down the sights (guns); throw the held object (Grab Gun) |
-| V | helmet cam on/off |
+| V | bodycam on/off |
 | G | graphics: high / fast (turns the effects off on slow machines) |
 | 1-8 or wheel | pick a weapon group; press the same number again for the next weapon in it (table under Weapons) |
 | R / F / B | reload / clear a jam / switch auto and semi |
@@ -139,7 +139,7 @@ Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted aft
   gripping hand for a two-handed pistol hold, and `KnifeHand` holds the knife, with a sleeve running back out of view.
   They all come from one hand builder (`models/hands.py`) that is given finger joint angles. Placements live in the `VIEW` table in `weapons.js`.
 - **Aiming:** right mouse moves the weapon so its sight line (`sight` in `VIEW`) sits on the screen centre, narrows the field of view, tightens spread and slows you down. Guns have real rear notches and front posts.
-- **Helmet cam (V):** wide field of view with a light colour grade and corner darkening in `main.js` (no fisheye, no grain), a camera that lags slightly behind your aim, heavier head bob and a REC overlay. Aiming in this view shoulders the weapon below the camera instead of putting the sights on screen, as in real helmet footage; shots leave from eye level along the weapon.
+- **Bodycam (V):** wide field of view through a bent lens (fisheye, colour fringes toward the edges, corner darkening: the last pass in `post.js`), no HUD at all (no crosshair, ammo, health or weapon bar), the nearest eight visible faces blocked out in pixels like released footage (`blockFaces()` in `main.js` hands their screen positions to the shader), a camera that lags slightly behind your aim, heavier head bob and a REC overlay. Aiming in this view shoulders the weapon below the camera instead of putting the sights on screen, as in real helmet footage; shots leave from eye level along the weapon.
 
 ## Graphics
 
@@ -161,7 +161,7 @@ Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of
 | 5 | Heavy | Rocket, Minigun, Flamethrower |
 | 6 | Blades | Knife, Machete, Katana, Axe, Chainsaw |
 | 7 | Blunt | Bat, Crowbar, Sledgehammer |
-| 8 | Gear | Grenade, Grab Gun |
+| 8 | Gear | Grenade, Grab Gun, Drone (flies where you look from its own camera, Shift = fast, click or a crash sets it off; it is a slow steered rocket, `flyDrone()` in `main.js`) |
 
 - **Recoil.** Every gun has `rec: [up, sideways]` in radians per shot. `Player.recoil()` turns most of that into a kick the
   view springs back from, and leaves the rest where it landed, so a burst climbs and has to be pulled back down. Sustained

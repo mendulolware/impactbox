@@ -136,6 +136,7 @@ export class Prop {
       this.remove();
       return true;
     }
+    if (this.drone) return false;
     for (let i = 0; i < 2; i++) {
       const g = rnd(0.3, 0.5);
       gore.smoke.emit(t.x - d.x * 0.2, t.y - d.y * 0.2, t.z - d.z * 0.2, rnd(-0.4, 0.4), rnd(0, 0.6), rnd(-0.4, 0.4),
