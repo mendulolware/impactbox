@@ -18,6 +18,7 @@ import { Brain } from './brain.js';
 // goes to a gut wound, wounds drip and leave a trail, blood loss ends in a collapse, and someone who
 // cannot stand drags themselves along the ground. Hard landings break things too.
 
+const VOICES = false;        // NPC screams, grunts, death cries and zombie growls: switched off (set true to bring them back)
 const UP = new THREE.Vector3(0, 1, 0);
 const rnd = (a, b) => a + Math.random() * (b - a);
 const clamp = THREE.MathUtils.clamp;
@@ -453,7 +454,7 @@ export class Ragdoll {
 
   /** Make a noise: 'grunt' | 'scream' | 'deathcry' | 'growl'. Quieter with distance; `gap` = seconds before the next. */
   cry(kind, gap = 0.5) {
-    if (this.t < this.voiceT || this.parts.head.gone || this.severed.has('head')) return;
+    if (!VOICES || this.t < this.voiceT || this.parts.head.gone || this.severed.has('head')) return;
     this.voiceT = this.t + gap;
     const d = this.center(_c).distanceTo(this.ctx.player.pos);
     this.ctx.sfx[kind](1 / (1 + d * d / 60), this.voice);
