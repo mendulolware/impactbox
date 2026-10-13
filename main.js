@@ -97,6 +97,15 @@ ctx.raycast = (origin, dir, maxT = 200) => {
   return world.castRayAndGetNormal(ray, maxT, true, undefined, undefined, ctx.player.collider);
 };
 
+/** A round has gone into `collider` at `point`: where it comes out the far side, or null if there is more than `pen` metres of it. */
+ctx.exitPoint = (collider, point, dir, pen) => {
+  const reach = pen + 0.02;
+  const o = { x: point.x + dir.x * reach, y: point.y + dir.y * reach, z: point.z + dir.z * reach };
+  const toi = collider.castRay(new RAPIER.Ray(o, { x: -dir.x, y: -dir.y, z: -dir.z }), reach, true);   // 0 = that far in is still inside it
+  if (!(toi > 0) || reach - toi < 0.01) return null;
+  return new THREE.Vector3(o.x - dir.x * (toi - 0.01), o.y - dir.y * (toi - 0.01), o.z - dir.z * (toi - 0.01));
+};
+
 ctx.applyHit = (hit, point, dir, dmg, impulse, opts = {}) => {
   const owner = ctx.owners.get(hit.collider.handle);
   if (owner?.kind === 'part') {

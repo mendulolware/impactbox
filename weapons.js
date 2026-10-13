@@ -12,23 +12,24 @@ export const SLOTS = ['Sidearms', 'SMGs', 'Shotguns', 'Rifles', 'Heavy', 'Blades
 //   mag = rounds it holds, reload = seconds to refill it (R), shells = loaded one at a time (reload is per shell,
 //   and firing interrupts it), selfLoad = reloads itself when empty, jam = chance per shot that the action
 //   stops (F clears it). Automatic guns switch between auto and single shots with B.
+//   pen = metres of wall, door or crate a round goes through (and whether body armour stops it),
 //   spin = seconds of wind-up, bolt = leaves a bolt where it hits,
 //   quiet = nobody hears it.
 // Melee is weak on purpose: a hit staggers, it takes several to bring someone down, and a limb only
 // comes off once its health is gone. blunt = breaks instead of cuts.
 export const WEAPONS = [
   { name: 'Pistol',   slot: 0, type: 'gun', auto: false, rate: 0.20,  dmg: 34,  impulse: 140, pellets: 1,  spread: 0.003, sound: 'pistol',   kick: 0.07,  hole: 0.034, rec: [0.020, 0.006], shell: true, mag: 17, reload: 1.5, jam: 0.004 },
-  { name: 'Revolver', slot: 0, type: 'gun', auto: false, rate: 0.50,  dmg: 70,  impulse: 260, pellets: 1,  spread: 0.002, sound: 'revolver', kick: 0.17,  hole: 0.046, rec: [0.055, 0.012], mag: 6, reload: 2.6 },
+  { name: 'Revolver', slot: 0, type: 'gun', auto: false, rate: 0.50,  dmg: 70,  impulse: 260, pellets: 1,  spread: 0.002, sound: 'revolver', kick: 0.17,  hole: 0.046, rec: [0.055, 0.012], mag: 6, reload: 2.6, pen: 0.2 },
   { name: 'SMG',      slot: 1, type: 'gun', auto: true,  rate: 0.055, dmg: 11,  impulse: 60,  pellets: 1,  spread: 0.020, sound: 'smg',      kick: 0.022, hole: 0.022, rec: [0.0075, 0.004], shell: true, mag: 30, reload: 1.9, jam: 0.007 },
   { name: 'Uzi',      slot: 1, type: 'gun', auto: true,  rate: 0.048, dmg: 9,   impulse: 50,  pellets: 1,  spread: 0.034, sound: 'uzi',      kick: 0.026, hole: 0.022, rec: [0.0095, 0.0065], shell: true, mag: 32, reload: 1.8, jam: 0.011 },
   { name: 'Shotgun',  slot: 2, type: 'gun', auto: false, rate: 0.85,  dmg: 15,  impulse: 110, pellets: 10, spread: 0.055, sound: 'shotgun',  kick: 0.16,  hole: 0.027, rec: [0.065, 0.015], shell: true, mag: 6, reload: 0.5, shells: true, jam: 0.006 },
   { name: 'Double Barrel', slot: 2, type: 'gun', auto: false, rate: 0.22, dmg: 16, impulse: 120, pellets: 12, spread: 0.075, sound: 'dbarrel', kick: 0.2, hole: 0.028, mag: 2, reload: 1.5, selfLoad: true, rec: [0.085, 0.02] },
-  { name: 'Rifle',    slot: 3, type: 'gun', auto: true,  rate: 0.075, dmg: 17,  impulse: 95,  pellets: 1,  spread: 0.010, sound: 'rifle',    kick: 0.035, hole: 0.03, rec: [0.015, 0.007], drift: 0.25, shell: true, mag: 30, reload: 2.2, jam: 0.004 },
-  { name: 'AR-15',    slot: 3, type: 'gun', auto: true,  rate: 0.072, dmg: 15,  impulse: 80,  pellets: 1,  spread: 0.006, sound: 'ar15',     kick: 0.03,  hole: 0.027, rec: [0.011, 0.0045], shell: true, mag: 30, reload: 2.0, jam: 0.008 },
-  { name: 'Sniper',   slot: 3, type: 'gun', auto: false, rate: 1.30,  dmg: 150, impulse: 420, pellets: 1,  spread: 0,     sound: 'sniper',   kick: 0.22,  hole: 0.05, pierce: 3, zoom: 0.82, rec: [0.085, 0.01], shell: true, mag: 5, reload: 2.8 },
+  { name: 'Rifle',    slot: 3, type: 'gun', auto: true,  rate: 0.075, dmg: 17,  impulse: 95,  pellets: 1,  spread: 0.010, sound: 'rifle',    kick: 0.035, hole: 0.03, rec: [0.015, 0.007], drift: 0.25, shell: true, mag: 30, reload: 2.2, jam: 0.004, pen: 0.35 },
+  { name: 'AR-15',    slot: 3, type: 'gun', auto: true,  rate: 0.072, dmg: 15,  impulse: 80,  pellets: 1,  spread: 0.006, sound: 'ar15',     kick: 0.03,  hole: 0.027, rec: [0.011, 0.0045], shell: true, mag: 30, reload: 2.0, jam: 0.008, pen: 0.3 },
+  { name: 'Sniper',   slot: 3, type: 'gun', auto: false, rate: 1.30,  dmg: 150, impulse: 420, pellets: 1,  spread: 0,     sound: 'sniper',   kick: 0.22,  hole: 0.05, pierce: 3, zoom: 0.82, rec: [0.085, 0.01], shell: true, mag: 5, reload: 2.8, pen: 0.7 },
   { name: 'Crossbow', slot: 3, type: 'gun', auto: false, rate: 1.25,  dmg: 85,  impulse: 180, pellets: 1,  spread: 0.001, sound: 'twang',    kick: 0.05,  hole: 0.02, bolt: true, quiet: true, zoom: 0.45, rec: [0.01, 0.002], mag: 1, reload: 1.1, selfLoad: true },
   { name: 'Rocket',   slot: 4, type: 'rocket', auto: false, rate: 0.3, sound: 'rocket', kick: 0.13, mag: 1, reload: 1.4, selfLoad: true },
-  { name: 'Minigun',  slot: 4, type: 'gun', auto: true,  rate: 0.028, dmg: 12,  impulse: 70,  pellets: 1,  spread: 0.030, sound: 'minigun',  kick: 0.018, hole: 0.026, spin: 0.7, hipOnly: true, rec: [0.0045, 0.004], shell: true, mag: 200, reload: 4.5, jam: 0.002 },
+  { name: 'Minigun',  slot: 4, type: 'gun', auto: true,  rate: 0.028, dmg: 12,  impulse: 70,  pellets: 1,  spread: 0.030, sound: 'minigun',  kick: 0.018, hole: 0.026, spin: 0.7, hipOnly: true, rec: [0.0045, 0.004], shell: true, mag: 200, reload: 4.5, jam: 0.002, pen: 0.3 },
   { name: 'Flamethrower', slot: 4, type: 'flame', range: 7.5, dmg: 5, heat: 0.13, mag: 100, reload: 3.0 },
   { name: 'Knife',    slot: 5, type: 'knife', slice: { rate: 0.32, dmg: 8, impulse: 15, range: 1.9 }, stab: { rate: 0.55, dmg: 16, impulse: 25, range: 1.8 } },
   { name: 'Machete',  slot: 5, type: 'melee', rate: 0.60, dmg: 14, impulse: 60,  range: 1.7 },
@@ -460,18 +461,37 @@ export class Weapons {
         .addScaledVector(right, (Math.random() - 0.5) * 2 * spread)
         .addScaledVector(up, (Math.random() - 0.5) * 2 * spread)
         .normalize();
-      // a round stops at the first thing it hits, unless the weapon pierces bodies
-      let from = origin, end = null;
-      for (let left = w.pierce || 1; left > 0; left--) {
+      // a round carries on: through bodies if the weapon pierces, out the back of anything thinner than it can
+      // punch through (pen, metres), or skipping off a surface it only grazes. Each of those costs it some force.
+      const pen = w.pen ?? (w.pellets > 1 ? 0.03 : 0.1);
+      let from = origin, end = null, first = null, dmg = w.dmg, bodies = w.pierce || 1;
+      for (let leg = 0; leg < 5; leg++) {
         const hit = ctx.raycast(from, d, 300);
         if (!hit) { end = from.clone().addScaledVector(d, 120); break; }
         end = from.clone().addScaledVector(d, hit.timeOfImpact);
-        ctx.applyHit(hit, end, d, w.dmg, w.impulse, w.bolt ? { hole: w.hole, stab: true } : { hole: w.hole });
+        ctx.applyHit(hit, end, d, dmg, w.impulse * dmg / w.dmg, w.bolt ? { hole: w.hole, stab: true } : { hole: w.hole, pen });
         if (w.bolt) { this.stickBolt(hit, end, d); break; }
-        if (ctx.owners.get(hit.collider.handle)?.kind !== 'part') break; // walls and props stop it
-        from = end.clone().addScaledVector(d, 0.45);
+        first ??= end;
+        if (ctx.owners.get(hit.collider.handle)?.kind === 'part') {
+          if (--bodies <= 0) break;
+          from = end.clone().addScaledVector(d, 0.45);
+          continue;
+        }
+        const n = hit.normal, graze = -(d.x * n.x + d.y * n.y + d.z * n.z);
+        if (graze < 0.22 && Math.random() < 0.6) {                 // ricochet
+          d.set(d.x + 2 * graze * n.x, d.y + 2 * graze * n.y, d.z + 2 * graze * n.z).normalize();
+          from = end.clone().addScaledVector(d, 0.02);
+          dmg *= 0.5;
+          continue;
+        }
+        const out = ctx.exitPoint(hit.collider, end, d, pen);
+        if (!out) break;
+        ctx.gore.bulletHole(out, d);
+        ctx.gore.sparks(out, d, 3);
+        from = out;
+        dmg *= 0.6;
       }
-      if (!w.bolt && (i < 3 || w.pellets === 1)) this.tracer(muzzle, end);
+      if (!w.bolt && (i < 3 || w.pellets === 1)) this.tracer(muzzle, first || end);
     }
     sfx[w.sound]();
     if (w.shell && (!w.auto || Math.random() < 0.5)) sfx.shell();

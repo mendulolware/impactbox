@@ -82,7 +82,7 @@ const MODEL_OF = {
 const REST = { spine: 0, neck: 0, shoulderL: 0.25, shoulderR: 0.25, elbowL: 0.45, elbowR: 0.45, hipL: 0.2, hipR: 0.2, kneeL: -0.35, kneeR: -0.35 };
 const BRACE = { spine: -0.3, neck: -0.35, shoulderL: 1.35, shoulderR: 1.35, elbowL: 0.6, elbowR: 0.6, hipL: 0.7, hipR: 0.7, kneeL: -1.0, kneeR: -1.0 };
 const TWIST = { spine: 0.5, neck: 0.9, shoulderL: 1.2, shoulderR: 1.2, hipL: 0.7, hipR: 0.7 };
-const FLINCH = 0.45, PUNCH = 0.35, LUNGE = 0.5;
+const FLINCH = 0.45, PUNCH = 0.35, LUNGE = 0.5, STUMBLE = 0.9;
 
 const PARENT = {};
 const JOINT_OF = {};
@@ -237,6 +237,8 @@ export class Ragdoll {
     const people = looks();
     this.model = people.length ? people[(Math.random() * people.length) | 0] : 'Body';
     this.real = this.model !== 'Body';
+    this.armour = this.model === 'Ch15' ? 120 : 0;   // the soldier's vest and helmet: how much more they can take
+    this.stumbleT = 0;
     this.skinned = !!bodyPieces('pelvis', this.model);
     const tint = this.real ? {} : this.skinned
       ? {
@@ -437,6 +439,7 @@ export class Ragdoll {
   /** Drop into physics for at least `seconds`. Safe to call repeatedly. */
   goLimp(seconds = 1.5) {
     this.stun = Math.max(this.stun, seconds);
+    this.stumbleT = 0;
     if (this.mode !== 'ragdoll') {
       this.setMode('ragdoll');
       this.speed = 0;
@@ -477,6 +480,14 @@ export class Ragdoll {
     if (!p || p.gone) return;
     const { gore, sfx } = this.ctx;
     this.impactMute = Math.max(this.impactMute, 0.35);   // being shot is not a fall
+    if (dmg > 0 && this.armour > 0 && (name === 'torso' || name === 'head') && opts.pen !== undefined && opts.pen < 0.25) {
+      // pistol-weight rounds stop in the vest or the helmet: a thump and a bruise, no hole. Plates only take so much
+      this.armour -= dmg;
+      gore.sparks(point, new THREE.Vector3(-dir.x, -dir.y, -dir.z), 4);
+      sfx.impact();
+      dmg *= 0.2;
+      opts = { ...opts, blunt: true };
+    }
     if (dmg > 0 || opts.explosion) this.split();
 
     // Light hits stagger a standing NPC; legs, heads, blades, blasts, repeated hits and low
@@ -488,7 +499,14 @@ export class Ragdoll {
     const melee = opts.melee || opts.blunt || (opts.blade && opts.light);
     const heavy = (opts.blade && !opts.light) || opts.explosion || (!melee && (name === 'head' || LEGS.has(name)))
       || this.hitAccum > (zombie ? 480 : 250) || (!zombie && this.health - dmg < 40);
-    if (standing && !heavy && !this.dead) {
+    // not every hard hit is a fall: some reel backward with the legs going, and then either catch it or do not
+    const reel = standing && !this.dead && !zombie && !opts.explosion && !opts.blade && name !== 'head' && this.stumbleT <= 0
+      && this.health - dmg > 0 && Math.random() < (heavy ? 0.65 : !melee && dmg >= 15 ? 0.4 : 0);
+    if (reel) {
+      this.stumbleT = STUMBLE;
+      this.stumbleFall = LEGS.has(name) || Math.random() < (heavy ? 0.5 : 0.15);
+      this.flinchDir.set(dir.x, 0, dir.z).normalize();
+    } else if (standing && !heavy && !this.dead) {
       this.flinchT = FLINCH;
       this.flinchDir.set(dir.x, 0, dir.z).normalize();
       const pt = p.body.translation();
@@ -574,7 +592,7 @@ export class Ragdoll {
         _t.copy(dir).multiplyScalar(-0.4); _t.y += 0.3;
         gore.blood(point, _t, 5, 2.5, 0.8);                // a little comes back out the front
         gore.mist(point, dir, name === 'head' ? 7 : 4, name === 'head' ? 1.5 : 1);
-        gore.wallSplatter(point, dir, 4.5);
+        gore.wallSplatter(point, dir, 4.5 * Math.min(2, (opts.hole || 0.026) / 0.03));   // a bigger round carries more, further
       }
       if (big) this.gutShot = true;
       sfx.squish();
@@ -928,6 +946,17 @@ export class Ragdoll {
     shLx += 0.3 * lg; shRx += 0.3 * lg;
     spY += this.flinchSide * 0.45 * fl;
     nkX += 0.25 * fl;
+    // stumbling: bent back, arms thrown out for balance, feet scrabbling to get back under the body
+    if (this.stumbleT > 0) {
+      const k = 1 - this.stumbleT / STUMBLE, st = this.stumbleFall ? Math.min(1, k * 2.5) : Math.sin(Math.PI * k);
+      const f = Math.sin(t * 15);
+      hipL += 0.55 * st * f; hipR -= 0.55 * st * f;
+      kneeL -= st * (0.35 + 0.45 * Math.max(0, f)); kneeR -= st * (0.35 + 0.45 * Math.max(0, -f));
+      spX += 0.3 * st; nkX -= 0.15 * st; spZ += 0.12 * st * Math.sin(t * 7);
+      shLz += 0.8 * st; shRz -= 0.8 * st;
+      shLx += 0.5 * st * Math.sin(t * 9); shRx += 0.5 * st * Math.cos(t * 8);
+      elL += 0.4 * st; elR += 0.4 * st;
+    }
     // limping: the body tips over the bad leg while it carries the weight
     spZ += (lameR * Math.max(0, c) - lameL * Math.max(0, -c)) * 0.2 * w;
     spX -= 0.12 * Math.max(lameL, lameR) * w;
@@ -1022,9 +1051,10 @@ export class Ragdoll {
     this.punchT = Math.max(0, this.punchT - dt);
     this.lungeT = Math.max(0, this.lungeT - dt);
     this.hitAccum = Math.max(0, this.hitAccum - dt * 320);
+    if (this.stumbleT > 0 && (this.stumbleT -= dt) <= 0 && this.stumbleFall) { this.goLimp(1.4); return; }   // did not catch it
 
     // a hit stops you in your tracks; a bad leg or a hole in the gut slows you down
-    const want = this.flinchT > 0 ? 0 : this.wantSpeed * (1 - 0.5 * Math.max(this.lame.L, this.lame.R)) * (1 - 0.15 * this.clutch);
+    const want = this.flinchT > 0 || this.stumbleT > 0 ? 0 : this.wantSpeed * (1 - 0.5 * Math.max(this.lame.L, this.lame.R)) * (1 - 0.15 * this.clutch);
     this.speed += (want - this.speed) * Math.min(1, dt * 5);
     let dh = this.targetHeading - this.heading;
     dh = Math.atan2(Math.sin(dh), Math.cos(dh));
@@ -1036,6 +1066,10 @@ export class Ragdoll {
     let vx = _fwd.x * this.speed, vz = _fwd.z * this.speed;
     if (this.flinchT > 0) {
       const k = 1.5 * Math.sin(Math.PI * (1 - this.flinchT / FLINCH));
+      vx += this.flinchDir.x * k; vz += this.flinchDir.z * k;
+    }
+    if (this.stumbleT > 0) {
+      const k = 2.4 * this.stumbleT / STUMBLE;
       vx += this.flinchDir.x * k; vz += this.flinchDir.z * k;
     }
     if (Math.abs(vx) + Math.abs(vz) < 0.02) return;
