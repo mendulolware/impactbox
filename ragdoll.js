@@ -457,8 +457,8 @@ export class Ragdoll {
     if (cause !== 'headshot') { this.voiceT = 0; this.cry(this.kind === 'zombie' ? 'growl' : 'deathcry', 9); }   // (a head shot is over before any sound)
     this.dead = true;
     this.goLimp(1e9);
-    this.tone = Math.min(this.tone, cause === 'headshot' ? 0.05 : 0.2);   // nothing holds the body up any more: it drops
-    this.twitch = cause === 'headshot' ? 1.3 : 0.6;   // nerves fire for a moment after death
+    this.tone = Math.min(this.tone, 0.05);   // nothing holds the body up any more: it drops like a cut puppet
+    this.twitch = cause === 'headshot' ? 1.3 : 1.0;   // nerves fire for a moment after death
     this.ctx.onKill(this, cause);
     this.ctx.alert('death', this.center(_c), 16);
   }
@@ -501,7 +501,8 @@ export class Ragdoll {
     if (dmg > 0 && !this.dead) this.cry(zombie ? 'growl' : dmg > 25 || opts.explosion || opts.blade ? 'scream' : 'grunt');
 
     if (impulse > 0 && this.mode === 'ragdoll') {
-      _v.copy(dir).multiplyScalar(impulse);
+      // a body already off its feet has nothing to push back with: rounds throw it about
+      _v.copy(dir).multiplyScalar(impulse * (this.mode === 'ragdoll' && !opts.explosion ? 1.5 : 1));
       p.body.applyImpulseAtPoint({ x: _v.x, y: _v.y, z: _v.z }, point, true);
     }
 
@@ -841,6 +842,13 @@ export class Ragdoll {
     const s = Math.sin(this.phase), c = Math.cos(this.phase);
     const t = this.t;
     const breathe = Math.sin(t * 1.6 + this.seed);
+    const pv = this.seed / 10;                                // 0..1: everyone carries themselves a little differently
+    const idle = 1 - w;
+    const shift = Math.sin(t * 0.35 + this.seed) * idle;      // standing: weight moves slowly from one leg to the other
+    let turn = this.targetHeading - this.heading;             // about to turn: the head goes first, the body leans in
+    turn = clamp(Math.atan2(Math.sin(turn), Math.cos(turn)), -1, 1);
+    this.turnLean = (this.turnLean || 0) + (turn - (this.turnLean || 0)) * Math.min(1, dt * 5);
+    turn = this.turnLean;
 
     // gestures ease in and out; one-shot moves follow a half-sine
     const G = this.gw;
@@ -858,11 +866,18 @@ export class Ragdoll {
     const lameL = this.lame.L, lameR = this.lame.R;
 
     // ---- legs. +x swings a limb forward; knees only bend backward (negative)
-    const stride = mix(z ? 0.38 : 0.55, 0.95, run);
-    const lift = mix(0.95, 1.55, run);
-    let hipL = stride * s * w * (1 - 0.45 * lameL), hipR = -stride * s * w * (1 - 0.45 * lameR);
-    let kneeL = -(0.06 + lift * Math.max(0, c) * (1 - 0.65 * lameL)) * w - 0.03;       // a bad leg is swung stiff
-    let kneeR = -(0.06 + lift * Math.max(0, -c) * (1 - 0.65 * lameR)) * w - 0.03;
+    const stride = mix(z ? 0.38 : 0.55, 0.8, run) * (0.88 + 0.24 * pv);
+    const lift = mix(0.85, 1.55, run);
+    const trail = z ? 0.1 : mix(0.3, 0.8, run);              // the leg left behind bends as it pushes off
+    // a leg reaches further forward than it trails behind
+    let hipL = stride * (s + 0.2) * w * (1 - 0.45 * lameL), hipR = stride * (-s + 0.2) * w * (1 - 0.45 * lameR);
+    // knee: folds to swing the foot through, and gives a little as the heel takes the weight
+    const give = z ? 0.2 : mix(0.5, 0.9, run);
+    let kneeL = -(0.06 + lift * Math.max(0, c) * (1 - 0.65 * lameL) + give * Math.max(0, -c) * Math.max(0, s) + trail * Math.max(0, -s) + 0.15 * run) * w - 0.03;       // a bad leg is swung stiff
+    let kneeR = -(0.06 + lift * Math.max(0, -c) * (1 - 0.65 * lameR) + give * Math.max(0, c) * Math.max(0, -s) + trail * Math.max(0, s) + 0.15 * run) * w - 0.03;
+    // standing: the leg without the weight on it goes soft
+    hipL += 0.09 * Math.max(0, shift); kneeL -= 0.16 * Math.max(0, shift);
+    hipR += 0.09 * Math.max(0, -shift); kneeR -= 0.16 * Math.max(0, -shift);
     hipL = mix(hipL, 1.9, cw); hipR = mix(hipR, 1.9, cw);                 // squat right down
     kneeL = mix(kneeL, -2.3, cw); kneeR = mix(kneeR, -2.3, cw);
     hipL += 0.12 * ft; kneeL -= 0.25 * ft + 0.3 * fl;                    // fighting crouch / buckling
@@ -879,12 +894,17 @@ export class Ragdoll {
       shLz = 0.1; shRz = -0.1;
       elL = 0.15; elR = 0.3;
     } else {
-      const arm = mix(0.5, 0.95, run);
-      spX = -0.05 * w - 0.26 * run + 0.012 * breathe; spY = -0.12 * s * w;
-      nkX = 0.04 * w + 0.16 * run; nkY = 0.3 * Math.sin(t * 0.45 + this.seed) * (1 - w);
-      shLx = -arm * s * w + 0.03 * breathe; shRx = arm * s * w - 0.03 * breathe;
-      elL = 0.18 + 0.3 * w + 0.25 * Math.max(0, -s) * w + 1.1 * run;
-      elR = 0.18 + 0.3 * w + 0.25 * Math.max(0, s) * w + 1.1 * run;
+      const arm = mix(0.5, 0.95, run) * (0.8 + 0.4 * pv);
+      const sa = Math.sin(this.phase - 0.3);                  // the arms trail the legs a touch
+      spX = -0.05 * w - 0.26 * run + 0.012 * breathe - 0.07 * pv * idle; spY = -0.12 * s * w + 0.25 * turn;
+      spZ = 0.04 * c * w - 0.05 * shift;                      // shoulders counter the hips
+      nkX = 0.04 * w + 0.16 * run + 0.05 * pv * idle;
+      nkY = 0.3 * Math.sin(t * 0.45 + this.seed) * idle + 0.1 * s * w + 0.45 * turn;   // head held steady over the twisting trunk
+      shLx = -arm * sa * w + 0.03 * breathe + 0.04 * Math.sin(t * 0.7 + this.seed) * idle;
+      shRx = arm * sa * w - 0.03 * breathe - 0.04 * Math.sin(t * 0.6 + this.seed) * idle;
+      shLz += 0.04 * w; shRz -= 0.04 * w;
+      elL = 0.18 + 0.14 * pv + 0.3 * w + 0.3 * Math.max(0, -sa) * w + 1.1 * run;
+      elR = 0.18 + 0.14 * pv + 0.3 * w + 0.3 * Math.max(0, sa) * w + 1.1 * run;
     }
     // hands up: arms overhead in a V
     shLx = mix(shLx, 2.85, up); shRx = mix(shRx, 2.85, up);
@@ -940,8 +960,9 @@ export class Ragdoll {
     nkX += this.lookPitch;
 
     const L = (name, x, y = 0, zr = 0) => this.joints[name].local.setFromEuler(_e.set(x, y, zr, 'YXZ'));
-    L('hipL', hipL, 0, 0.02 + 0.05 * ft);
-    L('hipR', hipR, 0, -0.02 - 0.05 * ft);
+    const roll = 0.035 * c * w + (z ? 0.05 * s : 0) + 0.045 * shift + 0.1 * turn * w;   // hips drop to the swinging side, and lean into a turn
+    L('hipL', hipL, 0, 0.02 + 0.05 * ft - roll);            // (legs stay upright under tilted hips)
+    L('hipR', hipR, 0, -0.02 - 0.05 * ft - roll);
     L('kneeL', kneeL);
     L('kneeR', kneeR);
     L('spine', spX, spY, spZ);
@@ -953,7 +974,7 @@ export class Ragdoll {
 
     // forward kinematics from the pelvis, placed at the origin first
     const pel = this.pose.pelvis;
-    pel.q.setFromEuler(_e.set(0, this.heading + 0.1 * s * w, 0.035 * c * w + (z ? 0.05 * s : 0), 'YXZ'));
+    pel.q.setFromEuler(_e.set(-0.03 * w - 0.07 * run, this.heading + 0.1 * s * w, roll, 'YXZ'));
     pel.p.set(0, 0, 0);
     for (const j of JOINTS) {
       const jd = this.joints[j.name];
@@ -1086,7 +1107,7 @@ export class Ragdoll {
       hurt = !this.dead && !brace && (this.crippled || this.health <= 20 || this.bleedRate > 1);
       crawl = this.crawl(dt, brace);
       // the dead keep a trace of tone for a few seconds, then only joint friction is left
-      const want = this.dead ? (this.deadT > 3 ? 0 : 0.05) : brace ? 0.9 : crawl ? 0.6 : hurt ? 0.42 : 0.3;
+      const want = this.dead ? (this.deadT > 3 ? 0 : 0.05) : brace ? 0.6 : crawl ? 0.6 : hurt ? 0.3 : 0.18;   // loose: a body that is down is mostly dead weight
       this.tone += (want - this.tone) * Math.min(1, dt * (this.dead ? 1.5 : 6));
       tone = this.tone;
       wake = hurt || brace;     // the living keep moving; the dead are allowed to settle and sleep
