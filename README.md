@@ -236,6 +236,14 @@ Rules the game relies on: models are found by object name (`MODEL_OF` in `props.
 The build prints `ref`: the sight height, muzzle and hand positions of each gun, which go in the `VIEW` table.
 `viewer.html` shows any model on a turntable under the game's lighting.
 
+**Downloaded models.** Six guns are not built here but taken from the public-domain (CC0)
+[Free CC0 Guns & Explosives Pack](https://3dmodelscc0.itch.io/free-cc0-guns-explosives-pack) by 3dmodelscc0: Pistol (Makarov),
+SMG (M3 Grease Gun), Shotgun, Rifle (AK-47), AR-15 (M4A1) and Sniper. `models/import_guns.py` turns each to the game's
+convention, moves it so its trigger is where the built model's was (so the hands in `VIEW` still fit), shrinks the textures to
+1024 px and writes `assets/weapons.glb` (3 MB). `models.js` loads that file after `models.glb`, and anything in it replaces the
+built model of the same name; delete the file to go back to the built guns. The script prints each gun's muzzle and sight
+height for `VIEW`. To swap in another model, add a line to `GUNS` in that script.
+
 ## Tuning knobs
 
 - Body part HP and layout: `PARTS` at the top of `ragdoll.js`. Joint limits: `JOINTS`. Landing damage: `IMPACT` and `impact()`. Crawl strength: `CRAWL_PULL`.

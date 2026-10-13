@@ -69,6 +69,12 @@ function enhance(m) {
 }
 
 export async function loadModels(url = 'assets/models.glb') {
+  await loadFile(url);
+  // downloaded models (models/import_guns.py): anything in here replaces the built model of the same name
+  if (url === 'assets/models.glb') await loadFile('assets/weapons.glb');
+}
+
+async function loadFile(url) {
   try {
     const gltf = await new GLTFLoader().loadAsync(url);
     gltf.scene.traverse((o) => {
@@ -83,7 +89,7 @@ export async function loadModels(url = 'assets/models.glb') {
       library.set(node.name, node);
     }
   } catch (e) {
-    console.warn('[impactbox] could not load models, falling back to primitive shapes', e);
+    console.warn(`[impactbox] could not load ${url}`, e);
   }
 }
 
