@@ -4,7 +4,7 @@ import { getMaterial } from './models.js';
 // "Ready or Not" mode: you are a SWAT officer sent in to bring order to chaos.
 //
 // The map's people are split into armed suspects and civilians. The job is to account for every
-// one of them: suspects arrested (best) or neutralised, civilians secured. E does the talking and
+// one of them: suspects arrested (best) or neutralised, civilians secured. F does the talking and
 // the handcuffs: aimed at someone who has given up (or is down) within reach, it arrests them;
 // otherwise it shouts for compliance. Civilians obey. Suspects might, more so if hurt, shouted at
 // again, or looking down your barrel, and a few of those are only pretending.
@@ -57,7 +57,7 @@ export class Mission {
     if (sleeve && this.sleeve0 !== undefined) sleeve.color.setHex(this.sleeve0);
   }
 
-  /** E: cuff whoever is in front of you if they have given up or are down; otherwise shout. */
+  /** F: cuff whoever is in front of you if they have given up or are down; otherwise shout. */
   act() {
     if (!this.on || this.over) return;
     const ctx = this.ctx;
@@ -120,7 +120,7 @@ export class Mission {
     const done = (r) => r.dead || r.removed || r.arrested;
     const S = this.people.filter((r) => r.role === 'suspect'), C = this.people.filter((r) => r.role === 'civilian');
     const count = (list) => `${list.filter((r) => r.arrested && !r.dead).length} in custody, ${list.filter((r) => r.dead || r.removed).length} dead, ${list.filter((r) => !done(r)).length} left`;
-    this.el.textContent = `READY OR NOT\nSuspects   ${count(S)}\nCivilians  ${count(C)}\n[E] shout / arrest`;
+    this.el.textContent = `READY OR NOT\nSuspects   ${count(S)}\nCivilians  ${count(C)}\n[F] shout / arrest`;
     if (this.people.every(done)) this.finish('MISSION COMPLETE');
   }
 

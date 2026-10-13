@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { sfx } from './audio.js';
+import { sfx, deafen } from './audio.js';
 import { getModel } from './models.js';
 
 // Number keys pick a group; pressing the same key again steps through the group.
@@ -338,6 +338,21 @@ export class Weapons {
     this.reloadT = w.reload;
     this.ads = 0;
     sfx.reload();
+    if (w.type === 'gun' && w.shell && !w.shells && !w.spin) this.dropMag();
+  }
+
+  /** The old magazine falls out and stays where it lands (the last dozen do). */
+  dropMag() {
+    const ctx = this.ctx;
+    this.aim();
+    const p = _o.clone().addScaledVector(_d, 0.45).addScaledVector(_r, 0.16).addScaledVector(_u, -0.3);
+    const m = ctx.spawnProp('mag', p, ctx.player.yaw);
+    const v = ctx.player.vel;
+    m.body.setLinvel({ x: v.x + _d.x * 0.6, y: -1.2, z: v.z + _d.z * 0.6 }, true);
+    m.body.setAngvel({ x: rnd(-4, 4), y: rnd(-2, 2), z: rnd(-4, 4) }, true);
+    this.mags = (this.mags || []).filter((o) => !o.removed);
+    this.mags.push(m);
+    if (this.mags.length > 12) this.mags.shift().remove();
   }
 
   /** F: rack the action to clear a jam. Costs the round that was stuck. */
@@ -498,6 +513,7 @@ export class Weapons {
     this.kick = w.kick;
     this.kickSide = (Math.random() - 0.5) * 2 * w.kick;
     if (!w.quiet) {
+      deafen(0.04 + w.kick * 0.5, true);
       ctx.alert('shot', ctx.player.pos, 40);
       this.muzzle.position.copy(muzzle);
       this.muzzle.intensity = 30;

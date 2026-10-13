@@ -676,6 +676,7 @@ export class Ragdoll {
     this.ctx.weapons.tracer(from, to);
     this.ctx.sfx.pistol();
     if (hit) pl.hurt(rnd(14, 24), this.root);
+    else { pl.suppress = Math.min(1, pl.suppress + 0.45); this.ctx.sfx.impact(); }   // the crack of one going past
   }
 
   /** An open wound: it drips, and costs health until it clots (limbs) or kills (body wounds). */

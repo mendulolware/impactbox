@@ -20,6 +20,7 @@ const TYPES = {
   car:       { label: 'Car',              icon: '🚗', shape: 'box', half: [0.92, 0.66, 2.14], color: 0x2a5a9a, density: 145, hp: 380, rest: 0.05, explosive: true, blast: [9, 1.5] },
   block:     { label: 'Heavy Block',      icon: '🧱', shape: 'box', half: [0.5, 0.5, 0.5], color: 0x6f7378, density: 1600, hp: Infinity, rest: 0.05 },
   plank:     { label: 'Plank',            icon: '🪵', shape: 'box', half: [1.1, 0.05, 0.14], color: 0xc9a066, density: 300, hp: Infinity, rest: 0.1 },
+  mag:       { label: 'Magazine',         icon: '', shape: 'box', half: [0.014, 0.06, 0.03], color: 0x1b1b1d, density: 2500, hp: Infinity, rest: 0.25 },
   rocket:    { label: 'Rocket',           icon: '🚀', shape: 'ball', r: 0.06, color: 0x4a5a3a, density: 400, hp: Infinity, rest: 0 },
   grenade:   { label: 'Grenade',          icon: '💣', shape: 'ball', r: 0.07, color: 0x2e4a2e, density: 5200, hp: Infinity, rest: 0.3, fuse: 2.4 },
 };

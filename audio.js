@@ -8,7 +8,8 @@
 //   shot()             a synthetic gunshot (only heard if a recording has not loaded)
 //   the echo           one generated impulse response; setSpace() says how much of it a place has
 //   the ambience       a quiet bed of wind, room hum or city, per map
-let ac = null, master = null, wetIn = null, wetOut = null, noiseBuf = null;
+let ac = null, master = null, wetIn = null, wetOut = null, noiseBuf = null, ears = null, comp = null;
+let deaf = 0, deafAt = 0;
 let space = 'yard', bed = null;
 
 // recordings: name -> how many takes there are (files are assets/sounds/<name>_<n>.mp3)
@@ -53,22 +54,25 @@ function play(name, { gain = 1, rate = 1, send = 0, delay = 0, jitter = 0.04 } =
 // how much echo each place has, and what it sounds like when nothing is happening
 const SPACES = {
   yard:      { wet: 0.28, bed: 'wind' },
-  warehouse: { wet: 0.6,  bed: 'hum' },
+  warehouse: { wet: 0.6,  bed: 'hum', indoor: 1 },
   rooftops:  { wet: 0.16, bed: 'gale' },
   street:    { wet: 0.42, bed: 'city' },
-  killhouse: { wet: 0.22, bed: 'wind' },
+  killhouse: { wet: 0.22, bed: 'wind', indoor: 0.7 },
 };
 
 export function initAudio() {
   try {
     if (!ac) {
       ac = new (window.AudioContext || window.webkitAudioContext)();
-      const comp = ac.createDynamicsCompressor();          // keeps a minigun from being louder than a pistol
+      comp = ac.createDynamicsCompressor();          // keeps a minigun from being louder than a pistol
       comp.threshold.value = -14; comp.ratio.value = 6; comp.attack.value = 0.002; comp.release.value = 0.18;
       comp.connect(ac.destination);
       master = ac.createGain();
       master.gain.value = 0.5;
-      master.connect(comp);
+      ears = ac.createBiquadFilter();                      // everything is heard through these (see deafen)
+      ears.type = 'lowpass'; ears.frequency.value = 20000;
+      ears.connect(comp);
+      master.connect(ears);
       const len = ac.sampleRate;
       noiseBuf = ac.createBuffer(1, len, ac.sampleRate);
       const d = noiseBuf.getChannelData(0);
@@ -94,12 +98,37 @@ export function initAudio() {
       conv.buffer = ir;
       wetIn = ac.createGain();
       wetOut = ac.createGain();
-      wetIn.connect(conv); conv.connect(wetOut); wetOut.connect(comp);
+      wetIn.connect(conv); conv.connect(wetOut); wetOut.connect(ears);
       setSpace(space);
       loadClips();
     }
     if (ac.state === 'suspended') ac.resume();
   } catch (e) { /* audio is optional */ }
+}
+
+/**
+ * A blast, or gunfire in a closed room: the world goes dull and the ears ring, then both come back over a few seconds.
+ * amount 0..1; it adds up. indoorsOnly = only counts where the walls throw the sound back (shooting).
+ */
+export function deafen(amount, indoorsOnly = false) {
+  if (!ac) return;
+  if (indoorsOnly) amount *= (SPACES[space] || SPACES.yard).indoor || 0;
+  if (amount < 0.01) return;
+  const now = ac.currentTime;
+  deaf = Math.min(1, deaf * Math.exp(-(now - deafAt) / 1.5) + amount);
+  deafAt = now;
+  const back = 1.5 + 4 * deaf;
+  ears.frequency.cancelScheduledValues(now);
+  ears.frequency.setValueAtTime(20000 * Math.pow(0.02, deaf), now);        // 1 = down to 400 Hz
+  ears.frequency.exponentialRampToValueAtTime(20000, now + back);
+  if (deaf > 0.3) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.value = 4100;
+    g.gain.setValueAtTime(0.07 * deaf, now);
+    g.gain.exponentialRampToValueAtTime(0.0005, now + back);
+    o.connect(g); g.connect(comp);
+    o.start(now); o.stop(now + back);
+  }
 }
 
 /** Which map we are in: sets the echo and the background. Safe to call before the audio exists. */

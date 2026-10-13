@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { initAudio, sfx, setSpace } from './audio.js';
+import { initAudio, sfx, setSpace, deafen } from './audio.js';
 import { Gore } from './gore.js';
 import { Ragdoll, selfCollide } from './ragdoll.js';
 import { tickWounds } from './wounds.js';
@@ -147,6 +147,7 @@ const _d = new THREE.Vector3();
 ctx.explode = (p, radius = 7, power = 1) => {
   ctx.gore.explosion(p, radius);
   sfx.explosion();
+  deafen(1.1 - ctx.player.eye.distanceTo(p) / (radius * 3));
   ctx.alert('explosion', p, 45);
   const center = new THREE.Vector3(p.x, p.y, p.z);
 
@@ -459,7 +460,7 @@ document.addEventListener('wheel', (e) => { if (gameActive()) input.wheel += Mat
 
 document.addEventListener('keydown', (e) => {
   if (e.repeat) return;
-  if (e.code === 'KeyQ' || e.code === 'Tab') {
+  if (e.code === 'Tab') {
     if (started || ctx.menuOpen) { e.preventDefault(); setMenu(!ctx.menuOpen); }
     return;
   }
@@ -473,10 +474,9 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyT') toggleSlowmo();
   if (e.code === 'KeyV') toggleHelmet();
   if (e.code === 'KeyG') toggleGraphics();
-  if (e.code === 'KeyE') ctx.mission.act();
   if (e.code === 'Enter' && ctx.mission.over) ctx.mission.start();
   if (e.code === 'KeyR') ctx.weapons.reload();
-  if (e.code === 'KeyF') ctx.weapons.unjam();
+  if (e.code === 'KeyF') { ctx.weapons.unjam(); ctx.mission.act(); }
   if (e.code === 'KeyB') ctx.weapons.toggleMode();
   if (e.code === 'KeyX') deleteTarget();
   if (e.code === 'KeyC') { clearAll(); toast('CLEARED'); }
@@ -656,6 +656,7 @@ function tick(now) {
   }
   ctx.sky.material.uniforms.uTime.value = now / 1000;   // clouds drift
   blockFaces();
+  post.final.uniforms.uSupp.value = ctx.player.suppress;
   post.render(scene, camera, ctx.helmet);
 }
 

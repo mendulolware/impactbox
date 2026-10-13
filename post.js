@@ -59,7 +59,7 @@ const BLUR_FRAG = `
 
 const FINAL_FRAG = `
   uniform sampler2D tScene; uniform sampler2D tAO; uniform sampler2D tBloom;
-  uniform vec2 uAoTexel; uniform float uHelmet; uniform float uAspect; uniform vec3 uFaces[8]; varying vec2 vUv;
+  uniform vec2 uAoTexel; uniform float uHelmet; uniform float uAspect; uniform float uSupp; uniform vec3 uFaces[8]; varying vec2 vUv;
   void main() {
     // bodycam lens: the middle of the picture is magnified and the edges squeezed in (corners stay put)
     vec2 lc = vUv * 2.0 - 1.0;
@@ -85,10 +85,11 @@ const FINAL_FRAG = `
     col += texture2D(tBloom, uv).rgb * 0.7;
 
     float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
-    col = mix(vec3(l), col, mix(1.06, 0.84, uHelmet));                       // helmet cam is flatter and colder
+    col = mix(vec3(l), col, mix(1.06, 0.84, uHelmet) * (1.0 - 0.6 * uSupp));   // under fire the colour drains and the edges close in                       // helmet cam is flatter and colder
     col *= mix(vec3(1.0), vec3(0.98, 1.0, 1.03) * 1.06, uHelmet);
     vec2 v = vUv * 2.0 - 1.0;
-    col *= mix(1.0, mix(0.8, 0.5, uHelmet), smoothstep(0.55, 1.55, length(v)));  // darker toward the corners
+    col *= mix(1.0, mix(0.8, 0.5, uHelmet), smoothstep(0.55, 1.55, length(v)));
+    col *= 1.0 - 0.8 * uSupp * smoothstep(0.2, 1.2, length(v));  // darker toward the corners
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -114,7 +115,7 @@ export class Post {
     this.blur.toneMapped = false;
     this.final = mat(FINAL_FRAG, {
       tScene: { value: this.target.texture }, tAO: { value: this.aoTarget.texture }, tBloom: { value: this.bloomA.texture },
-      uAoTexel: { value: new THREE.Vector2() }, uHelmet: { value: 0 }, uAspect: { value: 1 },
+      uAoTexel: { value: new THREE.Vector2() }, uHelmet: { value: 0 }, uAspect: { value: 1 }, uSupp: { value: 0 },
       uFaces: { value: Array.from({ length: 8 }, () => new THREE.Vector3()) },
     });
 

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 
 const EYE = 0.7;          // eye offset above capsule centre
+const LEAN = 0.42;        // how far the head goes out to the side
 const HELMET_UP = 0.1;    // the helmet camera sits a little above the eyes
 const FOV = 75, FOV_HELMET = 98;
 
@@ -33,6 +34,8 @@ export class Player {
     this.camYaw = 0;          // where the camera is looking (lags behind in helmet cam)
     this.camPitch = 0;
     this.aimOff = { yaw: 0, pitch: 0 };       // aim minus camera: the weapon rig turns by this
+    this.lean = 0;            // -1 left .. 1 right (Q / E)
+    this.suppress = 0;        // rounds going past: 0..1
     this.aimQuat = new THREE.Quaternion();    // true aim direction, used for shooting
     this.kickPitch = 0;       // recoil: how far the view is kicked off the aim right now...
     this.kickYaw = 0;
@@ -166,6 +169,15 @@ export class Player {
     this.recW += (-169 * this.kickYaw - 26 * this.recW) * h;
     this.kickYaw += this.recW * h;
     this.shake *= Math.max(0, 1 - rdt * 7);
+    this.suppress *= Math.max(0, 1 - rdt * 0.9);
+    // leaning out to one side: as far as there is room for the head
+    let lean = enabled ? (k.has('KeyE') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0) : 0;
+    if (lean) {
+      const side = { x: Math.cos(this.yaw) * lean, y: 0, z: -Math.sin(this.yaw) * lean };
+      const wall = this.ctx.raycast({ x: this.pos.x, y: this.pos.y + EYE, z: this.pos.z }, side, LEAN + 0.25);
+      if (wall) lean *= Math.max(0, wall.timeOfImpact - 0.25) / LEAN;
+    }
+    this.lean += (lean - this.lean) * Math.min(1, rdt * 9);
 
     // ---- camera
     const aimPitch = this.pitch + this.kickPitch, aimYaw = this.yaw + this.kickYaw;
@@ -191,7 +203,7 @@ export class Player {
     const bobAmp = (helmet ? 0.05 : 0.025) * steady * (this.grounded ? 1 : 0);
     // helmet cam: head sways with each step, and tips toward the stock when the weapon is shouldered
     const roll = helmet ? Math.sin(this.bob) * 0.014 * steady * (moving ? 1 : 0) - 0.05 * ads : 0;
-    const sh = helmet ? this.shake * 0.02 : this.shake * 0.004;
+    const sh = (helmet ? this.shake * 0.02 : this.shake * 0.004) + this.suppress * 0.012;
 
     // dead: the view slumps to the floor and tips over
     const slump = this.dead ? Math.min(1, this.deadT / 0.7) : 0;
@@ -199,14 +211,14 @@ export class Player {
 
     const cam = this.ctx.camera;
     cam.position.set(
-      this.pos.x,
-      this.pos.y + (EYE + (helmet ? HELMET_UP : 0)) * (1 - fall) - 0.6 * fall + Math.sin(this.bob * 2) * bobAmp,
-      this.pos.z
+      this.pos.x + Math.cos(this.yaw) * this.lean * LEAN,
+      this.pos.y + (EYE + (helmet ? HELMET_UP : 0)) * (1 - fall) - 0.6 * fall + Math.sin(this.bob * 2) * bobAmp - 0.06 * Math.abs(this.lean),
+      this.pos.z - Math.sin(this.yaw) * this.lean * LEAN
     );
     cam.rotation.set(
       this.camPitch * (1 - fall) + 0.25 * fall + (Math.random() - 0.5) * sh,
       this.camYaw + (Math.random() - 0.5) * sh,
-      roll + 1.25 * fall + (Math.random() - 0.5) * sh,
+      roll - 0.17 * this.lean + 1.25 * fall + (Math.random() - 0.5) * sh,
       'YXZ'
     );
     this.eye.set(this.pos.x, this.pos.y + EYE, this.pos.z);
