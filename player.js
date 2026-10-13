@@ -49,6 +49,19 @@ export class Player {
     this.hurtFlash = 0;
   }
 
+  /** Put the player somewhere else (a new map), facing `yaw`. That becomes where they come back to life. */
+  teleport(pos, yaw = 0) {
+    this.spawn = { x: pos.x, y: pos.y, z: pos.z };
+    this.pos.set(pos.x, pos.y, pos.z);
+    this.body.setTranslation(this.spawn, true);
+    this.body.setNextKinematicTranslation(this.spawn);
+    this.vel.set(0, 0, 0);
+    this.yaw = this.camYaw = yaw;
+    this.pitch = this.camPitch = 0;
+    this.health = 100;
+    this.dead = false;
+  }
+
   /** Something hit the player. `from` is where it came from. */
   hurt(amount, from) {
     if (this.dead) return;

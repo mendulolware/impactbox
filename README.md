@@ -30,7 +30,8 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 
 | File | What it does |
 | --- | --- |
-| `main.js` | renderer, game loop, input, spawn menu, explosions, hit routing |
+| `main.js` | renderer, game loop, input, spawn menu, map switching, explosions, hit routing |
+| `maps.js` | the maps: what each is built from and what it starts with |
 | `ragdoll.js` | 11-body ragdoll under one skinned figure: procedural animation, active ragdoll, injuries that show (limp arms, limping, crawling, bleeding out), fall damage, severing, gibbing |
 | `brain.js` | NPC AI: senses, civilian / thug / zombie behaviour, steering |
 | `weapons.js` | weapon definitions, firing, melee, grenades, grab gun, viewmodels |
@@ -40,11 +41,30 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | `gore.js` | blood droplets and mist, fire and smoke; decals (splats, spatter, runs, pools, smears); physical chunks (meat, bone, skull, ribs, gut, eyes) |
 | `wounds.js` | holes and gashes cut into body parts, blood soaking and running from them, burns, what is visible inside, and the torn stumps |
 | `player.js` | first-person character controller |
-| `world.js` | arena, sky with clouds, sun, fog, painted lines |
-| `textures.js` | asphalt, concrete and timber generated in code, each with colour, normal and roughness maps |
+| `world.js` | sky with clouds, sun, fog and time of day; `MapBuilder`, which turns a map description into colliders and a few merged meshes |
+| `textures.js` | asphalt, concrete, timber, brick and sheet metal generated in code, each with colour, normal and roughness maps |
 | `post.js` | picture pipeline: ambient occlusion, bloom, colour grade |
 | `audio.js` | procedural sound effects |
 | `viewer.html` | a turntable for looking at any model under the game's own sky and lighting (not part of the game) |
+
+## Maps
+
+Pick one on the start screen or under **Maps** in the spawn menu (Q). The last one played is remembered; `?map=street` in the address forces one.
+
+| Map | What it is |
+| --- | --- |
+| The Yard | the original open concrete yard: ramp, platform, cover |
+| Warehouse | a sheet-metal shed under an overcast sky: pallet racking, shipping containers, a mezzanine with stairs, a loading dock, hanging lamps |
+| Rooftops | five roofs at sunset joined by planks, 18 to 22 m up. Falling off kills you (and anything else) |
+| Night Street | a street at dusk: shopfronts, parked cars, a dead-end alley, street lamps |
+| Kill House | a walled compound with twelve plywood rooms and a catwalk over them |
+
+A map is one entry in `MAPS` (`maps.js`): a time of day, a spawn point, the rectangle NPCs keep to, `build(b)` and `populate(ctx)`.
+`build` gets a `MapBuilder` (`world.js`) with `box`, `cyl`, `wall` (with doorways), `stairs`, `stripe`, `light`, `ground` and `mat`.
+Every box gets a collider on one fixed body, and the visible boxes are joined into one mesh per material, so a map of several hundred
+pieces is a handful of draw calls. `loadMap()` removes the old map (meshes, materials, colliders) and builds the next.
+Times of day are `SKIES` in `world.js`: sun direction and colour, sky colours, cloud cover, fog.
+To add a map, add an entry to `MAPS`; both menus list it automatically.
 
 ## How NPCs work
 

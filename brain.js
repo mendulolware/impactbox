@@ -9,7 +9,6 @@ import RAPIER from '@dimforge/rapier3d-compat';
 //   zombie    hunts the nearest living thing, bites, and infects (the bitten rise again)
 
 export const WALK = 1.3, RUN = 3.9;
-const ARENA = 37;
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -134,7 +133,8 @@ export class Brain {
       if (this.walking) this.wanderHeading = this.npc.heading + rnd(-2.2, 2.2);
     }
     const r = this.npc.root;
-    if (Math.abs(r.x) > ARENA || Math.abs(r.z) > ARENA) this.wanderHeading = headingTo(-r.x, -r.z);
+    const b = this.ctx.map.bounds;       // strayed off the map: head back in
+    if (r.x < b.x0 || r.x > b.x1 || r.z < b.z0 || r.z > b.z1) this.wanderHeading = headingTo((b.x0 + b.x1) / 2 - r.x, (b.z0 + b.z1) / 2 - r.z);
     this.goal.mode = 'wander';
     this.goal.speed = this.walking ? (this.kind === 'zombie' ? 0.7 : WALK) : 0;
   }
@@ -278,12 +278,13 @@ export class Brain {
       let dx = r.x - g.pos.x, dz = r.z - g.pos.z;
       const l = Math.hypot(dx, dz) || 1;
       dx /= l; dz /= l;
-      // near the arena wall, running straight away is a dead end: bend back toward open ground
-      const edge = Math.max(Math.abs(r.x), Math.abs(r.z));
-      if (edge > ARENA - 6) {
-        const k = Math.min(1, (edge - (ARENA - 6)) / 6) * 1.6;
-        const cl = Math.hypot(r.x, r.z) || 1;
-        dx -= (r.x / cl) * k; dz -= (r.z / cl) * k;
+      // near the edge of the map, running straight away is a dead end: bend back toward open ground
+      const b = this.ctx.map.bounds;
+      const room = Math.min(r.x - b.x0, b.x1 - r.x, r.z - b.z0, b.z1 - r.z);
+      if (room < 6) {
+        const k = Math.min(1, (6 - room) / 6) * 1.6;
+        const cx = (b.x0 + b.x1) / 2 - r.x, cz = (b.z0 + b.z1) / 2 - r.z, cl = Math.hypot(cx, cz) || 1;
+        dx += (cx / cl) * k; dz += (cz / cl) * k;
       }
       heading = headingTo(dx, dz);
     }

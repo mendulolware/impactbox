@@ -7,7 +7,8 @@ import { tickWounds } from './wounds.js';
 import { Prop, PROP_TYPES } from './props.js';
 import { Player } from './player.js';
 import { Weapons, WEAPONS } from './weapons.js';
-import { buildWorld } from './world.js';
+import { buildWorld, loadMap } from './world.js';
+import { MAPS, MAP_LIST } from './maps.js';
 import { loadModels } from './models.js';
 import { Post } from './post.js';
 
@@ -74,8 +75,12 @@ const ctx = {
 window.__game = ctx; // handy for debugging in the console
 
 ctx.gore = new Gore(ctx);
-buildWorld(ctx);
-ctx.player = new Player(ctx, { x: 0, y: 1.0, z: 14 });
+// which map to start on: ?map=street in the address, else the one played last, else the yard
+let startMap = new URLSearchParams(location.search).get('map');
+try { startMap = startMap || localStorage.getItem('impactbox.map'); } catch (e) { /* no storage */ }
+buildWorld(ctx, MAPS[startMap] ? startMap : 'yard');
+ctx.player = new Player(ctx, ctx.map.spawn);
+ctx.player.yaw = ctx.player.camYaw = ctx.map.yaw;
 ctx.weapons = new Weapons(ctx);
 
 ctx.later = (sec, fn) => ctx.timers.push({ t: sec, fn });
@@ -252,6 +257,7 @@ function deleteTarget() {
 }
 
 const SPAWN_ITEMS = [
+  ...MAP_LIST.map((m) => ({ cat: 'Maps', label: m.name, icon: m.icon, small: m.blurb, run: () => { setMap(m.id); setMenu(false); } })),
   { cat: 'NPCs', label: 'Civilian', icon: '🧍', small: 'flees, surrenders', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER()) },
   { cat: 'NPCs', label: 'Thug', icon: '🥊', small: 'fights back', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER(), { kind: 'thug' }) },
   { cat: 'NPCs', label: 'Zombie', icon: '🧟', small: 'hunts and infects', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER(), { kind: 'zombie' }) },
@@ -441,40 +447,30 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => input.keys.delete(e.code));
 window.addEventListener('blur', () => { input.keys.clear(); input.left = input.right = false; });
 
-// ------------------------------------------------------------------ starting scene
-function populate() {
-  for (let i = 0; i < 5; i++) {
-    ctx.spawnRagdoll({ x: -8 + i * 4, y: 0.05, z: -4 - (i % 2) * 3 }, Math.random() * 6);
-  }
-  ctx.spawnRagdoll({ x: 3, y: 0.05, z: -14 }, 0, { kind: 'thug' });
-  for (let i = 0; i < 4; i++) ctx.spawnProp('crate', { x: 9 + (i % 2) * 0.65, y: 0.32 + Math.floor(i / 2) * 0.62, z: 4 }, 0);
-  ctx.spawnProp('explosive', { x: -4, y: 0.5, z: 1 });
-  ctx.spawnProp('explosive', { x: 10, y: 0.5, z: -3 });
-  ctx.spawnProp('barrel', { x: -5.2, y: 0.5, z: 1.2 });
-  ctx.spawnProp('ball', { x: 2, y: 1.0, z: 8 });
-
-  // the yard: parked cars, bins, lamps, a sandbag position, pallets and cones
-  const at = (type, x, z, yaw = 0, lift = 0) => {
-    const d = PROP_TYPES[type];
-    return ctx.spawnProp(type, { x, y: (d.half ? d.half[1] : d.h || d.r) + 0.03 + lift, z }, yaw);
-  };
-  at('car', -27.3, 31, 0.04);
-  at('car', -19.2, 31, Math.PI - 0.06);
-  at('car', 24.7, 20, 0.02);
-  at('dumpster', -38.6, 14, Math.PI / 2);
-  at('dumpster', -38.6, 10.6, Math.PI / 2 + 0.08);
-  at('dumpster', 30, -38.9, 0);
-  for (const [x, z] of [[-39.5, 30], [-39.5, -2], [39.5, 30], [39.5, -2], [-12, -40], [18, -40]]) at('lamp', x, z, Math.atan2(-x, -z));
-  for (let i = 0; i < 3; i++) at('sandbags', -22 + i * 1.95, 2, 0);
-  for (let i = 0; i < 2; i++) at('sandbags', -21 + i * 1.95, 2, 0, 0.55);
-  at('pallet', 15, 8, 0.3); at('pallet', 15, 8, 0.25, 0.16); at('pallet', 16.6, 9.2, 1.2);
-  at('crate', 15, 8, 0.4, 0.34);
-  at('propane', 17.6, 7.4); at('propane', 18.1, 7.8);
-  for (const [x, z] of [[-3, 12], [-1.4, 12.6], [0.3, 12.2], [5, -6], [6.2, -7.4]]) at('cone', x, z);
-  at('table', -12, 14, 0.2); at('chair', -12.9, 14.3, 1.4); at('chair', -11.2, 13.4, -1.9);
-  at('toilet', 37.5, 39.5, Math.PI);
+// ------------------------------------------------------------------ maps
+/** Wipe the sandbox and move to another map. */
+function setMap(id) {
+  clearAll();
+  loadMap(ctx, id);
+  ctx.player.teleport(ctx.map.spawn, ctx.map.yaw);
+  ctx.map.populate();
+  try { localStorage.setItem('impactbox.map', ctx.map.id); } catch (e) { /* private window: just don't remember */ }
+  for (const el of document.querySelectorAll('#maps button')) el.classList.toggle('on', el.dataset.map === ctx.map.id);
+  toast(ctx.map.name.toUpperCase());
 }
-populate();
+ctx.setMap = setMap;
+
+// the map can be chosen before starting, as well as from the spawn menu
+for (const m of MAP_LIST) {
+  const el = document.createElement('button');
+  el.dataset.map = m.id;
+  el.innerHTML = `<span>${m.icon}</span>${m.name}`;
+  el.title = m.blurb;
+  el.classList.toggle('on', m.id === ctx.map.id);
+  el.addEventListener('click', () => { if (m.id !== ctx.map.id) setMap(m.id); });
+  $('maps').appendChild(el);
+}
+ctx.map.populate();
 
 // ------------------------------------------------------------------ main loop
 let last = performance.now();
@@ -556,7 +552,7 @@ function tick(now) {
 
   // shadow camera follows the player
   const sun = ctx.sun;
-  sun.target.position.set(Math.round(ctx.player.pos.x), 0, Math.round(ctx.player.pos.z));
+  sun.target.position.set(Math.round(ctx.player.pos.x), Math.round(ctx.player.pos.y - 1), Math.round(ctx.player.pos.z));
   sun.position.copy(sun.target.position).add(ctx.sunOffset);
 
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').classList.remove('show'); }
@@ -576,6 +572,7 @@ function tick(now) {
 
   // health bar, red flash when hurt, and the death notice
   const pl = ctx.player;
+  if (!pl.dead && pl.pos.y < ctx.map.killY) pl.hurt(1000, null);      // fell off the map
   healthEl.style.width = pl.health + '%';
   healthEl.parentElement.classList.toggle('low', pl.health < 35);
   hurtEl.style.opacity = Math.min(0.85, pl.hurtFlash * 0.55 + (1 - pl.health / 100) * 0.4 + (pl.dead ? 0.5 : 0));

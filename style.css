@@ -40,6 +40,11 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #111; font-f
 #play:disabled { background: #444; cursor: wait; }
 #play:not(:disabled):hover { background: #f44; }
 #loading { margin: 0 0 12px; font-size: 13px; opacity: .6; }
+#maps { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 0 20px; }
+#maps button { padding: 8px 12px; border-radius: 6px; border: 1px solid #44444e; background: rgba(30,30,36,.8); color: #ddd; font-size: 13px; cursor: pointer; }
+#maps button span { margin-right: 6px; }
+#maps button:hover { border-color: #ff5a4a; }
+#maps button.on { background: #5a1616; border-color: #e23; color: #fff; }
 .keys { margin-top: 28px; font-size: 13px; line-height: 1.8; opacity: .55; }
 
 /* ---- helmet cam overlay ---- */

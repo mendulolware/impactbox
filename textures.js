@@ -177,6 +177,48 @@ function planks() {
   });
 }
 
+// ---- brickwork ---------------------------------------------------------------------------------
+/** One tile is 1.2 m: four bricks across, sixteen courses up, every other course shifted half a brick. */
+function brick() {
+  const size = 512, ROWS = 16, COLS = 4;
+  return bake(size, 2.6, (u, v, x, y, o) => {
+    const row = Math.floor(v * ROWS);
+    const uu = u * COLS + (row % 2) * 0.5;
+    const col = Math.floor(uu);
+    const fu = uu - col, fv = v * ROWS - row;
+    const joint = Math.max(1 - Math.min(fu, 1 - fu) * (size / COLS) / 3.5, 1 - Math.min(fv, 1 - fv) * (size / ROWS) / 3.0);
+    const m = Math.min(1, Math.max(0, joint));                    // 1 in the mortar
+    const tone = hash(col % COLS, row, 7);                        // every brick fired a little differently
+    const grit = fbm(u, v, 64, 2, 13);
+    const soot = Math.max(0, fbm(u, v * 0.3, 6, 3, 29) - 0.5) * 2;
+    const k = (tone > 0.86 ? 0.66 : 1) * (1 - 0.3 * soot);
+    const r = (0.6 + 0.2 * (tone - 0.5) + 0.07 * (grit - 0.5)) * k;
+    const g = (0.4 + 0.12 * (tone - 0.5) + 0.05 * (grit - 0.5)) * k;
+    const b = (0.33 + 0.1 * (tone - 0.5) + 0.05 * (grit - 0.5)) * k;
+    const mo = 0.62 + 0.08 * (grit - 0.5) - 0.15 * soot;
+    o.r = r + (mo - r) * m; o.g = g + (mo * 0.97 - g) * m; o.b = b + (mo * 0.92 - b) * m;
+    o.h = (1 - m) * (0.7 + 0.3 * grit);
+    o.rough = 0.9 - 0.06 * tone + 0.05 * m;
+  });
+}
+
+// ---- corrugated sheet metal ----------------------------------------------------------------------
+/** One tile is 2 m: sixteen ribs across, a sheet joint along the edge, rust running down from it. */
+function metal() {
+  const size = 512, RIBS = 16;
+  return bake(size, 3.0, (u, v, x, y, o) => {
+    const wave = 0.5 + 0.5 * Math.cos(u * RIBS * Math.PI * 2);
+    const rust = Math.min(1, Math.max(0, fbm(u, v * 0.25, 8, 4, 51) - 0.64) * 3.2) * 0.8;
+    const dirt = fbm(u, v, 8, 3, 61);
+    const seam = Math.max(0, 1 - Math.min(v, 1 - v) * size / 2.5);
+    const c = 0.7 + 0.1 * (wave - 0.5) + 0.08 * (dirt - 0.5);
+    o.r = c + (0.36 - c) * rust; o.g = c + (0.2 - c) * rust; o.b = c + (0.11 - c) * rust;
+    o.r *= 1 - 0.5 * seam; o.g *= 1 - 0.5 * seam; o.b *= 1 - 0.5 * seam;
+    o.h = wave * 0.9 - seam;
+    o.rough = 0.5 + 0.38 * rust + 0.1 * (dirt - 0.5);
+  });
+}
+
 /** Low-frequency blotches, used to break up the repetition of the ground over long distances. */
 function macro() {
   const size = 256;
@@ -213,8 +255,14 @@ function paint() {
   return t;
 }
 
+let surfaces = null;
+/** Every surface, made once. `tile` on each is how many metres one copy of it covers. */
 export function makeSurfaces() {
-  return { asphalt: asphalt(), concrete: concrete(), planks: planks(), macro: macro(), paint: paint() };
+  if (!surfaces) {
+    surfaces = { asphalt: asphalt(), concrete: concrete(), planks: planks(), brick: brick(), metal: metal(), macro: macro(), paint: paint() };
+    Object.assign(surfaces, { tile: { asphalt: 6, concrete: 4, planks: 2.4, brick: 1.2, metal: 2 } });
+  }
+  return surfaces;
 }
 
 /**
