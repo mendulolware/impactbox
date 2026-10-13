@@ -20,6 +20,12 @@ OUT, *FILES = sys.argv[sys.argv.index('--') + 1:]
 TEX = 1024
 HEIGHT = 1.82                 # the game's NPC, crown of the head
 PARTS = ['pelvis', 'torso', 'head', 'uarmL', 'farmL', 'uarmR', 'farmR', 'thighL', 'shinL', 'thighR', 'shinR']   # order = bone index in the game
+# which bodies are joined to which. A vertex may only follow its own body and one joined to it: the game cuts
+# a body free by standing in for its neighbours, so skin shared with anything else (the two thighs share the
+# crotch in most rigs) would stay stretched between the pieces
+LINKS = [('pelvis', 'torso'), ('torso', 'head'), ('torso', 'uarmL'), ('uarmL', 'farmL'), ('torso', 'uarmR'), ('uarmR', 'farmR'),
+         ('pelvis', 'thighL'), ('thighL', 'shinL'), ('pelvis', 'thighR'), ('thighR', 'shinR')]
+NEXT = {i: [PARTS.index(b if a == n else a) for a, b in LINKS if n in (a, b)] for i, n in enumerate(PARTS)}
 AX, LX = 0.21, 0.10           # arms and legs hang this far out from the centre line
 SPINE, NECK, SHOULDER, ELBOW, WRIST, HIP, KNEE = 1.10, 1.56, 1.45, 1.16, 0.88, 0.95, 0.46
 
@@ -130,8 +136,8 @@ for path in FILES:
             w = [0.0] * len(PARTS)
             for g in v.groups:
                 w[to_part[g.group]] += g.weight
-            order = sorted(range(len(PARTS)), key=lambda i: -w[i])
-            a, b = order[0], order[1]
+            a = max(range(len(PARTS)), key=lambda i: w[i])
+            b = max(NEXT[a], key=lambda i: w[i])
             wa = w[a] / (w[a] + w[b]) if w[a] + w[b] > 0 else 1.0
             skin.data[v.index].vector = (a, b, wa)
             main.data[v.index].value = a
@@ -169,6 +175,12 @@ for path in FILES:
         bmesh.ops.delete(pb, geom=[f for f in pb.faces if f[fpl] != i], context='FACES')
         if not pb.faces:
             pb.free(); continue
+        # a face goes to the body most of its corners follow, so a piece's edge has corners that follow others:
+        # hold those to this body and the ones joined to it as well
+        sk, ok = pb.verts.layers.float_vector['_skin'], {i, *NEXT[i]}
+        for v in pb.verts:
+            a, b, wa = v[sk]
+            v[sk] = (a if round(a) in ok else i, b if round(b) in ok else i, wa)
         rim = [e for e in pb.edges if e[cutl] and e.is_boundary]
         caps = bmesh.ops.holes_fill(pb, edges=rim, sides=0)['faces'] if rim else []
         if caps:
