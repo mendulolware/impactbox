@@ -19,7 +19,7 @@ export const WEAPONS = [
   { name: 'SMG',      slot: 1, type: 'gun', auto: true,  rate: 0.055, dmg: 11,  impulse: 60,  pellets: 1,  spread: 0.020, sound: 'smg',      kick: 0.022, hole: 0.022, rec: [0.0075, 0.004], shell: true },
   { name: 'Uzi',      slot: 1, type: 'gun', auto: true,  rate: 0.048, dmg: 9,   impulse: 50,  pellets: 1,  spread: 0.034, sound: 'uzi',      kick: 0.026, hole: 0.022, rec: [0.0095, 0.0065], shell: true },
   { name: 'Shotgun',  slot: 2, type: 'gun', auto: false, rate: 0.85,  dmg: 15,  impulse: 110, pellets: 10, spread: 0.055, sound: 'shotgun',  kick: 0.16,  hole: 0.027, rec: [0.065, 0.015], shell: true },
-  { name: 'Double Barrel', slot: 2, type: 'gun', auto: false, rate: 0.22, dmg: 16, impulse: 120, pellets: 12, spread: 0.075, sound: 'shotgun', kick: 0.2, hole: 0.028, mag: 2, reload: 1.5, rec: [0.085, 0.02] },
+  { name: 'Double Barrel', slot: 2, type: 'gun', auto: false, rate: 0.22, dmg: 16, impulse: 120, pellets: 12, spread: 0.075, sound: 'dbarrel', kick: 0.2, hole: 0.028, mag: 2, reload: 1.5, rec: [0.085, 0.02] },
   { name: 'Rifle',    slot: 3, type: 'gun', auto: true,  rate: 0.075, dmg: 17,  impulse: 95,  pellets: 1,  spread: 0.010, sound: 'rifle',    kick: 0.035, hole: 0.03, rec: [0.015, 0.007], drift: 0.25, shell: true },
   { name: 'AR-15',    slot: 3, type: 'gun', auto: true,  rate: 0.072, dmg: 15,  impulse: 80,  pellets: 1,  spread: 0.006, sound: 'ar15',     kick: 0.03,  hole: 0.027, rec: [0.011, 0.0045], shell: true },
   { name: 'Sniper',   slot: 3, type: 'gun', auto: false, rate: 1.30,  dmg: 150, impulse: 420, pellets: 1,  spread: 0,     sound: 'sniper',   kick: 0.22,  hole: 0.05, pierce: 3, zoom: 0.82, rec: [0.085, 0.01], shell: true },
