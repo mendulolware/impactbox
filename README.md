@@ -34,7 +34,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | X | delete what you're aiming at (or holding) |
 | C | clear everything |
 
-**Phones and tablets** (`touch.js`): a stick under your left thumb wherever it lands (push it all the way to sprint), drag on the right to look (the FIRE button looks too while held), buttons for fire, aim, jump, reload, next weapon, lean left and right (held) and use (shout, arrest, clear a jam), and a row along the top for the spawn menu, bodycam, night, flashlight, slow-mo, kick, mirror, rain, suppressor, laser, squad and record. Play goes full screen and sideways. Phones draw at 1.25x pixel ratio, skip ambient occlusion, use a 2048 shadow map and no shadow from the flashlight, keep half as many people (18) and meat chunks (60) and half the rain.
+**Phones and tablets** (`touch.js`): a stick under your left thumb wherever it lands (push it all the way to sprint), drag on the right to look (the FIRE button looks too while held), buttons for fire, aim, jump, reload, next weapon, lean left and right (held) and use (shout, arrest, clear a jam), and a row along the top for the spawn menu, bodycam, night, flashlight, slow-mo, kick, mirror, rain, suppressor, laser, squad and record. Play goes full screen and sideways. Tap a weapon group on the bar at the bottom to pick it (again for the next one in it). Shots and hits you take buzz the phone where it can, the screen stays awake while you play, sound stops when you switch away, and a notice asks you to turn the phone sideways. Phones draw at up to 1.25x pixel ratio and lower it on their own when the frame rate drops under 42 (back up when it is over 56, never under 0.6x: `adaptResolution` in `main.js`), skip ambient occlusion and screen multisampling, use a 2048 shadow map with plain (not soft) filtering redrawn every other frame, no shadow from the flashlight, keep half as many people (18), meat chunks (60) and blood drops (1,600, with simpler spheres) and half the rain.
 
 ## Layout
 
@@ -50,7 +50,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | `props.js` | crates, barrels, cars, furniture, grenades, rockets and the rest of the spawn menu |
 | `models.js` | loads `assets/models.glb`; lays surface detail and edge wear over the models; hands out body pieces |
 | `detail.js` | fine tiling surfaces for the models (steel, plastic, wood grain, cloth, leather, skin), generated in code |
-| `gore.js` | blood droplets and mist, fire and smoke; decals (splats, spatter, runs, pools, smears); physical chunks (meat, bone, skull, ribs, gut, eyes) |
+| `gore.js` | blood droplets and mist, fire and smoke; decals that dry (splats, spatter, runs, pools, smears, handprints); physical chunks (meat, bone, skull, ribs, gut, eyes) that stick to walls and ceilings |
 | `wounds.js` | holes and gashes cut into body parts, blood soaking and running from them, burns, what is visible inside, and the torn stumps |
 | `player.js` | first-person character controller |
 | `world.js` | sky with clouds, sun, fog and time of day; `MapBuilder`, which turns a map description into colliders and a few merged meshes |
@@ -297,6 +297,13 @@ Hole size per weapon is `hole` in the `WEAPONS` table; a part holds up to 12 wou
 or shin, spine and windpipe for a neck), ragged skin round the edge, and gut hanging out of a body cut in half. `ragdoll.js` adds the pulsing arterial spray.
 Explosions burn and pepper bodies rather than launching them out of the arena, and only destroy the parts that were right on top of the blast.
 
+- **Third gore pass:**
+  - **Pieces stick.** Meat, skull and bone that slap into a wall or a ceiling at speed stay there (`_stick` in `gore.js`): on a wall a piece slides down the bottom of its own streak (`run` hands back the streak, `_slide` follows it), on a ceiling it hangs for a moment; both drip, then let go and fall. Doors, glass and lamps are left out because they move or break.
+  - **Ceilings drip.** Blood that lands on a ceiling comes back down a drop at a time for a while, slower as it runs dry (`dripFrom`), and so does anything stuck up there.
+  - **Blood dries.** Every mark records when it was made (`aBirth` on each decal set) and its shader (`dries`) turns it from wet red to dull brown-black and matte over about two minutes of game time.
+  - **Head shots carry matter.** A killing head shot throws the back of the skull hard enough to reach the wall behind, and leaves pink-grey brain matter in the spatter (`wallSplatter(..., matter)`). A bigger round throws more out of the exit (scaled by `hole`). Gibbing paints the walls all round.
+  - **Handprints.** A bleeding person walking past a wall puts a hand on it now and then: a red print at hand height, sometimes with a run under it (`handprint`, a sixth decal shape). Up to six each.
+  - **Smears and splashes.** A piece sliding or rolling over the floor smears it; one landing in a pool splashes.
 - **Second gore pass:** blood from a hit within 2.4 m lands on the lens and runs down it (`lens()` in `gore.js`, the `#lens` overlay); anyone who walks through a pool, you included, prints the next nine steps (`wetAt`, `footprint`); a killing head shot takes skull and brain out the back; a torso shot down to its last third opens up and spills (`gutted`); pieces of meat now lie for a minute or two instead of twenty seconds.
 
 ## Models

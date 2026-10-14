@@ -617,7 +617,7 @@ export class Ragdoll {
           openWound(p, out, (opts.hole || 0.026) * 1.5, maxR, null, ld);
           this.bleed(p, out, 3, 0);
         }
-        gore.blood(point, dir, 14, 7, 0.35);              // exit spray carries on past the body
+        gore.blood(point, dir, Math.round(14 * Math.min(2, (opts.hole || 0.026) / 0.026)), 7, 0.35);   // exit spray carries on past the body (more from a bigger round)
         if (name === 'torso' && !this.gutted && p.hp - dmg < p.def.hp * 0.3) {
           // shot to pieces: the front of the body opens and what was inside comes out
           this.gutted = true;
@@ -662,9 +662,9 @@ export class Ragdoll {
         else {
           if (!opts.blunt) {
             // the back of the skull goes with the round
-            gore.chunks(point, 3, 3, { x: dir.x * 4, y: dir.y * 4 + 1, z: dir.z * 4 }, 'head');
+            gore.chunks(point, 4, 2.5, { x: dir.x * 7, y: dir.y * 7 + 0.6, z: dir.z * 7 }, 'head');
             gore.gush(point, dir, 30, 7);
-            gore.wallSplatter(point, dir, 7);
+            gore.wallSplatter(point, dir, 7, true);
           }
           this.die(opts.blunt ? 'beaten' : 'headshot');
         }
@@ -1203,6 +1203,16 @@ export class Ragdoll {
       else if (this.bloody > 0) {
         const side = stepN % 2 ? 0.1 : -0.1;
         gore.footprint({ x: this.root.x - _fwd.z * side, y: this.root.y, z: this.root.z + _fwd.x * side }, _fwd, this.bloody-- / 9);
+      }
+      // bleeding, they steady themselves on the wall they pass: a red hand at hand height (a few per person)
+      if (this.drips.length && stepN % 3 === 0 && (this.prints ??= 6) > 0) {
+        const s = stepN % 2 ? 1 : -1, y = this.root.y + rnd(0.95, 1.25);
+        const hit = gore.castFixed(this.root.x, y, this.root.z, -_fwd.z * s, 0, _fwd.x * s, 0.75);
+        if (hit && Math.abs(hit.normal.y) < 0.3 && !this.ctx.owners.has(hit.collider.handle)) {
+          this.prints--;
+          const d = hit.timeOfImpact;
+          gore.handprint({ x: this.root.x - _fwd.z * s * d, y, z: this.root.z + _fwd.x * s * d }, hit.normal);
+        }
       }
     }
   }

@@ -139,3 +139,8 @@ body.mirror #mirror { display: block; }
 #lens i.rain { background: radial-gradient(circle at 36% 30%, rgba(235,245,255,.5), rgba(200,220,240,.28) 58%, rgba(200,220,240,0) 72%); filter: blur(.7px); animation-duration: 5s; }
 #t-leanL { left: 3%; bottom: 46%; width: 54px !important; height: 54px !important; font-size: 20px !important; }
 #t-leanR { left: calc(3% + 62px); bottom: 46%; width: 54px !important; height: 54px !important; font-size: 20px !important; }
+#rotate { display: none; }
+@media (orientation: portrait) {
+  body.touch:has(#start.hidden) #rotate { display: flex; position: fixed; inset: 0; z-index: 20; align-items: center; justify-content: center; background: rgba(0,0,0,.88); color: #fff; font: 700 18px system-ui, sans-serif; }
+}
+body.touch #weapon-bar .slot { pointer-events: auto; touch-action: none; }

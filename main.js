@@ -21,10 +21,13 @@ await Promise.all([RAPIER.init(), loadModels()]);
 
 // ------------------------------------------------------------------ renderer
 const canvas = $('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, isTouch ? 1.25 : 2));   // phones: fewer pixels to fill
+// (phones: no multisampling on the screen itself; the picture is smoothed in post.js's own target anyway)
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch, powerPreference: 'high-performance' });
+const MAX_PR = Math.min(window.devicePixelRatio, isTouch ? 1.25 : 2);   // phones: fewer pixels to fill
+renderer.setPixelRatio(MAX_PR);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = isTouch ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = !isTouch;          // phones: shadows are redrawn every other frame (tick)
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.82;
 
@@ -88,7 +91,7 @@ ctx.player.yaw = ctx.player.camYaw = ctx.map.yaw;
 setSpace(ctx.map.id);
 ctx.weapons = new Weapons(ctx);
 ctx.post = post;
-if (isTouch) { post.lite = true; post.final.uniforms.uAoAmt.value = 0; ctx.gore.maxChunks = 60; ctx.gore.lite = true; }
+if (isTouch) { post.lite = true; post.final.uniforms.uAoAmt.value = 0; }
 
 ctx.later = (sec, fn) => ctx.timers.push({ t: sec, fn });
 
@@ -732,6 +735,17 @@ function flyDrone(now) {
   camera.rotateZ(Math.sin(now * 0.031) * 0.004);            // rotor buzz
 }
 
+// Phones: the picture's resolution follows the frame rate, down when it drops under 42, back up when there is room.
+let prT = 3;
+function adaptResolution(dt) {
+  if (!gameActive() || (prT -= dt) > 0) return;
+  prT = 2;
+  const pr = renderer.getPixelRatio();
+  const next = THREE.MathUtils.clamp(fps < 42 ? pr - 0.15 : fps > 56 ? pr + 0.1 : pr, 0.6, MAX_PR);
+  if (Math.abs(next - pr) > 0.01) { renderer.setPixelRatio(next); resize(); }
+}
+
+let shadowFlip = false;
 function tick(now) {
   const dt = Math.min(Math.max((now - last) / 1000, 0), 0.05);
   last = now;
@@ -739,6 +753,7 @@ function tick(now) {
 
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.5) { fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }
+  if (isTouch) adaptResolution(dt);
 
   const active = gameActive() && !ctx.player.dead;
   ctx.player.update(sdt, input, active, dt);
@@ -860,6 +875,7 @@ function tick(now) {
   const dyaw = Math.atan2(Math.sin(rot.y - lastRot.y), Math.cos(rot.y - lastRot.y)), dpitch = rot.x - lastRot.x;
   post.final.uniforms.uBlur.value.set(THREE.MathUtils.clamp(dyaw * pm[0] * 0.3, -0.05, 0.05), THREE.MathUtils.clamp(dpitch * pm[5] * 0.3, -0.05, 0.05));
   lastRot.copy(rot);
+  if (isTouch) renderer.shadowMap.needsUpdate = (shadowFlip = !shadowFlip);
   post.render(scene, camera, ctx.helmet);
   recordFrame();
 }

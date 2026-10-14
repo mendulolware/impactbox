@@ -5,6 +5,9 @@
 //   buttons      fire, aim, jump, reload, next weapon, use (shout / arrest / clear a jam), lean left and right (held),
 //                and a row along the top that just presses a key: spawn menu, bodycam, night, flashlight, slow-mo,
 //                kick, mirror, rain, suppressor, laser, squad, record
+//   weapon bar   tap a group to pick it, tap it again for the next weapon in it
+//   also         a buzz for each shot and each hit you take (where the phone can), the screen kept awake while
+//                playing, and a notice to turn the phone sideways
 
 export const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 
@@ -99,11 +102,25 @@ export function initTouch(ctx, input) {
   document.addEventListener('touchend', end);
   document.addEventListener('touchcancel', end);
 
+  // the weapon groups along the bottom
+  document.getElementById('weapon-bar').addEventListener('touchstart', (e) => {
+    const el = e.target.closest?.('.slot');
+    if (!el) return;
+    e.preventDefault(); e.stopPropagation();
+    ctx.weapons.selectSlot([...el.parentNode.children].indexOf(el));
+  }, { passive: false });
+
+  ctx.buzz = (ms) => navigator.vibrate?.(Math.round(ms));
+
   // the spawn menu closes when you tap outside it
   document.getElementById('menu').addEventListener('click', (e) => { if (e.target.id === 'menu') { key('Tab'); key('Tab', 'keyup'); } });
 
-  // full screen and sideways, once the player starts
+  // full screen and sideways, once the player starts, and the screen stays on
+  let lock = null;
+  const awake = () => { if (!lock && !document.hidden) navigator.wakeLock?.request('screen').then((l) => { lock = l; l.onrelease = () => { lock = null; }; }).catch(() => {}); };
   document.getElementById('play').addEventListener('click', () => {
     document.documentElement.requestFullscreen?.().then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
+    awake();
   });
+  document.addEventListener('visibilitychange', awake);       // the lock goes when the tab is hidden
 }

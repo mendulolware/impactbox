@@ -80,6 +80,7 @@ export class Player {
     this.sinceHurt = 0;
     this.hurtFlash = 1;
     this.ctx.sfx?.playerHurt();
+    this.ctx.buzz?.(Math.min(120, 30 + amount * 2));
     this.shake = Math.min(1, this.shake + 0.7);
     if (from) { // shoved away from the attacker
       const dx = this.pos.x - from.x, dz = this.pos.z - from.z, l = Math.hypot(dx, dz) || 1;
@@ -104,6 +105,7 @@ export class Player {
     this.pitch = THREE.MathUtils.clamp(this.pitch + up * 0.3, -1.5, 1.5);
     this.yaw += side * 0.3;
     this.shake = Math.min(1, this.shake + up * 6);
+    this.ctx.buzz?.(Math.min(40, 6 + up * 400));
   }
 
   /** dt is game time (slow-mo scaled); rdt is real time, used for camera smoothing. */

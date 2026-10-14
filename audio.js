@@ -78,6 +78,8 @@ export function initAudio() {
       ears.connect(micHp); micHp.connect(micClip); micClip.connect(comp);
       bodycam(micOn);
       master.connect(ears);
+      // nothing plays from a tab you switched away from (phones keep running it otherwise)
+      document.addEventListener('visibilitychange', () => (document.hidden ? ac.suspend() : ac.resume()).catch(() => {}));
       const len = ac.sampleRate;
       noiseBuf = ac.createBuffer(1, len, ac.sampleRate);
       const d = noiseBuf.getChannelData(0);

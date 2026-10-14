@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { mergeGeometries, mergeVertices } from './vendor/utils/BufferGeometryUtils.js';
+import { woundClock } from './wounds.js';
+import { isTouch } from './touch.js';
 
 // Everything wet. Three layers:
 //   particles - blood droplets (lit, glossy, drawn out along their flight), a fine red mist,
@@ -8,7 +10,9 @@ import { mergeGeometries, mergeVertices } from './vendor/utils/BufferGeometryUti
 //   decals    - what the blood leaves behind: impact splats, fine directional spatter, drips that
 //               run down walls, pools that spread, drag smears. Every shape is drawn once at start-up
 //               and carries its own relief, so pools and runs catch the light like liquid.
-//   chunks    - physical pieces: meat, fat, bone, skull, ribs, gut, organs, eyes
+//               Every mark dries: wet red and glossy at first, dull brown-black a couple of minutes on.
+//   chunks    - physical pieces: meat, fat, bone, skull, ribs, gut, organs, eyes. One that slaps into a wall
+//               or a ceiling sticks there, slides down its own streak, drips, and lets go.
 // Nothing here knows about NPCs; ragdoll.js and wounds.js decide when to call it.
 
 // drop kinds
@@ -300,6 +304,15 @@ const SHAPES = {
     }
     dot(x, 236, wd + 2.5 + r() * 2);
   }, { melt: 1, body: 4, lip: 2, relief: 6 }),
+  // a bloody hand put against a wall: palm, four fingers up, the thumb out to one side (odd seed: the other hand)
+  hand: (seed) => bakeDecal(128, 128, (g, dot) => {
+    const r = rng(seed), s = seed % 2 ? 1 : -1;
+    for (let k = 0; k < 9; k++) dot(64 + (r() - 0.5) * 22, 86 + (r() - 0.5) * 24, 13 + r() * 5);
+    for (const [x, len] of [[-17, 30], [-6, 36], [5, 34], [15, 26]]) {
+      for (let t = 0; t <= 1; t += 0.1) dot(64 + x * (1 + t * 0.15), 66 - t * len, 5.2 - t * 0.8);
+    }
+    for (let t = 0; t <= 1; t += 0.1) dot(64 + s * (22 + t * 16), 88 - t * 16, 6 - t);
+  }, { melt: 1, body: 4, lip: 2, relief: 4 }),
   // something bleeding was dragged along here
   smear: (seed) => bakeDecal(128, 256, (g, dot) => {
     const r = rng(seed);
@@ -314,6 +327,18 @@ const SHAPES = {
     }
   }, { melt: 2, body: 6 }),
 };
+
+/** Blood dries: over a couple of minutes a mark goes from wet red to dull brown-black (game time, so slow-mo slows it). */
+function dries(s) {
+  s.uniforms.uTime = woundClock;
+  s.vertexShader = s.vertexShader
+    .replace('#include <common>', '#include <common>\nattribute float aBirth;\nuniform float uTime;\nvarying float vAge;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvAge = uTime - aBirth;');
+  s.fragmentShader = s.fragmentShader
+    .replace('#include <common>', '#include <common>\nvarying float vAge;\nfloat dry;')
+    .replace('#include <color_fragment>', '#include <color_fragment>\ndry = smoothstep(20.0, 150.0, vAge);\ndiffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.r * vec3(0.36, 0.07, 0.045), dry);')
+    .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.65, dry);');
+}
 
 /** Matte black burn left by an explosion. */
 function scorchTexture() {
@@ -335,7 +360,10 @@ function scorchTexture() {
 class DecalSet {
   constructor(scene, max, material) {
     this.max = max;
-    this.mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), material, max);
+    const geo = new THREE.PlaneGeometry(1, 1);
+    this.birth = new THREE.InstancedBufferAttribute(new Float32Array(max), 1);    // when each mark was made (it dries)
+    geo.setAttribute('aBirth', this.birth);
+    this.mesh = new THREE.InstancedMesh(geo, material, max);
     this.mesh.frustumCulled = false;
     this.mesh.count = 0;
     this.mesh.setColorAt(0, _c.set(0xffffff));
@@ -352,6 +380,8 @@ class DecalSet {
     this.count = Math.min(this.count + 1, this.max);
     this.mesh.count = this.count;
     this.set(i, pos, quat, sx, sy);
+    this.birth.array[i] = woundClock.value;
+    this.birth.needsUpdate = true;
     this.mesh.setColorAt(i, _c.setRGB(r, g, b));
     this.mesh.instanceColor.needsUpdate = true;
     return i;
@@ -511,25 +541,28 @@ export class Gore {
     this.ctx = ctx;
     const scene = ctx.scene;
 
+    // phones: fewer drops and pieces, and rounder-enough spheres
+    this.lite = isTouch;
+    const ball = () => this.lite ? new THREE.SphereGeometry(0.5, 6, 4) : new THREE.SphereGeometry(0.5, 10, 8);
     // wet blood drops: lit, glossy, drawn out along their flight
-    this.drops = new ParticleSet(scene, 3600, new THREE.SphereGeometry(0.5, 10, 8),
+    this.drops = new ParticleSet(scene, this.lite ? 1600 : 3600, ball(),
       new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.16, metalness: 0 }), { stretch: true });
     // the red haze a hit throws up: there for half a second, then gone
-    this.mists = new ParticleSet(scene, 320, new THREE.SphereGeometry(0.5, 10, 8), softMaterial(0.32),
+    this.mists = new ParticleSet(scene, 320, ball(), softMaterial(0.32),
       { scaleFn: (f) => 0.3 + 0.7 * (1 - f * f), fadeFn: (f) => f });
-    this.fire = new ParticleSet(scene, 500, new THREE.SphereGeometry(0.5, 10, 8), softMaterial(1, THREE.AdditiveBlending),
+    this.fire = new ParticleSet(scene, 500, ball(), softMaterial(1, THREE.AdditiveBlending),
       { scaleFn: (f) => 0.25 + 0.75 * f, fadeFn: (f) => Math.min(1, f * 2.5) });
     // rain: thin grey streaks, no collisions (they fall through the ground and die), only emitted under open sky
     this.rain = new ParticleSet(scene, 2600, new THREE.SphereGeometry(0.5, 5, 4),
       new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false }), { stretch: true });
-    this.smoke = new ParticleSet(scene, 300, new THREE.SphereGeometry(0.5, 10, 8), softMaterial(0.75),
+    this.smoke = new ParticleSet(scene, 300, ball(), softMaterial(0.75),
       { scaleFn: (f) => Math.min(1, f * 3) * (1.6 - 0.6 * f), fadeFn: (f) => Math.min(1, f * 2.2) });
 
     // decals: glossy so they catch the light the way wet blood does
-    const decalMat = (tex, offset = -4) => new THREE.MeshStandardMaterial({
+    const decalMat = (tex, offset = -4) => Object.assign(new THREE.MeshStandardMaterial({
       map: tex.map, normalMap: tex.normalMap, color: 0xffffff, transparent: true, depthWrite: false,
       roughness: 0.1, metalness: 0, polygonOffset: true, polygonOffsetFactor: offset, polygonOffsetUnits: offset,
-    });
+    }), { onBeforeCompile: dries });
     const sets = (shape, seeds, max, offset) => seeds.map((s) => new DecalSet(scene, max, decalMat(SHAPES[shape](s), offset)));
     this.sets = {
       splat: sets('splat', [1, 2, 3], 900),
@@ -537,6 +570,7 @@ export class Gore {
       pool: sets('pool', [6, 7], 48, -5),
       drip: sets('drip', [8, 9], 110),
       smear: sets('smear', [10], 180),
+      hand: sets('hand', [11, 12], 40),
     };
     this.scorch = new DecalSet(scene, 24, new THREE.MeshStandardMaterial({
       map: scorchTexture(), color: 0x050505, transparent: true, depthWrite: false, roughness: 1,
@@ -555,6 +589,7 @@ export class Gore {
       })(),
     }));
     this.growing = []; // pools still spreading, drips still running
+    this.drippers = []; // blood on a ceiling, coming back down a drop at a time
     this.pools = [];   // where there is blood to step in (the newest forty)
     this.lensEl = document.getElementById('lens');
 
@@ -562,7 +597,7 @@ export class Gore {
     this.chunkGeo = chunkGeometries();
     this.chunkMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.42 });
     this.chunkList = [];
-    this.maxChunks = 150;
+    this.maxChunks = this.lite ? 60 : 150;
 
     this.ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
 
@@ -579,7 +614,7 @@ export class Gore {
     // a hit this close puts some of it on the camera
     const cam = this.ctx.camera.position, near = Math.hypot(p.x - cam.x, p.y - cam.y, p.z - cam.z);
     if (near < 2.4 && count >= 12) this.lens(Math.ceil((2.4 - near) * 2.5));
-    count = Math.ceil(count * 1.5);
+    count = Math.ceil(count * (this.lite ? 0.8 : 1.5));
     for (let k = 0; k < count; k++) {
       const s = speed * rnd(0.25, 1.15);
       const j = spread * speed * 0.5;
@@ -654,7 +689,12 @@ export class Gore {
 
   gibs(p, count = 50) {
     this.mist(p, UP, 10, 2.2);
-    count = Math.ceil(count * 1.5);
+    count = Math.ceil(count * (this.lite ? 0.8 : 1.5));
+    // the room gets painted: a burst onto whatever is around, every way at once
+    for (let k = 0; k < 4; k++) {
+      const a = k * 1.571 + rnd(0, 1.2);
+      this.wallSplatter(p, _d.set(Math.cos(a), rnd(-0.4, 0.5), Math.sin(a)), 3.5);
+    }
     for (let k = 0; k < count; k++) {
       const s = rnd(2, 9), a = rnd(0, Math.PI * 2), e = rnd(-0.2, 1.1);
       const vx = Math.cos(a) * Math.cos(e) * s, vy = Math.sin(e) * s + 2, vz = Math.sin(a) * Math.cos(e) * s;
@@ -798,7 +838,9 @@ export class Gore {
     const set = pick(this.sets.drip);
     const w = rnd(0.028, 0.05);
     const i = set.add(_p, _q, w, 0.03, rnd(0.2, 0.3), 0.004, 0.004);
-    this.growing.push({ set, i, pos: _p.clone(), quat: _q.clone(), down, w, from: 0.03, to: len, t: 0, dur: rnd(2.5, 7) * (0.5 + len) });
+    const g = { set, i, pos: _p.clone(), quat: _q.clone(), down, w, from: 0.03, to: len, t: 0, dur: rnd(2.5, 7) * (0.5 + len) };
+    this.growing.push(g);
+    return g;
   }
 
   /** A streak left by something bloody dragged over the ground. */
@@ -808,13 +850,25 @@ export class Gore {
     pick(this.sets.smear).add(_p, _q, width * rnd(0.8, 1.2) * k, length * rnd(0.9, 1.3) * k, rnd(0.17, 0.26), 0.004, 0.004);
   }
 
+  /** A bloody hand pressed on a wall, fingers up and a little tilted; sometimes it slid. */
+  handprint(p, normal) {
+    this.splat(p, normal, rnd(0.2, 0.26), { kind: 'hand', along: _t.set(rnd(-0.4, 0.4), 1, rnd(-0.4, 0.4)), r: rnd(0.16, 0.26) });
+    if (Math.random() < 0.3) this.run(p, normal);
+  }
+
+  /** Blood on a ceiling comes back down: a drop every so often from the same spot, slower as it runs dry. */
+  dripFrom(p, t) {
+    this.drippers.push({ x: p.x, y: p.y - 0.015, z: p.z, t, next: rnd(0.2, 0.8) });
+    if (this.drippers.length > 30) this.drippers.shift();
+  }
+
   bulletHole(p, normal) {
     this._orient(p, normal, 0.008);
     this.holes.add(_p, _q, 0.09, 0.09, 0.03, 0.03, 0.03);
   }
 
-  /** Blood thrown onto whatever is behind the victim. */
-  wallSplatter(point, dir, range = 4) {
+  /** Blood thrown onto whatever is behind the victim (matter: a head shot, so pink-grey brain goes with it). */
+  wallSplatter(point, dir, range = 4, matter = false) {
     const l = Math.hypot(dir.x, dir.y, dir.z) || 1;
     const dx = dir.x / l, dy = dir.y / l, dz = dir.z / l;
     const hit = this.castFixed(point.x, point.y, point.z, dx, dy, dz, range);
@@ -824,6 +878,15 @@ export class Gore {
     const base = { x: point.x + dx * t, y: point.y + dy * t, z: point.z + dz * t };
     const n = { x: hit.normal.x, y: hit.normal.y, z: hit.normal.z };
     this.splat(base, n, rnd(0.3, 0.55) * (0.5 + k), { drip: false });
+    if (matter) {
+      for (let j = 0; j < 3; j++) {
+        _t.set(dx + rnd(-0.6, 0.6), dy + rnd(-0.6, 0.3), dz + rnd(-0.6, 0.6));
+        this.splat({ x: base.x + rnd(-0.08, 0.08), y: base.y + rnd(-0.08, 0.08), z: base.z + rnd(-0.08, 0.08) }, n, rnd(0.07, 0.15),
+          { r: rnd(0.4, 0.55), g: rnd(0.16, 0.22), b: rnd(0.14, 0.19), along: _t, drip: false });
+      }
+      _t.set(dx, dy, dz);
+      this.splat(base, n, rnd(0.4, 0.6), { along: _t, kind: 'spatter', r: 0.42, g: 0.16, b: 0.14 });
+    }
     // fine spatter fanning out around it: mostly onward along the shot, sagging under gravity
     for (let j = 0; j < 3; j++) {
       _t.set(dx + rnd(-0.9, 0.9), dy + rnd(-0.9, 0.5), dz + rnd(-0.9, 0.9));
@@ -865,8 +928,37 @@ export class Gore {
       mesh.castShadow = true;
       scene.add(mesh);
       owners.set(col.handle, { kind: 'chunk', body });
-      this.chunkList.push({ body, col, mesh, life: rnd(70, 120), drip: def.drip, size: mesh.scale.x, vy: 0, marks: 3 });
+      this.chunkList.push({ body, col, mesh, life: rnd(70, 120), drip: def.drip, size: mesh.scale.x, r, vy: 0, marks: 3, stick: 2.5, stuck: null, smears: 5, sx: p.x, sz: p.z });
     }
+  }
+
+  /** A flying piece slaps into a wall or a ceiling and stays there for a while. */
+  _stick(c, t, v, sp, hit) {
+    const n = hit.normal, d = hit.timeOfImpact;
+    const at = { x: t.x + v.x / sp * d, y: t.y + v.y / sp * d, z: t.z + v.z / sp * d };
+    const pos = new THREE.Vector3(at.x + n.x * c.r * 0.6, at.y + n.y * c.r * 0.6, at.z + n.z * c.r * 0.6);
+    c.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+    c.body.setTranslation(pos, true);
+    this.splat(at, n, c.size * rnd(5, 8), { r: rnd(0.2, 0.3), drip: false });
+    const ceiling = n.y < -0.5;
+    c.stuck = { pos, run: ceiling ? null : this.run(at, n), t: ceiling ? rnd(0.8, 3.5) : rnd(4, 10) };
+    if (ceiling) this.dripFrom(at, c.stuck.t + 6);
+    c.drip = Math.max(c.drip, c.stuck.t);            // (slowly: see update)
+    c.stick = 0;
+  }
+
+  /** A stuck piece rides down the bottom of its own streak, then lets go. */
+  _slide(c, dt) {
+    const s = c.stuck, g = s.run;
+    if (g) {
+      const k = Math.min(1, g.t / g.dur);
+      c.body.setTranslation(_p.copy(s.pos).addScaledVector(g.down, (g.to - g.from) * (1 - (1 - k) * (1 - k))), true);
+    }
+    if ((s.t -= dt) > 0) return;
+    c.stuck = null;
+    c.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+    c.body.setLinvel({ x: 0, y: -0.5, z: 0 }, true);
+    c.marks = Math.max(c.marks, 1);
   }
 
   _removeChunk(i) {
@@ -884,6 +976,7 @@ export class Gore {
     this.holes.clear();
     this.scorch.clear();
     this.growing.length = 0;
+    this.drippers.length = 0;
     this.pools.length = 0;
     this.lensEl?.replaceChildren();
     while (this.chunkList.length) this._removeChunk(0);
@@ -914,6 +1007,7 @@ export class Gore {
     } else {
       this.splat(at, n, size * (big ? rnd(7, 11) : rnd(5, 9)), { r, drip: big });
       if (big && Math.random() < 0.4) this.run(at, n);
+      if (big && n.y < -0.55 && Math.random() < 0.5) this.dripFrom(at, rnd(6, 18));
     }
     return true;
   }
@@ -934,26 +1028,56 @@ export class Gore {
       if (k >= 1) this.growing.splice(i, 1);
     }
 
+    for (let i = this.drippers.length - 1; i >= 0; i--) {
+      const d = this.drippers[i];
+      if ((d.t -= dt) <= 0) { this.drippers.splice(i, 1); continue; }
+      if ((d.next -= dt) <= 0) {
+        d.next = rnd(0.3, 0.9) / Math.min(1, 0.25 + d.t / 8);
+        this.drops.emit(d.x + rnd(-0.01, 0.01), d.y, d.z + rnd(-0.01, 0.01), 0, -0.3, 0, rnd(0.009, 0.015), 3, 9.8, rnd(0.1, 0.16), 0.003, 0.003, BLOOD);
+      }
+    }
+
     for (let i = this.chunkList.length - 1; i >= 0; i--) {
       const c = this.chunkList[i];
       c.life -= dt;
       if (c.life <= 0) { this._removeChunk(i); continue; }
+      if (c.stuck) this._slide(c, dt);
       const t = c.body.translation(), r = c.body.rotation();
       if (t.y < -20) { this._removeChunk(i); continue; }
       c.mesh.position.set(t.x, t.y, t.z);
       c.mesh.quaternion.set(r.x, r.y, r.z, r.w);
       if (c.life < 1) c.mesh.scale.setScalar(c.size * c.life);
       const v = c.body.linvel();
-      // landed (it was falling, now it is not): a wet mark where it hit
-      if (c.marks > 0 && c.vy < -1.5 && v.y > c.vy + 1.2) {
+      // fresh off the body and flying: a wall or a ceiling it slaps into, it sticks to (not doors or glass: they move or go)
+      if (c.stick > 0 && !c.stuck) {
+        c.stick -= dt;
+        const sp = Math.hypot(v.x, v.y, v.z);
+        if (sp > 3) {
+          const hit = this.castFixed(t.x, t.y, t.z, v.x / sp, v.y / sp, v.z / sp, sp * dt * 1.5 + c.r);
+          if (hit && hit.normal.y < 0.5 && !this.ctx.owners.has(hit.collider.handle)) { this._stick(c, t, v, sp, hit); continue; }
+        }
+      }
+      // landed (it was falling, now it is not): a wet mark where it hit, and a splash if that was a pool
+      if (!c.stuck && c.marks > 0 && c.vy < -1.5 && v.y > c.vy + 1.2) {
         c.marks--;
         const hit = this.castFixed(t.x, t.y + 0.05, t.z, 0, -1, 0, 0.3);
         if (hit) this.splat({ x: t.x, y: t.y + 0.05 - hit.timeOfImpact, z: t.z }, hit.normal, c.size * rnd(2.5, 4.5) * (0.5 + c.marks * 0.25));
+        if (this.wetAt(t)) this.blood(t, UP, 5, 1.6, 1.5);
       }
       c.vy = v.y;
+      // sliding or rolling over the floor: it smears
+      const hs = Math.hypot(v.x, v.z);
+      if (!c.stuck && c.smears > 0 && hs > 1.2 && Math.abs(v.y) < 1 && (t.x - c.sx) ** 2 + (t.z - c.sz) ** 2 > 0.04) {
+        c.sx = t.x; c.sz = t.z;
+        const hit = this.castFixed(t.x, t.y + 0.02, t.z, 0, -1, 0, c.size + 0.08);
+        if (hit) {
+          c.smears--;
+          this.smear({ x: t.x, y: t.y + 0.02 - hit.timeOfImpact, z: t.z }, hit.normal, { x: v.x, y: 0, z: v.z }, c.size * 2.2, Math.min(0.5, hs * 0.12));
+        }
+      }
       if (c.drip > 0) { // freshly torn: leaves a trail
         c.drip -= dt;
-        if (Math.random() < dt * 30) {
+        if (Math.random() < dt * (c.stuck ? 3 : 30)) {
           this.drops.emit(t.x, t.y, t.z, v.x * 0.4 + rnd(-0.5, 0.5), v.y * 0.4, v.z * 0.4 + rnd(-0.5, 0.5),
             rnd(0.007, 0.015), 1.5, 9.8, rnd(0.09, 0.16), 0.003, 0.003, BLOOD);
         }
