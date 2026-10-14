@@ -12,6 +12,7 @@ import { MAPS, MAP_LIST } from './maps.js';
 import { loadModels } from './models.js';
 import { Post } from './post.js';
 import { Mission } from './mission.js';
+import { initTouch, isTouch } from './touch.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_RAGDOLLS = 36;
@@ -21,7 +22,7 @@ await Promise.all([RAPIER.init(), loadModels()]);
 // ------------------------------------------------------------------ renderer
 const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isTouch ? 1.25 : 2));   // phones: fewer pixels to fill
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -80,11 +81,13 @@ ctx.gore = new Gore(ctx);
 let startMap = new URLSearchParams(location.search).get('map');
 try { startMap = startMap || localStorage.getItem('impactbox.map'); } catch (e) { /* no storage */ }
 buildWorld(ctx, MAPS[startMap] ? startMap : 'yard');
+if (isTouch) ctx.sun.shadow.mapSize.set(2048, 2048);   // phones: a quarter of the shadow map
 ctx.player = new Player(ctx, ctx.map.spawn);
 ctx.player.yaw = ctx.player.camYaw = ctx.map.yaw;
 setSpace(ctx.map.id);
 ctx.weapons = new Weapons(ctx);
 ctx.post = post;
+if (isTouch) { post.lite = true; post.final.uniforms.uAoAmt.value = 0; }
 
 ctx.later = (sec, fn) => ctx.timers.push({ t: sec, fn });
 
@@ -573,6 +576,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyC') { clearAll(); toast('CLEARED'); }
 });
 document.addEventListener('keyup', (e) => input.keys.delete(e.code));
+initTouch(ctx, input);
 window.addEventListener('blur', () => { input.keys.clear(); input.left = input.right = false; });
 
 // ------------------------------------------------------------------ maps

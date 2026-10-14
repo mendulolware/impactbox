@@ -73,7 +73,7 @@ const EXP_FRAG = `
 
 const FINAL_FRAG = `
   uniform sampler2D tScene; uniform sampler2D tAO; uniform sampler2D tBloom;
-  uniform vec2 uAoTexel; uniform float uHelmet; uniform float uAspect; uniform float uSupp; uniform vec3 uFaces[8]; uniform vec2 uBlur; uniform vec2 uTexel; uniform float uTime; uniform sampler2D tExp; uniform float uKey; uniform float uFlash; varying vec2 vUv;
+  uniform vec2 uAoTexel; uniform float uHelmet; uniform float uAspect; uniform float uSupp; uniform vec3 uFaces[8]; uniform vec2 uBlur; uniform vec2 uTexel; uniform float uTime; uniform sampler2D tExp; uniform float uKey; uniform float uFlash; uniform float uAoAmt; varying vec2 vUv;
   void main() {
     // bodycam lens: the middle of the picture is magnified and the edges squeezed in (corners stay put)
     vec2 lc = vUv * 2.0 - 1.0;
@@ -111,7 +111,7 @@ const FINAL_FRAG = `
       ao += texture2D(tAO, uv + (vec2(float(x), float(y)) - 1.5) * uAoTexel).r;
     }
     ao /= 16.0;
-    col *= mix(1.0, ao, 0.85);
+    col *= mix(1.0, ao, uAoAmt);
     col += texture2D(tBloom, uv).rgb * 0.7;
     if (uHelmet > 0.5) col *= clamp(uKey / texture2D(tExp, vec2(0.5)).r, 0.5, 1.6);   // the camera's auto exposure
 
@@ -160,7 +160,7 @@ export class Post {
     this.blur.toneMapped = false;
     this.final = mat(FINAL_FRAG, {
       tScene: { value: this.target.texture }, tAO: { value: this.aoTarget.texture }, tBloom: { value: this.bloomA.texture },
-      uAoTexel: { value: new THREE.Vector2() }, uHelmet: { value: 0 }, uAspect: { value: 1 }, uSupp: { value: 0 }, uBlur: { value: new THREE.Vector2() }, uTexel: { value: new THREE.Vector2() }, uTime: { value: 0 }, tExp: { value: null }, uKey: { value: 0.14 }, uFlash: { value: 0 },   // what a sunny yard averages, so daylight stays as it was
+      uAoTexel: { value: new THREE.Vector2() }, uHelmet: { value: 0 }, uAspect: { value: 1 }, uSupp: { value: 0 }, uBlur: { value: new THREE.Vector2() }, uTexel: { value: new THREE.Vector2() }, uTime: { value: 0 }, tExp: { value: null }, uKey: { value: 0.14 }, uFlash: { value: 0 }, uAoAmt: { value: 0.85 },   // what a sunny yard averages, so daylight stays as it was
       uFaces: { value: Array.from({ length: 8 }, () => new THREE.Vector3()) },
     });
 
@@ -207,7 +207,7 @@ export class Post {
 
     this.ao.uniforms.uProj.value.copy(camera.projectionMatrix);
     this.ao.uniforms.uProjInv.value.copy(camera.projectionMatrixInverse);
-    this.pass(this.ao, this.aoTarget);
+    if (!this.lite) this.pass(this.ao, this.aoTarget);   // lite (phones): no ambient occlusion, the most expensive pass
 
     this.pass(this.bright, this.bloomA);
     for (let i = 0; i < 2; i++) {      // two rounds of blur, each a horizontal then a vertical sweep

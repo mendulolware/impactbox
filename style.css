@@ -107,3 +107,27 @@ body.scoped #mission { opacity: 0; }
   animation: lensrun 7s ease-in forwards; }
 @keyframes lensrun { 0% { transform: scale(.3); opacity: 0; } 3% { transform: scale(1); opacity: .85; } 60% { opacity: .6; }
   100% { transform: translateY(90px) scaleY(1.7); opacity: 0; } }
+
+/* ---- phones and tablets (touch.js) ---- */
+#touch { display: none; }
+body.touch #touch { display: block; position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+body.touch:has(#start:not(.hidden)) #touch, body.touch:has(#menu:not(.hidden)) #touch .b { display: none; }
+body.touch #help, body.touch .keys { display: none; }
+body.touch #start { overflow-y: auto; align-items: flex-start; padding: 16px 0; }
+body.touch #weapon-bar { bottom: 6px; transform: translateX(-50%) scale(.7); transform-origin: bottom center; }
+#touch button { pointer-events: auto; touch-action: none; color: #fff; -webkit-tap-highlight-color: transparent; }
+#touch .b { position: absolute; width: 62px; height: 62px; border-radius: 50%; background: rgba(0,0,0,.35); border: 2px solid rgba(255,255,255,.35); font: 700 13px system-ui, sans-serif; }
+#touch .b:active, #touch .b.on { border-color: #ff5a4a; background: rgba(120,10,10,.45); }
+#t-fire { right: 4%; bottom: 24%; width: 86px !important; height: 86px !important; background: rgba(150,20,20,.45) !important; }
+#t-aim { right: calc(4% + 100px); bottom: 15%; }
+#t-jump { right: 4%; bottom: 6%; }
+#t-reload { right: calc(4% + 104px); bottom: calc(15% + 74px); }
+#t-swap { right: calc(4% + 12px); bottom: calc(24% + 98px); }
+#t-use { right: calc(4% + 186px); bottom: 7%; }
+#touch .row { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+#touch .row button { padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,255,255,.3); font: 600 12px system-ui, sans-serif; }
+#stick { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: rgba(0,0,0,.15); display: none; }
+#stick.on { display: block; }
+#stick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px; border-radius: 50%; background: rgba(255,255,255,.35); }
+body.touch #ammo { bottom: auto; top: 64px; right: 16px; }
+body.touch #weapon-bar { left: 38%; }
