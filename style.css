@@ -243,3 +243,24 @@ body.touch #weapon-bar { bottom: 4px; left: 38%; transform: translateX(-50%) sca
 body.touch .slot { min-width: 66px; padding: 5px 6px 6px; }
 body.touch #weapon-bar .slot { pointer-events: auto; touch-action: none; }
 @media (pointer: coarse) { #help, .keys, .keys-h { display: none; } }   /* (before touch.js has run: no keyboard to show keys for) */
+
+/* ================================================================ settings */
+#settings { position: fixed; inset: 0; z-index: 12; display: flex; align-items: center; justify-content: center; background: rgba(4, 5, 8, .6); }
+#settings.hidden { display: none; }
+#settings .panel { width: min(580px, 94vw); }
+#set-close { padding: 6px 20px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: 700 15px var(--cond); letter-spacing: 2px; text-transform: uppercase; cursor: pointer; }
+.srow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 210px) 58px; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); font: 600 15px var(--cond); letter-spacing: 1.5px; text-transform: uppercase; }
+.srow output { font: 600 13px var(--mono); color: var(--dim); text-align: right; }
+.srow .seg, .srow .tog { grid-column: 2 / 4; justify-self: end; }
+.seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
+.seg button { padding: 7px 15px; border: 0; background: transparent; color: var(--dim); font: 600 13px var(--cond); letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; }
+.seg button.on { background: var(--accent); color: #fff; }
+.tog { position: relative; width: 48px; height: 26px; border-radius: 13px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, .08); cursor: pointer; }
+.tog::after { content: ''; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--dim); transition: left .15s, background .15s; }
+.tog.on { background: rgba(255, 59, 47, .35); border-color: var(--accent); }
+.tog.on::after { left: 25px; background: #fff; }
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; margin: 0; border-radius: 2px; background: rgba(255, 255, 255, .16); cursor: pointer; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); }
+input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); }
+#settings-btn { display: block; margin: 14px auto 0; padding: 6px 14px; border: 0; background: none; color: var(--dim); font: 600 14px var(--cond); letter-spacing: 2px; text-transform: uppercase; cursor: pointer; }
+#settings-btn:hover { color: #fff; }

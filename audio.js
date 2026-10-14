@@ -61,6 +61,13 @@ const SPACES = {
   house:     { wet: 0.45, bed: 'hum', indoor: 1 },
 };
 
+let volume = 1;
+/** The settings' volume slider (0..1). Safe to call before the first click starts the sound. */
+export function setVolume(v) {
+  volume = v;
+  if (master) master.gain.value = 0.5 * v;
+}
+
 export function initAudio() {
   try {
     if (!ac) {
@@ -69,7 +76,7 @@ export function initAudio() {
       comp.threshold.value = -14; comp.ratio.value = 6; comp.attack.value = 0.002; comp.release.value = 0.18;
       comp.connect(ac.destination);
       master = ac.createGain();
-      master.gain.value = 0.5;
+      master.gain.value = 0.5 * volume;
       ears = ac.createBiquadFilter();                      // everything is heard through these (see deafen)
       ears.type = 'lowpass'; ears.frequency.value = 20000;
       // then through the bodycam's microphone when that view is on (bodycam()): thin, and loud things clip

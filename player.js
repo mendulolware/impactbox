@@ -91,9 +91,9 @@ export class Player {
   }
 
   look(dx, dy) {
-    const s = 0.0022 * this.sens;
+    const st = this.ctx.settings, s = 0.0022 * this.sens * (st?.sens ?? 1);
     this.yaw -= dx * s;
-    this.pitch = THREE.MathUtils.clamp(this.pitch - dy * s, -1.5, 1.5);
+    this.pitch = THREE.MathUtils.clamp(this.pitch - dy * s * (st?.invert ? -1 : 1), -1.5, 1.5);
   }
 
   /**
@@ -239,7 +239,7 @@ export class Player {
     this.eye.set(this.pos.x, this.pos.y + EYE, this.pos.z);
 
     // eyes narrow in on the sights; a helmet camera has a fixed lens, so it barely changes
-    const fov = (helmet ? FOV_HELMET : FOV) * (1 - (helmet && zoom < 0.5 ? 0.05 : zoom) * ads);
+    const fov = (helmet ? FOV_HELMET : this.ctx.settings?.fov ?? FOV) * (1 - (helmet && zoom < 0.5 ? 0.05 : zoom) * ads);
     this.fov += (fov - this.fov) * Math.min(1, rdt * 14);
     if (Math.abs(cam.fov - this.fov) > 0.01) {
       cam.fov = this.fov;

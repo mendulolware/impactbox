@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { initAudio, sfx, setSpace, deafen, bodycam, audioStream, setRain } from './audio.js';
+import { initAudio, setVolume, sfx, setSpace, deafen, bodycam, audioStream, setRain } from './audio.js';
 import { Gore } from './gore.js';
 import { Ragdoll, selfCollide } from './ragdoll.js';
 import { tickWounds } from './wounds.js';
@@ -25,7 +25,7 @@ const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch, powerPreference: 'high-performance' });
 const MAX_PR = Math.min(window.devicePixelRatio, isTouch ? 1.25 : 2);   // phones: fewer pixels to fill
 renderer.setPixelRatio(MAX_PR);
-renderer.shadowMap.enabled = !isTouch;             // phones: no shadows at all
+renderer.shadowMap.enabled = true;                 // (the Graphics setting turns them off: phones start on Low)
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.82;
@@ -89,7 +89,64 @@ ctx.player.yaw = ctx.player.camYaw = ctx.map.yaw;
 setSpace(ctx.map.id);
 ctx.weapons = new Weapons(ctx);
 ctx.post = post;
-if (isTouch) { post.lite = true; post.final.uniforms.uAoAmt.value = 0; }
+
+// ------------------------------------------------------------------ settings (kept in this browser)
+const DEFAULTS = { sens: 1, fov: 75, volume: 1, scale: 1, quality: isTouch ? 'low' : 'high', invert: false, stats: true };
+ctx.settings = { ...DEFAULTS };
+try { Object.assign(ctx.settings, JSON.parse(localStorage.getItem('impactbox.settings') || '{}')); } catch (e) { /* no storage */ }
+const SETTINGS_UI = [
+  { id: 'sens', label: 'Look sensitivity', min: 0.2, max: 3, step: 0.05, fmt: (v) => v.toFixed(2) + 'x' },
+  { id: 'fov', label: 'Field of view', min: 60, max: 105, step: 1, fmt: (v) => v + '\u00b0' },
+  { id: 'volume', label: 'Volume', min: 0, max: 1, step: 0.05, fmt: (v) => Math.round(v * 100) + '%' },
+  { id: 'scale', label: 'Resolution', min: 0.5, max: 1, step: 0.05, fmt: (v) => Math.round(v * 100) + '%' },
+  { id: 'quality', label: 'Graphics', options: ['low', 'medium', 'high'] },        // high: occlusion, glow, shadows; medium: shadows; low: none
+  { id: 'invert', label: 'Invert look', toggle: true },
+  { id: 'stats', label: 'FPS and counters', toggle: true },
+];
+function applySettings() {
+  const s = ctx.settings;
+  setVolume(s.volume);
+  if (Math.abs(renderer.getPixelRatio() - MAX_PR * s.scale) > 0.01) { renderer.setPixelRatio(MAX_PR * s.scale); resize(); }
+  post.lite = s.quality !== 'high';
+  post.final.uniforms.uAoAmt.value = post.lite ? 0 : 0.85;
+  const shadows = s.quality !== 'low';
+  if (renderer.shadowMap.enabled !== shadows) {
+    renderer.shadowMap.enabled = shadows;
+    scene.traverse((o) => { for (const m of [].concat(o.material || [])) m.needsUpdate = true; });   // (their shaders change)
+  }
+  $('stats').style.display = s.stats ? '' : 'none';
+  try { localStorage.setItem('impactbox.settings', JSON.stringify(s)); } catch (e) { /* private window */ }
+}
+function buildSettings() {
+  const body = $('settings-body');
+  for (const it of SETTINGS_UI) {
+    const row = document.createElement('div');
+    row.className = 'srow';
+    body.appendChild(row);
+    if (it.options) {
+      row.innerHTML = `<span>${it.label}</span><div class="seg">${it.options.map((o) => `<button data-v="${o}">${o}</button>`).join('')}</div>`;
+      const mark = () => row.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === ctx.settings[it.id]));
+      row.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { ctx.settings[it.id] = b.dataset.v; mark(); applySettings(); }));
+      mark();
+    } else if (it.toggle) {
+      row.innerHTML = `<span>${it.label}</span><button class="tog"></button>`;
+      const b = row.querySelector('button'), mark = () => b.classList.toggle('on', !!ctx.settings[it.id]);
+      b.addEventListener('click', () => { ctx.settings[it.id] = !ctx.settings[it.id]; mark(); applySettings(); });
+      mark();
+    } else {
+      row.innerHTML = `<span>${it.label}</span><input type="range" min="${it.min}" max="${it.max}" step="${it.step}"><output></output>`;
+      const inp = row.querySelector('input'), out = row.querySelector('output');
+      inp.value = ctx.settings[it.id];
+      out.textContent = it.fmt(ctx.settings[it.id]);
+      inp.addEventListener('input', () => { ctx.settings[it.id] = +inp.value; out.textContent = it.fmt(+inp.value); applySettings(); });
+    }
+  }
+}
+function setSettings(open) { $('settings').classList.toggle('hidden', !open); }
+buildSettings();
+applySettings();
+$('settings-btn').addEventListener('click', () => setSettings(true));
+$('set-close').addEventListener('click', () => setSettings(false));
 
 ctx.later = (sec, fn) => ctx.timers.push({ t: sec, fn });
 
@@ -412,6 +469,7 @@ const SPAWN_ITEMS = [
   { cat: 'World', label: 'Slow-mo', icon: '⏳', small: 'toggle (T)', run: () => toggleSlowmo() },
   { cat: 'World', label: 'Helmet Cam', icon: '📹', small: 'toggle (V)', run: () => toggleHelmet() },
   { cat: 'World', label: 'Graphics', icon: '✨', small: 'high / fast (G)', run: () => toggleGraphics() },
+  { cat: 'World', label: 'Settings', icon: '⚙️', small: 'look, FOV, volume, graphics', run: () => setSettings(true) },
 ];
 
 function buildMenu() {
@@ -567,6 +625,7 @@ function toggleSlowmo() {
 
 function setMenu(open) {
   ctx.menuOpen = open;
+  if (!open) setSettings(false);
   $('menu').classList.toggle('hidden', !open);
   if (open) {
     if (document.pointerLockElement) document.exitPointerLock();
@@ -629,6 +688,7 @@ document.addEventListener('keydown', (e) => {
     if (started || ctx.menuOpen) { e.preventDefault(); setMenu(!ctx.menuOpen); }
     return;
   }
+  if (e.code === 'Escape' && !$('settings').classList.contains('hidden')) { setSettings(false); return; }
   if (e.code === 'Escape' && ctx.menuOpen) { setMenu(false); return; }
   if (!gameActive()) return;
   input.keys.add(e.code);
@@ -767,7 +827,7 @@ function adaptResolution(dt) {
   if (!gameActive() || (prT -= dt) > 0) return;
   prT = 2;
   const pr = renderer.getPixelRatio();
-  const next = THREE.MathUtils.clamp(fps < 42 ? pr - 0.15 : fps > 56 ? pr + 0.1 : pr, 0.6, MAX_PR);
+  const next = THREE.MathUtils.clamp(fps < 42 ? pr - 0.15 : fps > 56 ? pr + 0.1 : pr, 0.6, MAX_PR * ctx.settings.scale);
   if (Math.abs(next - pr) > 0.01) { renderer.setPixelRatio(next); resize(); }
 }
 

@@ -71,7 +71,7 @@ export function initTouch(ctx, input) {
   const lookStart = (t) => looks.set(t.identifier, [t.clientX, t.clientY]);
   $('#t-fire').addEventListener('touchstart', (e) => { for (const t of e.changedTouches) lookStart(t); });
   document.addEventListener('touchstart', (e) => {
-    if (e.target.closest?.('#menu, #start, button')) return;
+    if (e.target.closest?.('#menu, #start, #settings, button')) return;
     e.preventDefault();             // no zoom, no scroll, and no pretend mouse click (which would fire)
     for (const t of e.changedTouches) {
       if (t.clientX < innerWidth * 0.4 && !move) {
@@ -91,7 +91,7 @@ export function initTouch(ctx, input) {
       ctx.player.look(dx, dy);
       input.mx += dx; input.my += dy;
     }
-    if (!e.target.closest?.('#menu')) e.preventDefault();
+    if (!e.target.closest?.('#menu, #settings, #start')) e.preventDefault();
   }, { passive: false });
   const end = (e) => {
     for (const t of e.changedTouches) {
