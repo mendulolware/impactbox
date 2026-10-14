@@ -230,6 +230,29 @@ function ambience(kind) {
   return { gain: g, stop: () => { for (const n of nodes) { try { n.stop(); } catch (e) { /* already stopped */ } } g.disconnect(); } };
 }
 
+/** The engine of the car you are driving (drive.js): rev 0..1, or null to switch it off. */
+let eng = null;
+export function engine(rev) {
+  if (!ac) return;
+  const t = ac.currentTime;
+  if (rev === null) {
+    if (!eng) return;
+    const e = eng; eng = null;
+    e.g.gain.setTargetAtTime(0, t, 0.12);
+    setTimeout(() => { e.o.stop(); e.g.disconnect(); }, 900);
+    return;
+  }
+  if (!eng) {
+    const o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+    o.type = 'sawtooth'; f.type = 'lowpass'; g.gain.value = 0;
+    o.connect(f); f.connect(g); out(g, 0.1); o.start();
+    eng = { o, f, g };
+  }
+  eng.o.frequency.setTargetAtTime(36 + rev * 120, t, 0.08);
+  eng.f.frequency.setTargetAtTime(260 + rev * 1500, t, 0.08);
+  eng.g.gain.setTargetAtTime(0.06 + rev * 0.08, t, 0.1);
+}
+
 /** Connect a sound to the output, and `send` (0..1) of it to the echo. */
 function out(node, send) {
   node.connect(master);

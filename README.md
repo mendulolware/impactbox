@@ -22,7 +22,8 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | G | graphics: high / fast (turns the effects off on slow machines) |
 | 1-8 or wheel | pick a weapon group; press the same number again for the next weapon in it (table under Weapons) |
 | R / F / B | reload / clear a jam / switch auto and semi |
-| F | open or close the door in front of you; otherwise Ready or Not mode: shout for compliance, or arrest whoever has given up in front of you |
+| F | open or close the door in front of you; get into (or out of) a car beside you; otherwise Ready or Not mode: shout for compliance, or arrest whoever has given up in front of you |
+| in a car: W / S / A / D / Space | drive / brake and reverse / steer / handbrake (see Driving) |
 | H / M | kick the door in front of you / look under it with the mirror (M again, or walk away, to stop) |
 | U | the squad: go where you are pointing and hold that angle; U again (or getting 18 m away from them) calls them back |
 | J / K | suppressor on the current gun (quieter: heard 9 m away instead of 40, no flash) / laser (a red dot where the barrel points, and the beam at night) |
@@ -57,6 +58,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | `survival.js` | Zombie Survival: waves, lives, the best wave |
 | `tools.js` | the Rope Tool and the Weld Tool |
 | `traps.js` | saw blade, spike trap, launch pad, crusher |
+| `drive.js` | driving cars: getting in and out, the handling, the view behind, running people over |
 | `water.js` | water: floating, drag, splashes, rounds slowing down under it, swimming, the view under it |
 | `gore.js` | blood droplets and mist, fire and smoke; decals that dry (splats, spatter, runs, pools, smears, handprints); physical chunks (meat, bone, skull, ribs, gut, eyes) that stick to walls and ceilings |
 | `wounds.js` | holes and gashes cut into body parts, blood soaking and running from them, burns, what is visible inside, and the torn stumps |
@@ -87,6 +89,16 @@ Every box gets a collider on one fixed body, and the visible boxes are joined in
 pieces is a handful of draw calls. `loadMap()` removes the old map (meshes, materials, colliders) and builds the next.
 Times of day are `SKIES` in `world.js`: sun direction and colour, sky colours, cloud cover, fog.
 To add a map, add an entry to `MAPS`; both menus list it automatically.
+
+## Driving
+
+Any car (the ones parked on most maps, or one from the spawn menu) can be driven: walk up to it and press F (the USE button on a phone), F again to get out of the driver's door (or the other side, or behind, wherever there is room). `drive.js`:
+
+- **handling** is arcade, set on the body directly before each physics step: 0 to 40 km/h in about 2 s, 86 km/h flat out, 32 in reverse; S brakes first and then reverses; steering is sharpest at low speed and softens as it goes faster; the tyres hold the car sideways, and the handbrake lets go of that so the back steps out. Off the ground (a ramp, a drop) it just flies. The car is a box, not four wheels, so its friction is off while it is driven and the grip is done in code
+- **it stays a prop**: it can be shot, set alight and blown up like any car (you are put out first, then it goes off), and only its tilt is locked while someone is in it. Getting in sets it back on its wheels if it was over
+- **people in its path** are knocked down just before the bumper reaches them (`Ragdoll.knockBy`, the same knock a thrown crate does), harder the faster it goes, so it goes through them instead of stopping dead against an NPC on its feet (which is kinematic: infinitely heavy to the physics)
+- **the view** sits behind and above and swings round after the car, pulled in short of walls; the engine is a sawtooth through a filter that rises with speed (`engine` in `audio.js`). Your own collider is off while you drive, so rounds aimed at you hit the car
+- **co-op**: only the host drives for now (the guest gets a message); the guest sees the car move like any other prop
 
 ## Water
 

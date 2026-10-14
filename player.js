@@ -134,7 +134,7 @@ export class Player {
     const zoom = this.ctx.weapons ? this.ctx.weapons.zoom : 0.3;
     this.sens = 1 - (zoom > 0.5 ? 0.86 : 0.45) * ads;   // scopes need a much slower hand
 
-    if (this.ctx.drone) enabled = false;       // hands are on the drone's controls
+    if (this.ctx.drone || this.ctx.car) enabled = false;       // hands are on the drone's controls, or the wheel (drive.js)
     const f = enabled ? (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0) : 0;
     const s = enabled ? (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0) : 0;
     const sprint = enabled && ads < 0.3 && (k.has('ShiftLeft') || k.has('ShiftRight'));

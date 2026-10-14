@@ -1301,8 +1301,11 @@ export class Ragdoll {
       });
       if (hitBy) break;
     }
-    if (!hitBy) return;
-    const { v, sp, m, part } = hitBy;
+    if (hitBy) this.knockBy(hitBy.part, hitBy.v, hitBy.sp, hitBy.m);
+  }
+
+  /** Knocked over at `part` by something of mass m coming at velocity v (speed sp): a crate, a car (drive.js). */
+  knockBy(part, v, sp, m) {
     this.goLimp(1.5 + Math.min(2.5, m * sp / 150));
     const k = Math.min(260, m * sp * 0.6);
     this.parts[part].body.applyImpulse({ x: v.x / sp * k, y: v.y / sp * k + 20, z: v.z / sp * k }, true);

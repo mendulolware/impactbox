@@ -289,3 +289,6 @@ input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 
 /* under water (water.js): the picture goes blue and dim at the edges */
 #under { display: none; position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(30, 120, 150, .28), rgba(4, 36, 52, .72)); }
 body.underwater #under { display: block; }
+
+/* driving (drive.js): no gun, so no crosshair or ammo */
+body.driving #crosshair, body.driving #ammo { display: none; }

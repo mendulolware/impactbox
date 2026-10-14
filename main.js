@@ -18,6 +18,7 @@ import { Tools } from './tools.js';
 import { makeTrap, TRAP_TYPES } from './traps.js';
 import { Coop } from './coop.js';
 import { Water } from './water.js';
+import { Driving } from './drive.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_RAGDOLLS = isTouch ? 18 : 36;          // (phones: half the people)
@@ -86,6 +87,7 @@ window.__game = ctx; // handy for debugging in the console
 
 ctx.gore = new Gore(ctx);
 ctx.water = new Water(ctx);
+ctx.driving = new Driving(ctx);
 // which map to start on: ?map=street in the address, else the one played last, else the yard
 let startMap = new URLSearchParams(location.search).get('map');
 try { startMap = startMap || localStorage.getItem('impactbox.map'); } catch (e) { /* no storage */ }
@@ -794,7 +796,10 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Enter' && ctx.mission.over) ctx.mission.start();
   if (e.code === 'Enter' && ctx.survival.over) ctx.survival.start();
   if (e.code === 'KeyR') ctx.weapons.reload();
-  if (e.code === 'KeyF') { const d = doorAhead(); if (d) d.door.toggle(ctx.player.pos); else { ctx.weapons.unjam(); ctx.mission.act(); } }
+  if (e.code === 'KeyF') {
+    if (ctx.car) ctx.driving.exit();
+    else { const d = doorAhead(); if (d) d.door.toggle(ctx.player.pos); else if (!ctx.driving.tryEnter()) { ctx.weapons.unjam(); ctx.mission.act(); } }
+  }
   if (e.code === 'KeyH') { const d = doorAhead(1.9); if (d) d.door.kick(ctx.player.pos); }
   if (e.code === 'KeyM') { ctx.mirrorOn = !ctx.mirrorOn; sfx.tick(); }
   if (e.code === 'KeyU') {
@@ -954,8 +959,8 @@ function tick(now) {
     camera.rotation.x = THREE.MathUtils.clamp(camera.rotation.x + 0.35, 0.1, 0.6);
     input.left = input.leftDown = false;
   }
-  ctx.weapons.pivot.visible = !mirror && !ctx.drone;
-  if (active) ctx.weapons.update(dt, input);
+  ctx.weapons.pivot.visible = !mirror && !ctx.drone && !ctx.car;
+  if (active && !ctx.car) ctx.weapons.update(dt, input);
   flyDrone(now);
   for (const d of ctx.doors) d.update(sdt);
   // footsteps: one for every half turn of the walk cycle
@@ -987,6 +992,7 @@ function tick(now) {
   for (const p of ctx.props) p.update(sdt);
   for (const t of ctx.traps) if (!t.removed) t.update(sdt);     // (moves their kinematic parts for the step below; a deleted one has no bodies left)
   ctx.water.update(sdt);                                          // (floats things for the step below)
+  ctx.driving.update(sdt, input, active);                         // (drives the car you are in)
   ctx.net.pre(sdt);
 
   if (sdt > 0) {
@@ -998,6 +1004,7 @@ function tick(now) {
 
   for (const r of ctx.ragdolls) r.sync();
   for (const p of ctx.props) p.sync();
+  ctx.driving.view(dt);
   ctx.tools.update();
   ctx.net.post(dt);
   if (ctx.traps.some((t) => t.removed)) ctx.traps = ctx.traps.filter((t) => !t.removed);
