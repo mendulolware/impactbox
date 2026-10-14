@@ -24,6 +24,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | R / F / B | reload / clear a jam / switch auto and semi |
 | F | Ready or Not mode: shout for compliance, or arrest whoever has given up in front of you |
 | J / K | suppressor on the current gun (quieter: heard 9 m away instead of 40, no flash) / laser (a red dot where the barrel points, and the beam at night) |
+| P | record a video of what you see and hear; P again saves it as a .webm (in bodycam it is cut to 4:3, with the timestamp burned in) |
 | Q / E | lean left / right (hold) |
 | N / L | night on the current map / flashlight |
 | Tab | spawn menu |
@@ -180,7 +181,7 @@ Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of
 | 5 | Heavy | Rocket, Minigun, Flamethrower |
 | 6 | Blades | Knife, Machete, Katana, Axe, Chainsaw |
 | 7 | Blunt | Bat, Crowbar, Sledgehammer |
-| 8 | Gear | Grenade, Grab Gun, Drone (flies where you look from its own camera, Shift = fast, click or a crash sets it off; it is a slow steered rocket, `flyDrone()` in `main.js`) |
+| 8 | Gear | Grenade, Flashbang (1.5 s fuse: whites out your screen if you look at it and rings your ears; anyone within 13 m who can see it doubles over for 2 to 6 s, stops fighting, gives up far more easily when shouted at, and can be cuffed), Grab Gun, Drone (flies where you look from its own camera, Shift = fast, click or a crash sets it off; it is a slow steered rocket, `flyDrone()` in `main.js`) |
 
 - **Recoil.** Every gun has `rec: [up, sideways]` in radians per shot. `Player.recoil()` turns most of that into a kick the
   view springs back from, and leaves the rest where it landed, so a burst climbs and has to be pulled back down. Sustained

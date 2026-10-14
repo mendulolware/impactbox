@@ -66,7 +66,7 @@ export class Mission {
     const hit = ctx.raycast(cam, dir, REACH);
     const owner = hit && ctx.owners.get(hit.collider.handle);
     const r = owner?.kind === 'part' ? owner.ragdoll : null;
-    if (r && !r.dead && !r.arrested && r.role && (r.brain.gaveUp || r.brain.comply || r.mode === 'ragdoll')) this.arrest(r);
+    if (r && !r.dead && !r.arrested && r.role && (r.brain.gaveUp || r.brain.comply || r.brain.flashed > 0 || r.mode === 'ragdoll')) this.arrest(r);   // (a flashbanged suspect can be cuffed before they recover)
     else this.shout();
   }
 

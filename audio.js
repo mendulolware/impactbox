@@ -110,6 +110,14 @@ export function initAudio() {
   } catch (e) { /* audio is optional */ }
 }
 
+/** The game's sound as a stream, for recording. */
+export function audioStream() {
+  if (!ac) return null;
+  const dest = ac.createMediaStreamDestination();
+  comp.connect(dest);
+  return { stream: dest.stream, stop: () => comp.disconnect(dest) };
+}
+
 /** Hear the world through the bodycam's little microphone (or not). */
 export function bodycam(on) {
   micOn = on;

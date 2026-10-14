@@ -202,7 +202,7 @@ export class Brain {
     if (this.kind === 'zombie' || n.arrested || this.gaveUp) return;
     if (!n.armed) { this.comply = true; return; }
     this.pleas = (this.pleas || 0) + 1;      // every shout wears them down a little
-    const chance = 0.25 + 0.12 * this.pleas + (n.health < 60 ? 0.3 : 0) + (this.playerAimingAtMe() ? 0.15 : 0);
+    const chance = 0.25 + 0.12 * this.pleas + (n.health < 60 ? 0.3 : 0) + (this.playerAimingAtMe() ? 0.15 : 0) + (this.flashed > 0 ? 0.5 : 0);
     if (Math.random() < chance) {
       this.gaveUp = true;
       this.fake = Math.random() < 0.15;      // some only pretend, and go for the gun when you look away
@@ -547,7 +547,13 @@ export class Brain {
     this.goal.speed = 0;
 
     if (n.gun) n.gun.visible = !this.gaveUp && !n.arrested;
-    if (this.kind === 'zombie') this.zombie(dt, scan);
+    if (this.flashed > 0 && this.kind !== 'zombie' && !n.arrested) {
+      // blinded and deafened by a flashbang: doubled over, hands to the face, no fight in them
+      this.flashed -= dt;
+      this.goal.mode = 'stop';
+      n.gesture = 'cower';
+      if (this.kind !== 'thug' && !n.armed && this.flashed <= 0) { this.state = 'cower'; this.t = rnd(2, 4); }
+    } else if (this.kind === 'zombie') this.zombie(dt, scan);
     else if (n.arrested) { this.goal.mode = 'stop'; n.gesture = 'cower'; }      // cuffed: stays down
     else if (n.armed) this.suspect(dt, scan);
     else if (this.kind === 'thug') this.thug(dt, scan);

@@ -73,7 +73,7 @@ const EXP_FRAG = `
 
 const FINAL_FRAG = `
   uniform sampler2D tScene; uniform sampler2D tAO; uniform sampler2D tBloom;
-  uniform vec2 uAoTexel; uniform float uHelmet; uniform float uAspect; uniform float uSupp; uniform vec3 uFaces[8]; uniform vec2 uBlur; uniform vec2 uTexel; uniform float uTime; uniform sampler2D tExp; uniform float uKey; varying vec2 vUv;
+  uniform vec2 uAoTexel; uniform float uHelmet; uniform float uAspect; uniform float uSupp; uniform vec3 uFaces[8]; uniform vec2 uBlur; uniform vec2 uTexel; uniform float uTime; uniform sampler2D tExp; uniform float uKey; uniform float uFlash; varying vec2 vUv;
   void main() {
     // bodycam lens: the middle of the picture is magnified and the edges squeezed in (corners stay put)
     vec2 lc = vUv * 2.0 - 1.0;
@@ -137,6 +137,7 @@ const FINAL_FRAG = `
       c += (n - 0.5) * (0.035 + 0.11 * (1.0 - smoothstep(0.0, 0.4, lum)));
       gl_FragColor.rgb = c;
     }
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(1.0, 1.0, 0.97), uFlash);    // a flashbang: the picture burns out to white
   }`;
 
 export class Post {
@@ -159,7 +160,7 @@ export class Post {
     this.blur.toneMapped = false;
     this.final = mat(FINAL_FRAG, {
       tScene: { value: this.target.texture }, tAO: { value: this.aoTarget.texture }, tBloom: { value: this.bloomA.texture },
-      uAoTexel: { value: new THREE.Vector2() }, uHelmet: { value: 0 }, uAspect: { value: 1 }, uSupp: { value: 0 }, uBlur: { value: new THREE.Vector2() }, uTexel: { value: new THREE.Vector2() }, uTime: { value: 0 }, tExp: { value: null }, uKey: { value: 0.14 },   // what a sunny yard averages, so daylight stays as it was
+      uAoTexel: { value: new THREE.Vector2() }, uHelmet: { value: 0 }, uAspect: { value: 1 }, uSupp: { value: 0 }, uBlur: { value: new THREE.Vector2() }, uTexel: { value: new THREE.Vector2() }, uTime: { value: 0 }, tExp: { value: null }, uKey: { value: 0.14 }, uFlash: { value: 0 },   // what a sunny yard averages, so daylight stays as it was
       uFaces: { value: Array.from({ length: 8 }, () => new THREE.Vector3()) },
     });
 

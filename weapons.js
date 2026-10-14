@@ -40,6 +40,7 @@ export const WEAPONS = [
   { name: 'Crowbar',  slot: 6, type: 'melee', rate: 0.60, dmg: 11, impulse: 120, range: 1.5, blunt: true },
   { name: 'Sledgehammer', slot: 6, type: 'melee', rate: 1.20, dmg: 24, impulse: 320, range: 1.7, blunt: true },
   { name: 'Grenade',  slot: 7, type: 'grenade', auto: false, rate: 0.7 },
+  { name: 'Flashbang', slot: 7, type: 'grenade', prop: 'flashbang', auto: false, rate: 0.9 },
   { name: 'Grab Gun', slot: 7, type: 'grab' },
   { name: 'Drone',    slot: 7, type: 'drone', auto: false, rate: 1.0 },
 ];
@@ -98,6 +99,7 @@ const VIEW = [
   { model: 'Crowbar', hip: [0.3, -0.3, -0.5], melee: true, tilt: 0.75, grip: -0.12 },
   { model: 'SledgeHammer', hip: [0.3, -0.32, -0.5], melee: true, tilt: 0.6, grip: -0.2 },
   { model: 'Grenade', hip: [0.28, -0.3, -0.5], held: true },
+  { model: 'Grenade', hip: [0.28, -0.3, -0.5], held: true },      // shortcut: the flashbang is held as a grenade; give it its own model when one is built
   { model: 'GrabGun', hip: [0.21, -0.22, -0.45], muzzle: [0, 0.005, -0.37],
     handR: [0, -0.088, 0.1, -0.25], handL: [0, -0.045, -0.075, 0] },
   { model: 'Grenade', hip: [0.28, -0.3, -0.5], held: true },      // shortcut: the drone is a grenade in the hand, give it its own model when someone builds one
@@ -752,11 +754,11 @@ export class Weapons {
     ctx.toast('DRONE: MOUSE STEERS - SHIFT FAST - CLICK DETONATES');
   }
 
-  throwGrenade() {
+  throwGrenade(type = 'grenade') {
     const ctx = this.ctx;
     this.aim();
     const p = _o.clone().addScaledVector(_d, 0.9).addScaledVector(_u, -0.1);
-    const g = ctx.spawnProp('grenade', p);
+    const g = ctx.spawnProp(type, p);
     const v = ctx.player.vel;
     g.body.setLinvel({ x: _d.x * 15 + v.x, y: _d.y * 15 + 3 + v.y, z: _d.z * 15 + v.z }, true);
     g.body.setAngvel({ x: rnd(-8, 8), y: rnd(-8, 8), z: rnd(-8, 8) }, true);
@@ -905,7 +907,7 @@ export class Weapons {
         this.cool = w.rate;
         if (w.type === 'gun') this.fireGun(w);
         else if (w.type === 'melee') this.fireMelee(w);
-        else if (w.type === 'grenade') this.throwGrenade();
+        else if (w.type === 'grenade') this.throwGrenade(w.prop);
         else if (w.type === 'rocket') this.fireRocket(w);
         else if (w.type === 'drone') this.launchDrone();
       }

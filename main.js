@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { initAudio, sfx, setSpace, deafen, bodycam } from './audio.js';
+import { initAudio, sfx, setSpace, deafen, bodycam, audioStream } from './audio.js';
 import { Gore } from './gore.js';
 import { Ragdoll, selfCollide } from './ragdoll.js';
 import { tickWounds } from './wounds.js';
@@ -144,6 +144,27 @@ ctx.spawnProp = (type, pos, rotY = 0) => {
 
 const _v = new THREE.Vector3();
 const _d = new THREE.Vector3();
+
+/** A flashbang going off: a white-out and ringing for whoever looks at it, and anyone near it stops fighting for a while. */
+ctx.flashbang = (p) => {
+  sfx.revolver(); sfx.crack();
+  const g = ctx.gore;
+  g.flash.position.set(p.x, p.y + 0.3, p.z); g.flash.intensity = 700; g.flashT = 0.35;
+  for (let i = 0; i < 10; i++) g.smoke.emit(p.x, p.y + 0.1, p.z, (Math.random() - 0.5) * 2, Math.random() * 1.2, (Math.random() - 0.5) * 2, 0.25 + Math.random() * 0.2, 2 + Math.random() * 2, -0.1, 0.8, 0.8, 0.8, 0, 1.5);
+  const pl = ctx.player, eye = pl.eye, dist = eye.distanceTo(p);
+  const to = new THREE.Vector3(p.x - eye.x, p.y - eye.y, p.z - eye.z).normalize();
+  const seen = dist < 1.5 || !g.castFixed(eye.x, eye.y, eye.z, to.x, to.y, to.z, dist - 0.2);
+  const facing = to.dot(new THREE.Vector3(0, 0, -1).applyQuaternion(pl.aimQuat));
+  const k = Math.max(0, 1 - dist / 18) * (seen ? 0.35 + 0.65 * Math.max(0, facing) : 0.15);
+  pl.flash = Math.max(pl.flash || 0, k * 5);           // seconds; the first 1.5 of them fully white
+  deafen(Math.min(1, k * 1.4 + (dist < 7 ? 0.3 : 0)));
+  for (const r of ctx.ragdolls) {
+    if (r.removed || r.dead) continue;
+    const d = r.center(_v).distanceTo(p);
+    if (d < 13 && r.brain.los(p)) r.brain.flashed = Math.max(r.brain.flashed || 0, 2 + 4 * (1 - d / 13));
+  }
+  ctx.alert('shot', p, 30);
+};
 
 ctx.explode = (p, radius = 7, power = 1) => {
   ctx.gore.explosion(p, radius);
@@ -412,6 +433,48 @@ function toggleNight() {
   toast(ctx.night ? 'NIGHT - L flashlight' : 'DAY');
 }
 
+// P: record what you see (and hear) to a video file. Each frame is copied onto a 2D canvas with the camera's
+// timestamp burned in (the HTML overlay is not part of the picture); in bodycam it is cut to the 4:3 frame.
+let rec = null;
+function toggleRecording() {
+  if (rec) { rec.media.stop(); return; }
+  if (!window.MediaRecorder) { toast('RECORDING NOT SUPPORTED'); return; }
+  const c = document.createElement('canvas');
+  const sound = audioStream();
+  const stream = c.captureStream(30);
+  if (sound) for (const t of sound.stream.getAudioTracks()) stream.addTrack(t);
+  const type = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find((t) => MediaRecorder.isTypeSupported(t));
+  const media = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: 6e6 } : {});
+  const parts = [];
+  media.ondataavailable = (e) => { if (e.data.size) parts.push(e.data); };
+  media.onstop = () => {
+    sound?.stop();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(parts, { type: 'video/webm' }));
+    a.download = `impactbox-bodycam-${new Date().toISOString().replace(/[:.]/g, '-')}.webm`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    rec = null;
+    toast('RECORDING SAVED');
+  };
+  rec = { media, c, g: c.getContext('2d'), t0: performance.now() };
+  media.start(1000);
+  toast('RECORDING - P to stop');
+}
+function recordFrame() {
+  if (!rec) return;
+  const W = canvas.width, H = canvas.height;
+  const w = ctx.helmet ? Math.min(W, Math.round(H * 4 / 3)) : W, x = (W - w) >> 1;
+  if (rec.c.width !== w || rec.c.height !== H) { rec.c.width = w; rec.c.height = H; }
+  const g = rec.g;
+  g.drawImage(canvas, x, 0, w, H, 0, 0, w, H);       // straight after drawing, while the frame is still there
+  g.font = `600 ${Math.round(H / 40)}px Consolas, monospace`;
+  g.fillStyle = '#f2f2f2'; g.shadowColor = '#000'; g.shadowBlur = 4; g.textAlign = 'right';
+  g.fillText(camTimeEl.textContent || new Date().toISOString().slice(0, 19) + 'Z', w * 0.95, H * 0.08);
+  g.fillText('BWC 07 \u00b7 X60A31F2', w * 0.95, H * 0.08 + H / 32);
+  g.shadowBlur = 0;
+}
+
 // G: switch the effects pipeline off on slow machines (plain rendering, no occlusion or bloom)
 function toggleGraphics() {
   post.enabled = !post.enabled;
@@ -498,6 +561,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyV') toggleHelmet();
   if (e.code === 'KeyG') toggleGraphics();
   if (e.code === 'KeyN') toggleNight();
+  if (e.code === 'KeyP') toggleRecording();
   if (e.code === 'KeyL') { torch.visible = !torch.visible; sfx.tick(); }
   if (e.code === 'Enter' && ctx.mission.over) ctx.mission.start();
   if (e.code === 'KeyR') ctx.weapons.reload();
@@ -695,12 +759,15 @@ function tick(now) {
   ctx.sky.material.uniforms.uTime.value = now / 1000;   // clouds drift
   blockFaces();
   post.final.uniforms.uSupp.value = ctx.player.suppress;
+  ctx.player.flash = Math.max(0, (ctx.player.flash || 0) - dt);
+  post.final.uniforms.uFlash.value = Math.min(1, ctx.player.flash / 1.5);
   // bodycam motion blur: how far the picture slid since the last frame
   const pm = camera.projectionMatrix.elements, rot = camera.rotation;
   const dyaw = Math.atan2(Math.sin(rot.y - lastRot.y), Math.cos(rot.y - lastRot.y)), dpitch = rot.x - lastRot.x;
   post.final.uniforms.uBlur.value.set(THREE.MathUtils.clamp(dyaw * pm[0] * 0.3, -0.05, 0.05), THREE.MathUtils.clamp(dpitch * pm[5] * 0.3, -0.05, 0.05));
   lastRot.copy(rot);
   post.render(scene, camera, ctx.helmet);
+  recordFrame();
 }
 
 $('loading').remove();
