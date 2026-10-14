@@ -72,7 +72,7 @@ const EXP_FRAG = `
   }`;
 
 const FINAL_FRAG = `
-  uniform sampler2D tScene; uniform sampler2D tAO; uniform sampler2D tBloom;
+  uniform sampler2D tScene; uniform sampler2D tAO; uniform sampler2D tBloom; uniform float uBloom;
   uniform vec2 uAoTexel; uniform float uHelmet; uniform float uAspect; uniform float uSupp; uniform vec3 uFaces[8]; uniform vec2 uBlur; uniform vec2 uTexel; uniform float uTime; uniform sampler2D tExp; uniform float uKey; uniform float uFlash; uniform float uAoAmt; varying vec2 vUv;
   void main() {
     // bodycam lens: the middle of the picture is magnified and the edges squeezed in (corners stay put)
@@ -112,7 +112,7 @@ const FINAL_FRAG = `
     }
     ao /= 16.0;
     col *= mix(1.0, ao, uAoAmt);
-    col += texture2D(tBloom, uv).rgb * 0.7;
+    col += texture2D(tBloom, uv).rgb * uBloom;
     if (uHelmet > 0.5) col *= clamp(uKey / texture2D(tExp, vec2(0.5)).r, 0.5, 1.6);   // the camera's auto exposure
 
     float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
@@ -159,7 +159,7 @@ export class Post {
     this.blur = mat(BLUR_FRAG, { tSrc: { value: null }, uStep: { value: new THREE.Vector2() } });
     this.blur.toneMapped = false;
     this.final = mat(FINAL_FRAG, {
-      tScene: { value: this.target.texture }, tAO: { value: this.aoTarget.texture }, tBloom: { value: this.bloomA.texture },
+      tScene: { value: this.target.texture }, tAO: { value: this.aoTarget.texture }, tBloom: { value: this.bloomA.texture }, uBloom: { value: 0.7 },
       uAoTexel: { value: new THREE.Vector2() }, uHelmet: { value: 0 }, uAspect: { value: 1 }, uSupp: { value: 0 }, uBlur: { value: new THREE.Vector2() }, uTexel: { value: new THREE.Vector2() }, uTime: { value: 0 }, tExp: { value: null }, uKey: { value: 0.14 }, uFlash: { value: 0 }, uAoAmt: { value: 0.85 },   // what a sunny yard averages, so daylight stays as it was
       uFaces: { value: Array.from({ length: 8 }, () => new THREE.Vector3()) },
     });
@@ -209,15 +209,18 @@ export class Post {
     this.ao.uniforms.uProjInv.value.copy(camera.projectionMatrixInverse);
     if (!this.lite) this.pass(this.ao, this.aoTarget);   // lite (phones): no ambient occlusion, the most expensive pass
 
-    this.pass(this.bright, this.bloomA);
-    for (let i = 0; i < 2; i++) {      // two rounds of blur, each a horizontal then a vertical sweep
-      const k = i + 1;
-      this.blur.uniforms.tSrc.value = this.bloomA.texture;
-      this.blur.uniforms.uStep.value.set(this.bloomStep[0] * k, 0);
-      this.pass(this.blur, this.bloomB);
-      this.blur.uniforms.tSrc.value = this.bloomB.texture;
-      this.blur.uniforms.uStep.value.set(0, this.bloomStep[1] * k);
-      this.pass(this.blur, this.bloomA);
+    this.final.uniforms.uBloom.value = this.lite ? 0 : 0.7;      // lite (phones): no glow round bright things either
+    if (!this.lite) {
+      this.pass(this.bright, this.bloomA);
+      for (let i = 0; i < 2; i++) {      // two rounds of blur, each a horizontal then a vertical sweep
+        const k = i + 1;
+        this.blur.uniforms.tSrc.value = this.bloomA.texture;
+        this.blur.uniforms.uStep.value.set(this.bloomStep[0] * k, 0);
+        this.pass(this.blur, this.bloomB);
+        this.blur.uniforms.tSrc.value = this.bloomB.texture;
+        this.blur.uniforms.uStep.value.set(0, this.bloomStep[1] * k);
+        this.pass(this.blur, this.bloomA);
+      }
     }
 
     const now = performance.now(), dt = Math.min(0.1, (now - this.lastT) / 1000);

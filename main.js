@@ -25,9 +25,8 @@ const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isTouch, powerPreference: 'high-performance' });
 const MAX_PR = Math.min(window.devicePixelRatio, isTouch ? 1.25 : 2);   // phones: fewer pixels to fill
 renderer.setPixelRatio(MAX_PR);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = isTouch ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
-renderer.shadowMap.autoUpdate = !isTouch;          // phones: shadows are redrawn every other frame (tick)
+renderer.shadowMap.enabled = !isTouch;             // phones: no shadows at all
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.82;
 
@@ -85,7 +84,6 @@ ctx.gore = new Gore(ctx);
 let startMap = new URLSearchParams(location.search).get('map');
 try { startMap = startMap || localStorage.getItem('impactbox.map'); } catch (e) { /* no storage */ }
 buildWorld(ctx, MAPS[startMap] ? startMap : 'yard');
-if (isTouch) ctx.sun.shadow.mapSize.set(2048, 2048);   // phones: a quarter of the shadow map
 ctx.player = new Player(ctx, ctx.map.spawn);
 ctx.player.yaw = ctx.player.camYaw = ctx.map.yaw;
 setSpace(ctx.map.id);
@@ -117,6 +115,7 @@ ctx.exitPoint = (collider, point, dir, pen) => {
 ctx.applyHit = (hit, point, dir, dmg, impulse, opts = {}) => {
   const owner = ctx.owners.get(hit.collider.handle);
   if (owner?.kind === 'part') {
+    marker('hit');                       // (before the hit: a kill it causes turns it red)
     owner.ragdoll.hit(owner.name, dmg, point, dir, impulse, { ...opts, normal: hit.normal });
   } else if (owner?.kind === 'chunk') {
     owner.body.applyImpulse({ x: dir.x * 2, y: dir.y * 2 + 1, z: dir.z * 2 }, true);
@@ -251,7 +250,8 @@ const KILL_TEXT = {
 };
 ctx.onKill = (rag, cause) => {
   ctx.kills++;
-  toast(KILL_TEXT[cause] || 'KILLED');
+  feed(KILL_TEXT[cause] || 'KILLED');
+  marker('kill');
   ctx.mission.onKill(rag);
 };
 
@@ -260,8 +260,27 @@ let toastT = 0;
 function toast(msg) {
   const el = $('toast');
   el.textContent = msg;
+  el.classList.remove('show');
+  void el.offsetWidth;                  // (restart its pop-in)
   el.classList.add('show');
   toastT = 1.1;
+}
+
+/** The kill feed down the right: newest on top, five at most, each gone after a few seconds. */
+function feed(text) {
+  const box = $('feed'), e = document.createElement('div');
+  e.textContent = text;
+  box.prepend(e);
+  while (box.childElementCount > 5) box.lastChild.remove();
+  setTimeout(() => e.remove(), 4000);
+}
+
+/** The crosshair's X: white for a hit, red for a kill. */
+function marker(kind) {
+  const m = $('hitmark');
+  m.className = '';
+  void m.offsetWidth;
+  m.className = kind;
 }
 
 // ------------------------------------------------------------------ spawning helpers
@@ -413,12 +432,19 @@ function buildMenu() {
     el.addEventListener('click', () => { it.run(); sfx.pop(); });
     grid.appendChild(el);
   }
+  // the controls from the start screen, so they are a Tab away in game
+  const h = document.createElement('div');
+  h.className = 'cat keys-h'; h.textContent = 'Controls';
+  const keys = $('keys').cloneNode(true);
+  keys.removeAttribute('id');
+  body.append(h, keys);
 }
 buildMenu();
 
 const crosshairEl = $('crosshair');
-const healthEl = $('health-fill');
-const hurtEl = $('hurt');
+const healthEl = $('health-fill'), healthBox = $('health'), healthNum = $('health-num');
+const hurtEl = $('hurt'), dmgEl = $('dmgdir');
+let shownHealth = 100, shownGap = 0;
 let wasDead = false;
 const camTimeEl = $('cam-time');
 const lastRot = new THREE.Euler();
@@ -457,7 +483,7 @@ function blockFaces() {
 const torch = new THREE.SpotLight(0xfff1dc, 380, 50, 0.4, 0.6, 1.6);
 torch.position.set(0.08, -0.08, -0.6);     // out by the muzzle, so it does not light up your own hands
 torch.target.position.set(0.08, -0.08, -1.6);
-torch.castShadow = !isTouch;                   // (the flashlight's shadow map is dear on a phone)
+torch.castShadow = true;
 torch.shadow.mapSize.set(1024, 1024);
 torch.shadow.camera.near = 0.4;
 torch.shadow.bias = -0.0008;
@@ -568,7 +594,7 @@ document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === canvas;
   if (!locked && started && !ctx.menuOpen && !lockFallback) {
     $('start').classList.remove('hidden');
-    $('play').textContent = 'Click to resume';
+    $('play').textContent = 'Resume';
     started = false;
     input.keys.clear();
     input.left = input.right = false;
@@ -665,7 +691,7 @@ ctx.setMap = setMap;
 for (const m of MAP_LIST) {
   const el = document.createElement('button');
   el.dataset.map = m.id;
-  el.innerHTML = `<span>${m.icon}</span>${m.name}`;
+  el.innerHTML = `<span class="ico">${m.icon}</span><b>${m.name}</b><small>${m.blurb}</small>`;
   el.title = m.blurb;
   el.classList.toggle('on', m.id === ctx.map.id);
   el.addEventListener('click', () => { if (m.id !== ctx.map.id) { ctx.mission.stop(); setMap(m.id); } });
@@ -745,7 +771,6 @@ function adaptResolution(dt) {
   if (Math.abs(next - pr) > 0.01) { renderer.setPixelRatio(next); resize(); }
 }
 
-let shadowFlip = false;
 function tick(now) {
   const dt = Math.min(Math.max((now - last) / 1000, 0), 0.05);
   last = now;
@@ -849,7 +874,18 @@ function tick(now) {
   const pl = ctx.player;
   if (!pl.dead && pl.pos.y < ctx.map.killY) pl.hurt(1000, null);      // fell off the map
   healthEl.style.width = pl.health + '%';
-  healthEl.parentElement.classList.toggle('low', pl.health < 35);
+  healthBox.classList.toggle('low', pl.health < 35);
+  if (Math.ceil(pl.health) !== shownHealth) healthNum.textContent = shownHealth = Math.ceil(pl.health);
+  // the crosshair opens up while you move, jump or fire
+  const gap = Math.round((3 + Math.min(12, Math.hypot(pl.vel.x, pl.vel.z) * 1.4) + pl.shake * 16 + (pl.grounded ? 0 : 6)) * 2) / 2;
+  if (gap !== shownGap) crosshairEl.style.setProperty('--gap', `${shownGap = gap}px`);
+  // and an arc on the side the last hit came from
+  const hf = pl.hurtFrom;
+  if (hf && pl.hurtFlash > 0.02 && !pl.dead) {
+    const dx = hf.x - pl.pos.x, dz = hf.z - pl.pos.z, fx = -Math.sin(pl.yaw), fz = -Math.cos(pl.yaw);
+    dmgEl.style.transform = `rotate(${Math.atan2(-dx * fz + dz * fx, dx * fx + dz * fz)}rad)`;
+    dmgEl.style.opacity = Math.min(1, pl.hurtFlash * 1.4);
+  } else if (dmgEl.style.opacity !== '0') dmgEl.style.opacity = '0';
   hurtEl.style.opacity = Math.min(0.85, pl.hurtFlash * 0.55 + (1 - pl.health / 100) * 0.4 + (pl.dead ? 0.5 : 0));
   if (pl.dead !== wasDead) { wasDead = pl.dead; if (pl.dead) { toast('YOU DIED'); toastT = 3; ctx.weapons.releaseGrab(); } }
 
@@ -875,7 +911,6 @@ function tick(now) {
   const dyaw = Math.atan2(Math.sin(rot.y - lastRot.y), Math.cos(rot.y - lastRot.y)), dpitch = rot.x - lastRot.x;
   post.final.uniforms.uBlur.value.set(THREE.MathUtils.clamp(dyaw * pm[0] * 0.3, -0.05, 0.05), THREE.MathUtils.clamp(dpitch * pm[5] * 0.3, -0.05, 0.05));
   lastRot.copy(rot);
-  if (isTouch) renderer.shadowMap.needsUpdate = (shadowFlip = !shadowFlip);
   post.render(scene, camera, ctx.helmet);
   recordFrame();
 }

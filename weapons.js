@@ -308,7 +308,7 @@ export class Weapons {
     this.slots = SLOTS.map((label, n) => {
       const el = document.createElement('div');
       el.className = 'slot';
-      el.innerHTML = `<div class="list"></div><b>${n + 1} &middot; ${label}</b><span></span>`;
+      el.innerHTML = `<div class="list"></div><b><kbd>${n + 1}</kbd>${label}</b><span></span>`;
       bar.appendChild(el);
       return el;
     });
@@ -495,12 +495,16 @@ export class Weapons {
     }
     const working = this.reloadT > 0 || this.clearT > 0;
     this.busy += ((working ? 1 : 0) - this.busy) * Math.min(1, dt * 10);
-    const text = !w.mag ? '' : this.clearT > 0 ? 'CLEARING' : this.jammed[i] ? 'JAMMED  [F]' : this.reloadT > 0 ? 'RELOADING'
-      : `${Math.min(this.ammo[i], w.mag)}${this.ammo[i] > w.mag ? '+1' : ''} / ${w.mag}` + (w.type === 'gun' && w.auto && !w.spin ? (this.single[i] ? '  SEMI' : '  AUTO') : '');
+    // the weapon's name over the count (or what is being done to it), and the fire mode
+    const mode = w.type === 'gun' && w.auto && !w.spin ? `<em>${this.single[i] ? 'SEMI' : 'AUTO'}</em>` : '';
+    const state = this.clearT > 0 ? 'CLEARING' : this.jammed[i] ? 'JAMMED <kbd>F</kbd>' : this.reloadT > 0 ? 'RELOADING' : '';
+    const text = `<small>${w.name}${mode}</small>` + (!w.mag ? '' : state ? `<b class="st">${state}</b>`
+      : `<b>${Math.min(this.ammo[i], w.mag)}${this.ammo[i] > w.mag ? '<sup>+1</sup>' : ''}</b><i>/ ${w.mag}</i>`);
     if (text !== this.ammoText) {
       this.ammoText = text;
-      this.ammoEl.textContent = text;
+      this.ammoEl.innerHTML = text;
       this.ammoEl.classList.toggle('warn', this.jammed[i] || (w.mag > 0 && this.ammo[i] === 0));
+      this.ammoEl.classList.toggle('low', w.mag > 3 && this.ammo[i] > 0 && this.ammo[i] <= w.mag / 4);
     }
   }
 

@@ -82,6 +82,7 @@ export class Player {
     this.ctx.sfx?.playerHurt();
     this.ctx.buzz?.(Math.min(120, 30 + amount * 2));
     this.shake = Math.min(1, this.shake + 0.7);
+    this.hurtFrom = from ? { x: from.x, z: from.z } : null;      // (the HUD points at it)
     if (from) { // shoved away from the attacker
       const dx = this.pos.x - from.x, dz = this.pos.z - from.z, l = Math.hypot(dx, dz) || 1;
       this.vel.x += (dx / l) * 3; this.vel.z += (dz / l) * 3;

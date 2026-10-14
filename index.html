@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>IMPACTBOX</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -15,12 +18,14 @@
   <div id="mirror"><span>MIRROR</span></div>
   <div id="lens"></div>
   <div id="hurt"></div>
-  <div id="crosshair"></div>
-  <div id="health"><div id="health-fill"></div></div>
+  <div id="dmgdir"></div>
+  <div id="crosshair"><i></i><i></i><i></i><i></i><b id="hitmark"></b></div>
+  <div id="health"><span class="lbl">HP</span><b id="health-num">100</b><div class="bar"><div id="health-fill"></div></div></div>
   <div id="ammo"></div>
   <div id="weapon-bar"></div>
   <div id="stats"></div>
   <div id="mission"></div>
+  <div id="feed"></div>
   <div id="toast"></div>
   <div id="slowmo">SLOW-MO</div>
   <div id="cam">
@@ -28,34 +33,57 @@
     <div id="cam-id">BWC 07 &middot; X60A31F2</div>
     <div id="cam-time"></div>
   </div>
-  <div id="help">
-    <b>WASD</b> move &nbsp; <b>Shift</b> sprint &nbsp; <b>Space</b> jump &nbsp; <b>LMB</b> fire &nbsp;
-    <b>RMB</b> aim &nbsp; <b>R</b> reload &nbsp; <b>F</b> door, clear jam, shout/arrest &nbsp; <b>H</b> kick door &nbsp; <b>M</b> mirror &nbsp; <b>U</b> squad go / come &nbsp; <b>B</b> auto/semi &nbsp; <b>J</b> suppressor &nbsp; <b>K</b> laser &nbsp; <b>Q E</b> lean &nbsp; <b>1-8 / wheel</b> weapon (press again for the next in a group) &nbsp; <b>Tab</b> spawn menu &nbsp;
-    <b>V</b> bodycam &nbsp; <b>N</b> night &nbsp; <b>O</b> rain &nbsp; <b>P</b> record &nbsp; <b>L</b> flashlight &nbsp; <b>T</b> slow-mo &nbsp; <b>X</b> delete target &nbsp; <b>C</b> clear all
-  </div>
+  <div id="help"><kbd>Tab</kbd> spawn menu &amp; controls</div>
 </div>
 
 <div id="menu" class="hidden">
   <div class="panel">
-    <h2>Spawn Menu <span class="sub">click an item &middot; Tab or Esc to close</span></h2>
+    <h2>Spawn menu <span class="sub"><kbd>Tab</kbd> or <kbd>Esc</kbd> to close</span></h2>
     <div id="menu-body"></div>
   </div>
 </div>
 
 <div id="start">
   <div class="card">
-    <h1>IMPACTBOX</h1>
-    <p class="tag">physics sandbox &middot; ragdolls &middot; mayhem</p>
+    <div class="brand">
+      <h1>IMPACT<span>BOX</span></h1>
+      <p class="tag">Physics sandbox &middot; Ragdolls &middot; Close quarters</p>
+    </div>
     <p id="loading">Loading physics&hellip;</p>
+    <div class="sect">Map</div>
     <div id="maps"></div>
-    <div id="modes"><button id="swat" title="You are SWAT: shout for compliance (F), arrest who gives up, shoot only who is a threat">&#128680; Ready or Not mode</button> <button id="night" title="Any map after dark, with a flashlight (N in game, L for the light)">&#127769; Night</button> <button id="rain" title="Rain on any map (O in game)">&#127783; Rain</button></div>
-    <button id="play" disabled>Click to play</button>
-    <p class="keys">
-      WASD move &middot; Space jump &middot; Shift sprint<br>
-      LMB fire &middot; RMB aim down sights (or throw what the Grab Gun holds) &middot; 1&ndash;8 pick a weapon group, press again for the next one in it, or use the wheel<br>
-      R reload &middot; F open a door, clear a jam &middot; H kick a door &middot; M mirror under a door &middot; U send the squad where you point, or call them back &middot; B switch auto / semi &middot; J suppressor &middot; K laser &middot; Knife: LMB slice, RMB stab<br>
-      Tab spawn menu &middot; Q / E lean &middot; V bodycam &middot; N night &middot; O rain &middot; P record video &middot; L flashlight &middot; T slow-mo &middot; X delete target &middot; C clear all
-    </p>
+    <div class="sect">Options</div>
+    <div id="modes"><button id="swat" title="You are SWAT: shout for compliance (F), arrest who gives up, shoot only who is a threat"><span>&#128680;</span>Ready or Not mode</button><button id="night" title="Any map after dark, with a flashlight (N in game, L for the light)"><span>&#127769;</span>Night</button><button id="rain" title="Rain on any map (O in game)"><span>&#127783;</span>Rain</button></div>
+    <button id="play" disabled>Play</button>
+    <div class="sect keys-h">Controls</div>
+    <div id="keys" class="keys">
+      <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Move</span></div>
+      <div><kbd>Shift</kbd><span>Sprint</span></div>
+      <div><kbd>Space</kbd><span>Jump</span></div>
+      <div><kbd>LMB</kbd><span>Fire</span></div>
+      <div><kbd>RMB</kbd><span>Aim / throw grabbed</span></div>
+      <div><kbd>R</kbd><span>Reload</span></div>
+      <div><kbd>1</kbd>&ndash;<kbd>8</kbd><span>Weapon group (again: next)</span></div>
+      <div><kbd>B</kbd><span>Auto / semi</span></div>
+      <div><kbd>J</kbd><span>Suppressor</span></div>
+      <div><kbd>K</kbd><span>Laser</span></div>
+      <div><kbd>Q</kbd><kbd>E</kbd><span>Lean</span></div>
+      <div><kbd>F</kbd><span>Door &middot; shout &middot; arrest &middot; unjam</span></div>
+      <div><kbd>H</kbd><span>Kick door</span></div>
+      <div><kbd>M</kbd><span>Mirror under door</span></div>
+      <div><kbd>U</kbd><span>Squad: go there / on me</span></div>
+      <div><kbd>Tab</kbd><span>Spawn menu</span></div>
+      <div><kbd>V</kbd><span>Bodycam</span></div>
+      <div><kbd>L</kbd><span>Flashlight</span></div>
+      <div><kbd>N</kbd><span>Night</span></div>
+      <div><kbd>O</kbd><span>Rain</span></div>
+      <div><kbd>T</kbd><span>Slow-mo</span></div>
+      <div><kbd>P</kbd><span>Record video</span></div>
+      <div><kbd>X</kbd><span>Delete target</span></div>
+      <div><kbd>C</kbd><span>Clear all</span></div>
+      <div><kbd>G</kbd><span>Graphics high / fast</span></div>
+    </div>
+    <p class="note keys">Knife: <kbd>LMB</kbd> slice, <kbd>RMB</kbd> stab &middot; Grab Gun: <kbd>LMB</kbd> pick up, <kbd>RMB</kbd> throw</p>
   </div>
 </div>
 

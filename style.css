@@ -1,144 +1,245 @@
+/* IMPACTBOX - everything drawn over the game: the HUD, the start screen, the spawn menu, the bodycam overlay
+   and the phone controls. One accent (signal red), condensed type for labels and numbers. */
+:root {
+  --accent: #ff3b2f;
+  --warn: #ffb020;
+  --text: #eef1f4;
+  --dim: rgba(238, 241, 244, .62);
+  --faint: rgba(238, 241, 244, .38);
+  --glass: rgba(9, 10, 13, .58);
+  --line: rgba(255, 255, 255, .12);
+  --line-2: rgba(255, 255, 255, .24);
+  --cond: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', system-ui, sans-serif;
+  --body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+  --mono: ui-monospace, Consolas, 'Courier New', monospace;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .85), 0 0 14px rgba(0, 0, 0, .35);
+}
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; overflow: hidden; background: #111; font-family: "Segoe UI", system-ui, sans-serif; color: #eee; user-select: none; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0b0e; font-family: var(--body); color: var(--text); user-select: none; -webkit-font-smoothing: antialiased; }
 #c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+button { font-family: inherit; }
+kbd { display: inline-block; min-width: 1.75em; padding: 1px 5px; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; background: rgba(255, 255, 255, .07); font: 600 11px/1.45 var(--mono); color: var(--text); text-align: center; text-shadow: none; }
+@keyframes blink { 50% { opacity: .45; } }
 
+/* ================================================================ HUD */
 #hud { position: fixed; inset: 0; pointer-events: none; }
-#crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(255,255,255,.85); box-shadow: 0 0 0 1px rgba(0,0,0,.6); }
-#crosshair.grab { background: #6cf; box-shadow: 0 0 0 2px rgba(0,0,0,.5), 0 0 10px #6cf; }
 
-#weapon-bar { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); display: flex; gap: 6px; }
-.slot { min-width: 84px; padding: 6px 10px; border-radius: 6px; background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.15); text-align: center; font-size: 13px; opacity: .7; }
-.slot b { display: block; font-size: 11px; opacity: .6; font-weight: 600; }
-.slot.on { opacity: 1; border-color: #ff5a4a; background: rgba(120,10,10,.55); }
+/* ---- crosshair: a dot and four ticks that open up while you move, jump or fire (--gap, set every frame) ---- */
+#crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; --gap: 3px; }
+#crosshair::before { content: ''; position: absolute; left: -2px; top: -2px; width: 4px; height: 4px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .55); transition: opacity .12s; }
+#crosshair i { position: absolute; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .45); transition: top .07s linear, left .07s linear, opacity .12s; }
+#crosshair i:nth-child(1) { width: 2px; height: 7px; left: -1px; top: calc(-7px - var(--gap)); }
+#crosshair i:nth-child(2) { width: 2px; height: 7px; left: -1px; top: var(--gap); }
+#crosshair i:nth-child(3) { width: 7px; height: 2px; top: -1px; left: calc(-7px - var(--gap)); }
+#crosshair i:nth-child(4) { width: 7px; height: 2px; top: -1px; left: var(--gap); }
+#crosshair.hide::before, #crosshair.hide i { opacity: 0; }
+#crosshair.grab::before { left: -4px; top: -4px; width: 8px; height: 8px; background: #6cf; box-shadow: 0 0 0 2px rgba(0, 0, 0, .5), 0 0 10px #6cf; }
+#crosshair.grab i { background: #6cf; }
+/* hit marker: white X for a hit, red for a kill (stays visible while aiming) */
+#hitmark { position: absolute; left: -11px; top: -11px; width: 22px; height: 22px; opacity: 0; }
+#hitmark::before, #hitmark::after { content: ''; position: absolute; left: 10px; top: -3px; width: 2px; height: 28px; transform: rotate(45deg); filter: drop-shadow(0 0 1px #000);
+  background: linear-gradient(#fff 0 34%, transparent 34% 66%, #fff 66%); }
+#hitmark::after { transform: rotate(-45deg); }
+#hitmark.hit { animation: hitmark .24s ease-out; }
+#hitmark.kill { animation: hitmark .55s ease-out; }
+#hitmark.kill::before, #hitmark.kill::after { width: 3px; background: linear-gradient(var(--accent) 0 34%, transparent 34% 66%, var(--accent) 66%); }
+@keyframes hitmark { 0% { opacity: 1; transform: scale(1.4); } 30% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1); } }
 
-#stats { position: absolute; left: 14px; top: 12px; font: 13px/1.5 Consolas, monospace; text-shadow: 0 1px 2px #000; opacity: .9; white-space: pre; }
-#toast { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); font-size: 22px; font-weight: 700; text-shadow: 0 2px 6px #000; opacity: 0; transition: opacity .25s; }
-#toast.show { opacity: 1; }
-#slowmo { position: absolute; right: 16px; top: 12px; padding: 4px 10px; border-radius: 4px; background: #c22; font-weight: 700; letter-spacing: 2px; font-size: 12px; display: none; }
+/* ---- where the last hit came from: an arc round the crosshair, turned toward it ---- */
+#dmgdir { position: absolute; left: 50%; top: 50%; width: 250px; height: 250px; margin: -125px 0 0 -125px; border-radius: 50%; opacity: 0;
+  background: conic-gradient(from -24deg, rgba(255, 36, 24, .9) 0 48deg, transparent 48deg);
+  -webkit-mask: radial-gradient(circle, transparent 108px, #000 109px, #000 121px, transparent 122px);
+  mask: radial-gradient(circle, transparent 108px, #000 109px, #000 121px, transparent 122px); }
+
+/* ---- health, bottom left: a number and a bar in ten segments ---- */
+#health { position: absolute; left: 26px; bottom: 22px; width: 250px; display: grid; grid-template-columns: auto 1fr; align-items: end; column-gap: 8px; row-gap: 6px; font-family: var(--cond); text-shadow: var(--shadow); }
+#health .lbl { padding-bottom: 5px; font-size: 13px; font-weight: 600; letter-spacing: 3px; color: var(--dim); }
+#health-num { font-size: 38px; line-height: .85; font-weight: 700; font-variant-numeric: tabular-nums; }
+#health .bar { grid-column: 1 / -1; height: 7px; background: rgba(0, 0, 0, .5);
+  -webkit-mask: repeating-linear-gradient(90deg, #000 0 23px, transparent 23px 25px); mask: repeating-linear-gradient(90deg, #000 0 23px, transparent 23px 25px); }
+#health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #cfd6dc, #fff); transition: width .15s; }
+#health.low #health-fill { background: var(--accent); }
+#health.low #health-num { color: var(--accent); animation: blink .9s infinite; }
+
+/* ---- rounds left, bottom right: the weapon's name, then the count ---- */
+#ammo { position: absolute; right: 26px; bottom: 22px; text-align: right; font-family: var(--cond); line-height: 1; text-shadow: var(--shadow); white-space: nowrap; }
+#ammo small { display: block; margin-bottom: 5px; font-size: 15px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: var(--dim); }
+#ammo small em { margin-left: 8px; padding: 1px 6px; border: 1px solid var(--line-2); border-radius: 3px; font-size: 11px; font-style: normal; letter-spacing: 2px; color: var(--text); vertical-align: 2px; }
+#ammo b { font-size: 50px; font-weight: 700; font-variant-numeric: tabular-nums; }
+#ammo b sup { margin-left: 2px; font-size: 18px; color: var(--dim); }
+#ammo i { margin-left: 6px; font-size: 22px; font-weight: 600; font-style: normal; color: var(--dim); }
+#ammo b.st { font-size: 26px; letter-spacing: 3px; color: var(--warn); animation: blink .8s infinite; }
+#ammo.low b { color: var(--warn); }
+#ammo.warn b { color: var(--accent); }
+
+/* ---- weapon groups along the bottom; the open group lists what is in it ---- */
+#weapon-bar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 2px; }
+.slot { position: relative; min-width: 84px; padding: 6px 10px 7px; background: rgba(8, 9, 12, .5); border-bottom: 2px solid rgba(255, 255, 255, .1); text-align: center; font: 600 14px/1.15 var(--cond); letter-spacing: .5px; text-transform: uppercase; color: var(--dim); text-shadow: 0 1px 2px #000; transition: background .12s, color .12s; }
+.slot:first-child { border-radius: 6px 0 0 0; }
+.slot:last-child { border-radius: 0 6px 0 0; }
+.slot b { display: flex; align-items: center; justify-content: center; gap: 5px; margin-bottom: 2px; font-size: 10.5px; letter-spacing: 1.5px; color: var(--faint); white-space: nowrap; }
+.slot kbd { min-width: 0; padding: 0 4px; font-size: 9.5px; border-bottom-width: 1px; }
+.slot.on { background: rgba(26, 8, 7, .75); border-bottom-color: var(--accent); color: var(--text); }
+.slot.on b { color: var(--accent); }
+.slot.on kbd { border-color: var(--accent); color: var(--accent); }
+.slot .list { position: absolute; left: 0; right: 0; bottom: 100%; margin-bottom: 6px; display: flex; flex-direction: column; gap: 2px; }
+.slot .list i { display: block; padding: 3px 5px; border-radius: 3px; background: rgba(8, 9, 12, .62); font-style: normal; font-size: 12px; letter-spacing: 1px; color: var(--dim); }
+.slot .list i.cur { background: rgba(170, 26, 18, .85); color: #fff; }
+@media (max-width: 1260px) { body:not(.touch) #weapon-bar { bottom: 86px; } }     /* (no room between health and ammo: it goes above them) */
+
+/* ---- counters and hints, top left ---- */
+#stats { position: absolute; left: 16px; top: 12px; font: 11px/1.55 var(--mono); color: var(--faint); text-shadow: 0 1px 2px #000; white-space: pre; }
+#help { position: absolute; left: 16px; top: 70px; font: 600 12px var(--cond); letter-spacing: 1.5px; text-transform: uppercase; color: var(--faint); text-shadow: 0 1px 2px #000; }
+
+/* ---- messages: one big line in the upper third, kills down the right ---- */
+#toast { position: absolute; left: 50%; top: 20%; transform: translateX(-50%); padding: 6px 34px; white-space: nowrap; font: 700 26px var(--cond); letter-spacing: 4px; text-transform: uppercase; text-shadow: var(--shadow); opacity: 0; transition: opacity .3s;
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, .42) 18%, rgba(0, 0, 0, .42) 82%, transparent); }
+#toast.show { opacity: 1; animation: toastpop .22s cubic-bezier(.2, 1.5, .4, 1); }
+@keyframes toastpop { from { opacity: 0; transform: translateX(-50%) scale(1.2); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
+#feed { position: absolute; right: 26px; top: 40%; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+#feed div { padding: 4px 12px 4px 10px; background: rgba(8, 9, 12, .62); border-right: 3px solid var(--accent); font: 700 15px var(--cond); letter-spacing: 2px; text-transform: uppercase; text-shadow: 0 1px 2px #000;
+  animation: feedin .25s ease-out, feedout .6s ease-in 3.4s forwards; }
+#feed div::before { content: '\2620'; margin-right: 8px; color: var(--accent); }
+@keyframes feedin { from { opacity: 0; transform: translateX(30px); } }
+@keyframes feedout { to { opacity: 0; } }
+#slowmo { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); display: none; padding: 3px 14px; border: 1px solid var(--accent); border-radius: 3px; background: rgba(50, 4, 2, .55); color: var(--accent); font: 700 13px var(--cond); letter-spacing: 5px; }
 #slowmo.on { display: block; }
-#help { position: absolute; left: 0; right: 0; bottom: 10px; text-align: center; font-size: 12px; opacity: .65; text-shadow: 0 1px 2px #000; }
-#help b { color: #ff8a7a; }
 
-#menu { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.45); backdrop-filter: blur(2px); }
-#menu.hidden { display: none; }
-.panel { width: min(760px, 92vw); max-height: 84vh; overflow: auto; background: #1b1b1f; border: 1px solid #3a3a42; border-radius: 10px; padding: 18px 22px 22px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
-.panel h2 { margin: 0 0 4px; font-size: 20px; letter-spacing: 1px; }
-.panel .sub { font-size: 12px; font-weight: 400; opacity: .5; margin-left: 8px; }
-.cat { margin-top: 16px; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; opacity: .55; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-top: 8px; }
-.item { padding: 12px 8px; border-radius: 8px; background: #26262d; border: 1px solid #353540; text-align: center; cursor: pointer; font-size: 14px; transition: transform .08s, background .12s, border-color .12s; }
-.item:hover { background: #3a1d1d; border-color: #ff5a4a; transform: translateY(-1px); }
-.item .ico { font-size: 26px; display: block; margin-bottom: 4px; }
-.item small { display: block; opacity: .5; font-size: 11px; margin-top: 2px; }
+/* ---- Ready or Not: objectives top right (the first line is the title) ---- */
+#mission { position: absolute; right: 26px; top: 16px; max-width: 48vw; font: 13px/1.65 var(--mono); white-space: pre; text-shadow: 0 1px 2px #000; }
+#mission:not(:empty) { padding: 10px 16px 11px 14px; background: var(--glass); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; }
+#mission::first-line { font: 700 16px var(--cond); letter-spacing: 3px; color: var(--accent); }
 
-#start { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 40%, rgba(60,10,10,.85), rgba(5,5,8,.96)); }
-#start.hidden { display: none; }
-.card { text-align: center; max-width: 560px; padding: 0 20px; }
-.card h1 { margin: 0; font-size: 60px; letter-spacing: 8px; color: #e23; text-shadow: 0 0 30px rgba(220,30,30,.5); }
-.tag { margin: 4px 0 26px; opacity: .6; letter-spacing: 3px; text-transform: uppercase; font-size: 12px; }
-#play { padding: 14px 40px; font-size: 18px; font-weight: 700; border: 0; border-radius: 6px; background: #e23; color: #fff; cursor: pointer; }
-#play:disabled { background: #444; cursor: wait; }
-#play:not(:disabled):hover { background: #f44; }
-#loading { margin: 0 0 12px; font-size: 13px; opacity: .6; }
-#maps { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 0 20px; }
-#maps button { padding: 8px 12px; border-radius: 6px; border: 1px solid #44444e; background: rgba(30,30,36,.8); color: #ddd; font-size: 13px; cursor: pointer; }
-#maps button span { margin-right: 6px; }
-#maps button:hover { border-color: #ff5a4a; }
-#maps button.on { background: #5a1616; border-color: #e23; color: #fff; }
-.keys { margin-top: 28px; font-size: 13px; line-height: 1.8; opacity: .55; }
-
-/* ---- helmet cam overlay ---- */
-#crosshair { transition: opacity .12s; }
-#crosshair.hide { opacity: 0; }
-#cam { display: none; position: absolute; inset: 0; font: 600 15px/1.4 Consolas, "Courier New", monospace; color: #f2f2f2; text-shadow: 0 0 4px #000, 0 1px 2px #000; letter-spacing: 1px; }
-body.helmet #cam { display: block; }
-body.helmet #mission { right: 24px; top: auto; bottom: 12%; z-index: 2; }
-body.helmet #toast, body.helmet #lens { z-index: 2; }
-#cam-rec { position: absolute; left: 6%; top: 7%; }
-#cam-rec i { display: inline-block; width: 11px; height: 11px; margin-right: 8px; border-radius: 50%; background: #f22; animation: rec 1s steps(2, start) infinite; }
-@keyframes rec { to { visibility: hidden; } }
-#cam-time { position: absolute; right: 6%; top: 7%; }
-#cam-id { position: absolute; right: 6%; top: calc(7% + 22px); opacity: .85; }
-/* footage has no game on it: no counters, no bars */
-body.helmet #stats, body.helmet #help, body.helmet #weapon-bar, body.helmet #ammo, body.helmet #health { display: none; }
-body.helmet #slowmo { right: 6%; top: 12%; }
-
-/* ---- player health ---- */
-#hurt { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, rgba(120,0,0,0) 35%, rgba(150,0,0,.9) 100%); }
-#health { position: absolute; left: 50%; bottom: 96px; width: 220px; height: 7px; transform: translateX(-50%); background: rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.2); border-radius: 4px; overflow: hidden; }
-#health-fill { height: 100%; width: 100%; background: #d9d9d9; transition: width .15s; }
-#health.low #health-fill { background: #e23; }
-
-/* ---- weapon groups: one slot per number key, the open group lists what is in it ---- */
-#weapon-bar { gap: 4px; }
-.slot { position: relative; min-width: 78px; padding: 5px 8px; font-size: 12px; }
-.slot b { font-size: 10px; white-space: nowrap; }
-.slot .list { position: absolute; left: 0; right: 0; bottom: 100%; margin-bottom: 4px; }
-.slot .list i { display: block; font-style: normal; font-size: 11px; padding: 3px 4px; margin-top: 2px; border-radius: 4px; background: rgba(0,0,0,.5); opacity: .6; }
-.slot .list i.cur { opacity: 1; background: rgba(150,20,20,.75); }
+/* ---- hurt: the edges go red ---- */
+#hurt { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, rgba(120, 0, 0, 0) 35%, rgba(150, 0, 0, .9) 100%); }
 
 /* ---- sniper scope ---- */
 #scope { display: none; position: absolute; inset: 0;
   background:
     linear-gradient(#000, #000) center / 1px 100% no-repeat,
     linear-gradient(#000, #000) center / 100% 1px no-repeat,
-    radial-gradient(circle at center, transparent 0, transparent 37.5vh, rgba(0,0,0,.55) 38vh, #000 39vh); }
+    radial-gradient(circle at center, transparent 0, transparent 37.5vh, rgba(0, 0, 0, .55) 38vh, #000 39vh); }
 body.scoped #scope { display: block; }
-body.scoped #weapon-bar, body.scoped #help, body.scoped #health { opacity: 0; }
+body.scoped #weapon-bar, body.scoped #help, body.scoped #health, body.scoped #ammo, body.scoped #mission { opacity: 0; }
 
-/* ---- rounds left, or what is wrong with the gun ---- */
-#ammo { position: absolute; right: 28px; bottom: 110px; font-size: 26px; font-weight: 700; letter-spacing: 1px; text-shadow: 0 2px 6px #000; font-variant-numeric: tabular-nums; }
-#ammo.warn { color: #ff5a4a; }
-body.scoped #ammo { opacity: 0; }
+/* ---- the mirror under a door ---- */
+#mirror { display: none; position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 26%, rgba(0, 0, 0, .55) 36%, rgba(0, 0, 0, .97) 46%); }
+#mirror span { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); font: 600 14px var(--cond); letter-spacing: 5px; opacity: .75; }
+body.mirror #mirror { display: block; }
 
-/* ---- Ready or Not mode: objectives top right, and its button on the start screen ---- */
-#mission { position: absolute; right: 16px; top: 12px; text-align: right; font: 14px/1.6 Consolas, monospace; text-shadow: 0 1px 3px #000; white-space: pre; }
-#modes { margin: -8px 0 20px; }
-#modes button { padding: 8px 14px; border-radius: 6px; border: 1px solid #44444e; background: rgba(20,26,40,.85); color: #cfd8ff; font-size: 13px; cursor: pointer; }
-#modes button:hover, #modes button.on { border-color: #6f8cff; background: #1c2a55; color: #fff; }
-body.scoped #mission { opacity: 0; }
-
-/* ---- blood on the lens ---- */
+/* ---- blood (or rain) on the lens ---- */
 #lens { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 #lens i { position: absolute; border-radius: 50% 44% 56% 48%; filter: blur(1.4px);
-  background: radial-gradient(circle at 36% 30%, rgba(120,4,4,.6), rgba(60,0,0,.55) 55%, rgba(40,0,0,0) 72%);
+  background: radial-gradient(circle at 36% 30%, rgba(120, 4, 4, .6), rgba(60, 0, 0, .55) 55%, rgba(40, 0, 0, 0) 72%);
   animation: lensrun 7s ease-in forwards; }
+#lens i.rain { background: radial-gradient(circle at 36% 30%, rgba(235, 245, 255, .5), rgba(200, 220, 240, .28) 58%, rgba(200, 220, 240, 0) 72%); filter: blur(.7px); animation-duration: 5s; }
 @keyframes lensrun { 0% { transform: scale(.3); opacity: 0; } 3% { transform: scale(1); opacity: .85; } 60% { opacity: .6; }
   100% { transform: translateY(90px) scaleY(1.7); opacity: 0; } }
 
-/* ---- phones and tablets (touch.js) ---- */
+/* ---- bodycam: footage, so no game on it - only REC, the time and the camera ID ---- */
+#cam { display: none; position: absolute; inset: 0; font: 600 15px/1.4 Consolas, 'Courier New', monospace; color: #f2f2f2; text-shadow: 0 0 4px #000, 0 1px 2px #000; letter-spacing: 1px; }
+body.helmet #cam { display: block; }
+#cam-rec { position: absolute; left: 6%; top: 7%; }
+#cam-rec i { display: inline-block; width: 11px; height: 11px; margin-right: 8px; border-radius: 50%; background: #f22; animation: rec 1s steps(2, start) infinite; }
+@keyframes rec { to { visibility: hidden; } }
+#cam-time { position: absolute; right: 6%; top: 7%; }
+#cam-id { position: absolute; right: 6%; top: calc(7% + 22px); opacity: .85; }
+body.helmet #stats, body.helmet #help, body.helmet #weapon-bar, body.helmet #ammo, body.helmet #health, body.helmet #feed, body.helmet #hitmark, body.helmet #dmgdir { display: none; }
+body.helmet #mission { right: 24px; top: auto; bottom: 12%; z-index: 2; }
+body.helmet #toast, body.helmet #lens { z-index: 2; }
+body.helmet #slowmo { top: 12%; }
+
+/* ================================================================ spawn menu */
+#menu { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: rgba(4, 5, 8, .55); backdrop-filter: blur(6px); }
+#menu.hidden { display: none; }
+.panel { width: min(920px, 94vw); max-height: 86vh; overflow: auto; padding: 0 22px 24px; background: linear-gradient(180deg, rgba(22, 23, 28, .97), rgba(13, 14, 18, .97)); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 30px 80px rgba(0, 0, 0, .6); scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .18) transparent; }
+.panel h2 { position: sticky; top: 0; z-index: 1; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 -22px; padding: 18px 22px 14px; background: rgba(19, 20, 25, .98); border-bottom: 1px solid var(--line); font: 700 26px var(--cond); letter-spacing: 3px; text-transform: uppercase; }
+.panel .sub { font: 500 12px var(--body); letter-spacing: 0; text-transform: none; color: var(--faint); }
+.cat { display: flex; align-items: center; gap: 10px; margin: 24px 0 10px; font: 600 13px var(--cond); letter-spacing: 3px; text-transform: uppercase; color: var(--dim); }
+.cat::before { content: ''; width: 14px; height: 2px; background: var(--accent); }
+.cat::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+.item { padding: 13px 10px 11px; border-radius: 10px; background: rgba(255, 255, 255, .035); border: 1px solid var(--line); text-align: center; cursor: pointer; font: 600 15px/1.2 var(--cond); letter-spacing: .5px; transition: transform .08s, background .12s, border-color .12s; }
+.item:hover { background: rgba(255, 59, 47, .1); border-color: rgba(255, 59, 47, .7); transform: translateY(-2px); }
+.item:active { transform: scale(.97); }
+.item .ico { display: block; margin-bottom: 6px; font-size: 28px; line-height: 1.1; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .5)); }
+.item small { display: block; margin-top: 3px; font: 400 11.5px/1.3 var(--body); letter-spacing: 0; color: var(--faint); }
+
+/* ================================================================ start screen */
+#start { position: fixed; inset: 0; z-index: 10; display: flex; overflow-y: auto; padding: 28px 18px;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .025) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at 50% 22%, rgba(110, 12, 8, .55), rgba(7, 7, 10, .93) 68%);
+  backdrop-filter: blur(4px); }
+#start.hidden { display: none; }
+.card { width: min(880px, 100%); margin: auto; text-align: center; }
+.brand h1 { margin: 0; font: italic 700 clamp(52px, 10vw, 112px)/.9 var(--cond); letter-spacing: .05em; color: #fff; text-shadow: 0 8px 50px rgba(255, 40, 30, .35); }
+.brand h1 span { color: var(--accent); }
+.tag { margin: 12px 0 0; font: 600 13px var(--cond); letter-spacing: .42em; text-transform: uppercase; color: var(--dim); }
+#loading { margin: 18px 0 0; font: 600 12px var(--cond); letter-spacing: .3em; text-transform: uppercase; color: var(--dim); animation: blink 1s infinite; }
+.sect { display: flex; align-items: center; gap: 14px; margin: 30px 0 12px; font: 600 12px var(--cond); letter-spacing: .32em; text-transform: uppercase; color: var(--faint); }
+.sect::before, .sect::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+#maps { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+#maps button { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 10px; align-items: center; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(16, 17, 22, .78); color: var(--text); text-align: left; cursor: pointer; transition: border-color .12s, background .12s, transform .08s; }
+#maps .ico { grid-row: 1 / 3; font-size: 24px; }
+#maps b { font: 700 16px/1.15 var(--cond); letter-spacing: .5px; text-transform: uppercase; }
+#maps small { overflow: hidden; font: 400 11.5px/1.3 var(--body); color: var(--faint); text-overflow: ellipsis; white-space: nowrap; }
+#maps button:hover { border-color: rgba(255, 59, 47, .6); background: rgba(42, 14, 12, .82); transform: translateY(-1px); }
+#maps button.on { border-color: var(--accent); background: linear-gradient(180deg, rgba(130, 18, 12, .6), rgba(64, 8, 6, .6)); box-shadow: inset 0 0 0 1px rgba(255, 59, 47, .3); }
+#modes { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+#modes button { display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(16, 17, 22, .78); color: var(--text); font: 600 14px var(--cond); letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; transition: border-color .12s, background .12s; }
+#modes button:hover { border-color: #7d96ff; }
+#modes button.on { border-color: #7d96ff; background: rgba(44, 64, 150, .5); box-shadow: 0 0 0 3px rgba(125, 150, 255, .15); }
+#play { margin-top: 30px; padding: 16px 78px; border: 0; border-radius: 10px; background: linear-gradient(180deg, #ff4d3f, #d2221a); color: #fff; font: 700 22px var(--cond); letter-spacing: .32em; text-indent: .32em; text-transform: uppercase; cursor: pointer;
+  box-shadow: 0 12px 34px rgba(255, 40, 30, .3), inset 0 1px 0 rgba(255, 255, 255, .25); transition: transform .1s, filter .15s; }
+#play:not(:disabled):hover { transform: translateY(-2px); filter: brightness(1.1); }
+#play:not(:disabled):active { transform: scale(.98); }
+#play:disabled { background: #25262c; color: var(--faint); box-shadow: none; cursor: wait; }
+div.keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 7px 20px; text-align: left; }
+div.keys div { display: flex; align-items: center; gap: 3px; font: 500 13px var(--body); color: var(--dim); }
+div.keys div span { margin-left: 7px; }
+.note { margin: 16px 0 0; font: 400 12px var(--body); color: var(--faint); }
+
+#rotate { display: none; }
+@media (orientation: portrait) {
+  body.touch:has(#start.hidden) #rotate { display: flex; position: fixed; inset: 0; z-index: 20; align-items: center; justify-content: center; background: rgba(0, 0, 0, .9); color: #fff; font: 700 20px var(--cond); letter-spacing: 3px; text-transform: uppercase; }
+}
+
+/* ================================================================ phones and tablets (touch.js) */
 #touch { display: none; }
 body.touch #touch { display: block; position: fixed; inset: 0; pointer-events: none; z-index: 5; }
 body.touch:has(#start:not(.hidden)) #touch, body.touch:has(#menu:not(.hidden)) #touch .b { display: none; }
-body.touch #help, body.touch .keys { display: none; }
-body.touch #start { overflow-y: auto; align-items: flex-start; padding: 16px 0; }
-body.touch #weapon-bar { bottom: 6px; transform: translateX(-50%) scale(.7); transform-origin: bottom center; }
+body.touch #help, body.touch .keys, body.touch .keys-h { display: none; }
+body.touch #start, body.touch #menu { backdrop-filter: none; }          /* (a full-screen blur every frame is dear on a phone) */
+body.touch #start { padding: 14px 12px; }
+body.touch .card { margin-top: 0; }
+body.touch .sect { margin: 16px 0 8px; }
+body.touch #play { margin-top: 18px; padding: 14px 60px; }
 #touch button { pointer-events: auto; touch-action: none; color: #fff; -webkit-tap-highlight-color: transparent; }
-#touch .b { position: absolute; width: 62px; height: 62px; border-radius: 50%; background: rgba(0,0,0,.35); border: 2px solid rgba(255,255,255,.35); font: 700 13px system-ui, sans-serif; }
-#touch .b:active, #touch .b.on { border-color: #ff5a4a; background: rgba(120,10,10,.45); }
-#t-fire { right: 4%; bottom: 24%; width: 86px !important; height: 86px !important; background: rgba(150,20,20,.45) !important; }
+#touch .b { position: absolute; width: 62px; height: 62px; border-radius: 50%; background: rgba(10, 11, 14, .4); border: 1.5px solid rgba(255, 255, 255, .3); box-shadow: 0 4px 14px rgba(0, 0, 0, .3); font: 700 14px var(--cond); letter-spacing: 1px; text-shadow: 0 1px 2px #000; }
+#touch .b:active, #touch .b.on { border-color: var(--accent); background: rgba(150, 20, 14, .5); }
+#t-fire { right: 4%; bottom: 24%; width: 88px !important; height: 88px !important; background: radial-gradient(circle, rgba(255, 70, 50, .55), rgba(140, 18, 12, .5)) !important; border: 2px solid rgba(255, 120, 100, .75) !important; font-size: 18px !important; letter-spacing: 2px !important; }
 #t-aim { right: calc(4% + 100px); bottom: 15%; }
 #t-jump { right: 4%; bottom: 6%; }
 #t-reload { right: calc(4% + 104px); bottom: calc(15% + 74px); }
-#t-swap { right: calc(4% + 12px); bottom: calc(24% + 98px); }
+#t-swap { right: calc(4% + 12px); bottom: calc(24% + 100px); }
 #t-use { right: calc(4% + 186px); bottom: 7%; }
-#touch .row { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; width: 62%; }
-#touch .row button { padding: 6px 8px; border-radius: 8px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,255,255,.3); font: 600 12px system-ui, sans-serif; }
-#stick { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: rgba(0,0,0,.15); display: none; }
-#stick.on { display: block; }
-#stick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px; border-radius: 50%; background: rgba(255,255,255,.35); }
-body.touch #ammo { bottom: auto; top: 64px; right: 16px; }
-body.touch #weapon-bar { left: 38%; }
-
-/* ---- the mirror under a door ---- */
-#mirror { display: none; position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 26%, rgba(0,0,0,.55) 36%, rgba(0,0,0,.97) 46%); }
-#mirror span { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); font: 600 14px Consolas, monospace; letter-spacing: 3px; opacity: .7; }
-body.mirror #mirror { display: block; }
-#lens i.rain { background: radial-gradient(circle at 36% 30%, rgba(235,245,255,.5), rgba(200,220,240,.28) 58%, rgba(200,220,240,0) 72%); filter: blur(.7px); animation-duration: 5s; }
 #t-leanL { left: 3%; bottom: 46%; width: 54px !important; height: 54px !important; font-size: 20px !important; }
 #t-leanR { left: calc(3% + 62px); bottom: 46%; width: 54px !important; height: 54px !important; font-size: 20px !important; }
-#rotate { display: none; }
-@media (orientation: portrait) {
-  body.touch:has(#start.hidden) #rotate { display: flex; position: fixed; inset: 0; z-index: 20; align-items: center; justify-content: center; background: rgba(0,0,0,.88); color: #fff; font: 700 18px system-ui, sans-serif; }
-}
+#touch .row { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; width: 62%; }
+#touch .row button { padding: 5px 9px; border-radius: 6px; background: rgba(10, 11, 14, .45); border: 1px solid rgba(255, 255, 255, .22); font: 600 12px var(--cond); letter-spacing: 1px; }
+#touch .row button:active { border-color: var(--accent); background: rgba(150, 20, 14, .5); }
+#stick { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .25); background: rgba(0, 0, 0, .15); display: none; }
+#stick.on { display: block; }
+#stick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px; border-radius: 50%; background: rgba(255, 255, 255, .35); }
+/* the HUD moves out from under the thumbs */
+body.touch #stats { font-size: 10px; }
+body.touch #health { left: 12px; top: 84px; bottom: auto; transform: scale(.72); transform-origin: top left; }
+body.touch #ammo { right: 14px; top: 10px; bottom: auto; transform: scale(.72); transform-origin: top right; }
+body.touch #feed { right: 14px; top: 80px; transform: scale(.82); transform-origin: top right; }
+body.touch #mission { left: 12px; right: auto; top: 136px; transform: scale(.72); transform-origin: top left; }
+body.touch #toast { top: 26%; width: 78vw; padding: 6px 12px; white-space: normal; text-align: center; font-size: 19px; letter-spacing: 3px; }
+body.touch #weapon-bar { bottom: 4px; left: 38%; transform: translateX(-50%) scale(.72); transform-origin: bottom center; }
+body.touch .slot { min-width: 66px; padding: 5px 6px 6px; }
 body.touch #weapon-bar .slot { pointer-events: auto; touch-action: none; }
+@media (pointer: coarse) { #help, .keys, .keys-h { display: none; } }   /* (before touch.js has run: no keyboard to show keys for) */
