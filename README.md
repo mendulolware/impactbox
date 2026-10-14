@@ -82,6 +82,7 @@ Pick one on the start screen or under **Maps** in the spawn menu (Tab). The last
 | Kill House | a walled compound with twelve plywood rooms and a catwalk over them |
 | The House | a two-storey house after dark: a hall with the stairs, living room, kitchen and den downstairs, a landing, three bedrooms and a bathroom upstairs, ten doors (three locked), windows you can see and shoot through, two lamps on and the rest dark. It is always night here (`night: true` turns the night sky and the flashlight on, and halves how far people see); made for the flashlight, the mirror and the bodycam |
 | The Pool | an outdoor pool, 25 by 12 m and 2.6 m deep, with a diving board, changing rooms, bleachers and sun loungers. Bodies and props float, blood spreads in the water as clouds, and you can swim (see Water) |
+| The Office | an open-plan office floor under an overcast sky: twelve pods of four desks with lit screens, three glass-fronted meeting rooms, the manager's office, a server room behind a locked door, a break room and a lobby with a reception desk. Glass all along the north and east sides (every pane breaks), nine office workers and three armed men, two cars out in the street |
 
 A map is one entry in `MAPS` (`maps.js`): a time of day, a spawn point, the rectangle NPCs keep to, `build(b)` and `populate(ctx)`.
 `build` gets a `MapBuilder` (`world.js`) with `box`, `cyl`, `wall` (with doorways), `door` (hung in one, `y0` for an upper floor), `stairs`, `stripe`, `light`, `water`, `ground` and `mat`.

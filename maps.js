@@ -570,6 +570,7 @@ export const MAPS = {
       ctx.spawnProp('ball', { x: 5, y: 1.0, z: 15 });
     },
   },
+
   // ----------------------------------------------------------------------------------------- pool
   pool: {
     id: 'pool', name: 'The Pool', icon: '🏊', blurb: 'an outdoor pool: bodies float, blood spreads in the water',
@@ -639,6 +640,132 @@ export const MAPS = {
       stack('crate', 24, -20, 2); at('crate', 25.2, -20, 0.3); at('explosive', 26, -15); at('barrel', 26.6, -16.2);
       at('table', -20, 10, 0.2); at('chair', -21, 10.4, 1.4); at('chair', -19, 9.6, -1.6);
       at('cone', -3, 24); at('cone', 3, 24);
+    },
+  },
+
+  // --------------------------------------------------------------------------------------- office
+  office: {
+    id: 'office', name: 'The Office', icon: '🏢', blurb: 'an open-plan office floor: cubicles, glass meeting rooms, a server room',
+    sky: 'overcast', spawn: { x: 0, y: 1.0, z: 17 }, yaw: 0, bounds: { x0: -17, x1: 17, z0: -11, z1: 15 },
+
+    build(b) {
+      const con = b.mat('concrete', 0x9fa1a3);
+      const plaster = b.mat('concrete', 0xe9e7e2, { roughness: 0.85 });
+      const carpet = b.mat('plain', 0x4a535e, { roughness: 1 });
+      const tiles = b.mat('concrete', 0xc9c6bf, { roughness: 0.4 });
+      const ceiling = b.mat('plain', 0xdddbd5, { roughness: 0.95 });
+      const desk = b.mat('planks', 0xd9c6a2);
+      const felt = b.mat('plain', 0x66788a, { roughness: 1 });
+      const black = b.mat('plain', 0x1c1d20, { roughness: 0.35, metalness: 0.3 });
+      const screen = b.mat('plain', 0x0d1a26, { roughness: 0.15, emissive: 0x2a5578, emissiveIntensity: 0.5 });
+      const white = b.mat('plain', 0xeeeeea, { roughness: 0.6 });
+      const sofa = b.mat('plain', 0x8a3a32, { roughness: 0.9 });
+      const leaf = b.mat('plain', 0x3f6b35, { roughness: 0.9 });
+      const glass = b.mat('plain', 0x9fc4d8, { transparent: true, opacity: 0.25, roughness: 0.05, metalness: 0.4 });
+      const steel = b.mat('metal', 0xa8afb6, { metalness: 0.7, roughness: 0.35 });
+      const road = b.mat('asphalt', 0x55575a);
+      const F = 3.2, T = 0.2, D = 1.3, H2 = Math.PI / 2;
+      const dr = (x, z, yaw, locked = false) => b.door(x, z, yaw, { wallH: F, wallT: T, gap: D, locked });
+      b.ground();
+      b.box(0, 0.01, 0, 36, 0.02, 24, carpet);                              // the floor: carpet, tiles in the lobby
+      b.box(0, 0.012, 8, 20, 0.02, 8, tiles);
+      b.box(0, F + 0.1, 0, 36.4, 0.2, 24.4, ceiling);                       // the ceiling, and the roof over it
+      b.box(0, F + 0.4, 0, 37, 0.4, 25, con);
+      b.box(0, 0.01, 24, 80, 0.02, 9, road, { solid: false });              // the street out front
+      b.box(0, 0.06, 18.2, 80, 0.12, 2.4, con);                             // pavement
+
+      // outside walls: glass all along the north and east sides, the way in on the south, the west side blank
+      const ribbon = (a, e, c, alongX) => {
+        const n = Math.round((e - a) / 3), w = (e - a) / n, o = alongX ? {} : { ry: H2 };
+        const put = (s, y, ww, h, m, pane) => {
+          const x = alongX ? s : c, z = alongX ? c : s;
+          if (pane) b.pane(x, y, z, ww, h, 0.02, m, o); else b.box(x, y, z, ww, h, T, m, o);
+        };
+        put((a + e) / 2, 0.45, e - a, 0.9, con); put((a + e) / 2, 2.85, e - a, 0.7, con);   // sill, and the band above
+        for (let i = 0; i <= n; i++) put(a + i * w, 1.7, 0.16, 1.6, con);                  // mullions
+        for (let i = 0; i < n; i++) put(a + (i + 0.5) * w, 1.7, w - 0.16, 1.6, glass, true);
+      };
+      ribbon(-18, 18, -12, true);
+      ribbon(-12, 12, 18, false);
+      b.wall(-18, -12, -18, 12, F, T, con);
+      b.wall(-18, 12, 18, 12, F, T, con, [[0.5, 2.6], [0.25, 3], [0.75, 3]]);
+      for (const x of [-9, 9]) { b.box(x, 0.45, 12, 3, 0.9, T, con); b.box(x, 2.85, 12, 3, 0.7, T, con); b.pane(x, 1.7, 12, 2.9, 1.6, 0.02, glass); }
+      dr(-0.65, 12, 0); dr(0.65, 12, 0);
+
+      // the server room (south-west): racks in rows, cold light, a locked door
+      b.wall(-18, 4, -10, 4, F, T, plaster);
+      b.wall(-10, 4, -10, 12, F, T, plaster, [[0.5, D]]);
+      dr(-10, 8, H2, true);
+      for (const z of [6, 9]) for (let i = 0; i < 4; i++) {
+        b.box(-16.2 + i * 1.3, 1.0, z, 0.62, 2.0, 1.05, black);
+        for (let k = 0; k < 6; k++) b.box(-16.2 + i * 1.3, 0.3 + k * 0.3, z + 0.53, 0.5, 0.04, 0.01, screen, { solid: false });   // the lights on their fronts
+      }
+      b.light(-14, 2.9, 7.5, 0x9fc8ff, 10, 8);
+
+      // the break room (south-east): a counter, a fridge, a table
+      b.wall(10, 4, 18, 4, F, T, plaster);
+      b.wall(10, 4, 10, 12, F, T, plaster, [[0.5, D]]);
+      dr(10, 8, H2);
+      b.box(17.4, 0.45, 8, 0.8, 0.9, 6, white); b.box(17.4, 0.92, 8, 0.84, 0.04, 6.04, black);
+      b.box(17.3, 0.95, 4.8, 0.9, 1.9, 0.8, steel);
+      b.light(14, 2.9, 8, 0xfff1dc, 10, 8);
+
+      // the lobby: reception desk, sofas, plants
+      b.box(0, 0.55, 7.6, 4.4, 1.1, 0.8, desk); b.box(0, 1.12, 7.6, 4.5, 0.05, 0.9, black);
+      b.box(0, 0.5, 5.6, 6, 1.0, 0.25, desk);
+      for (const x of [-7, 7]) { b.box(x, 0.3, 10.6, 2.4, 0.6, 0.9, sofa); b.box(x, 0.65, 11.1, 2.4, 0.7, 0.25, sofa); }
+      for (const [x, z] of [[-3.6, 11.3], [3.6, 11.3], [-9.4, 4.7], [9.4, 4.7], [-1, -11.3], [5, -11.3]]) { b.cyl(x, 0.25, z, 0.25, 0.5, black); b.box(x, 0.85, z, 0.6, 0.8, 0.6, leaf, { solid: false }); }
+      b.light(0, 2.9, 9, 0xfff1dc, 14, 10);
+
+      // meeting rooms along the north wall: glass fronts, a table each
+      for (let i = 0; i < 3; i++) {
+        const x0 = -18 + i * 5.4, x1 = x0 + 5.4, cx = (x0 + x1) / 2;
+        b.wall(x1, -12, x1, -6, F, T, plaster);
+        const dx = x1 - 1.0;                                                 // the door, at the right of the front
+        b.pane((x0 + dx - D / 2) / 2, 1.3, -6, dx - D / 2 - x0 - 0.1, 2.6, 0.04, glass);
+        b.box((x0 + dx - D / 2) / 2, 2.9, -6, dx - D / 2 - x0, 0.6, 0.12, steel);
+        b.box(x1 - 0.19, F / 2, -6, 0.38, F, 0.12, steel);
+        dr(dx, -6, 0);
+        b.box(cx, 0.72, -9, 3.2, 0.06, 1.3, desk); b.box(cx, 0.36, -9, 0.3, 0.7, 0.3, steel);
+        b.box(x0 + 0.12, 1.6, -9, 0.05, 0.9, 1.6, screen, { solid: false });
+      }
+      // the manager's office (north-east)
+      b.wall(8, -12, 8, -5, F, T, plaster);
+      b.wall(8, -5, 18, -5, F, T, plaster, [[0.2, D]]);
+      dr(10, -5, 0);
+      b.box(14, 0.38, -9.5, 2.4, 0.76, 1.1, desk); b.box(14, 0.95, -9.9, 0.6, 0.38, 0.05, screen);
+      b.box(17.6, 1.0, -8, 0.5, 2.0, 2.4, desk);
+      // printers and a water cooler between them
+      b.box(2, 0.55, -11.2, 1.2, 1.1, 0.8, white); b.box(4, 0.55, -11.2, 1.0, 1.1, 0.7, white);
+      b.cyl(6.6, 0.55, -11.3, 0.18, 1.1, white); b.cyl(6.6, 1.3, -11.3, 0.15, 0.4, b.mat('plain', 0x7ab8e0, { transparent: true, opacity: 0.6 }));
+
+      // the open plan: pods of four desks, back to back, with felt partitions between
+      for (const cz of [-2.6, 1.4]) for (const cx of [-14, -8.5, -3, 2.5, 8, 13.5]) {
+        b.box(cx, 0.65, cz, 3.4, 1.3, 0.06, felt);                          // the spine
+        b.box(cx, 0.65, cz, 0.06, 1.3, 2.0, felt);                          // and across it
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+          const x = cx + sx * 0.86, z = cz + sz * 0.52;
+          b.box(x, 0.73, z, 1.6, 0.04, 0.9, desk);
+          b.box(x + sx * 0.75, 0.36, z, 0.04, 0.72, 0.85, steel, { solid: false });
+          b.box(x, 1.0, cz + sz * 0.16, 0.56, 0.34, 0.03, screen);
+          b.box(x, 0.8, cz + sz * 0.14, 0.12, 0.14, 0.12, black, { solid: false });
+        }
+      }
+      for (const z of [-4, 2]) for (const x of [-11, 0, 11]) b.light(x, 2.95, z, 0xf4f6ff, 12, 11);
+      for (const z of [-4, 2]) for (const x of [-15, -5, 5, 15]) b.box(x, F - 0.01, z, 1.2, 0.02, 0.6, white, { solid: false });   // ceiling panels
+    },
+
+    populate(ctx) {
+      const { at, npc } = crew(ctx);
+      for (const [x, z] of [[-11.5, -0.6], [-5.5, -0.5], [0, 3.2], [5.5, -0.4], [11, 3.3], [-13, -4.6], [-1.5, 9.5], [14, 7], [-4.5, -10.8]]) npc(x, z);
+      npc(15.5, -7.5, 'thug'); npc(-0.5, -9, 'thug'); npc(3, 7.5, 'thug');
+      for (const cz of [-2.6, 1.4]) for (const cx of [-14, -8.5, -3, 2.5, 8, 13.5]) {
+        if (Math.random() < 0.6) at('chair', cx + (Math.random() < 0.5 ? -0.86 : 0.86), cz + 1.15, Math.PI);
+        if (Math.random() < 0.6) at('chair', cx + (Math.random() < 0.5 ? -0.86 : 0.86), cz - 1.15, 0);
+      }
+      at('table', 14.5, 9, 0); at('chair', 13.6, 9.4, 1.4); at('chair', 15.4, 8.6, -1.6);
+      at('chair', 14, -8.6, Math.PI); at('crate', -12, 5, 0.2); at('crate', -12.6, 5.2, 0.6); at('propane', 16.9, 6);
+      at('car', -12, 21.5, Math.PI / 2); at('car', 9, 26, -Math.PI / 2); at('cone', 3, 19.8); at('cone', -3, 19.8);
     },
   },
 };

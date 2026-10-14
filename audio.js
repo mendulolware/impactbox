@@ -68,6 +68,7 @@ const SPACES = {
   killhouse: { wet: 0.22, bed: 'wind', indoor: 0.7 },
   house:     { wet: 0.45, bed: 'hum', indoor: 1 },
   pool:      { wet: 0.3,  bed: 'wind' },
+  office:    { wet: 0.35, bed: 'hum', indoor: 1 },
 };
 
 let volume = 1;
