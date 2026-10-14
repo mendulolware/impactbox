@@ -48,6 +48,8 @@ export const WEAPONS = [
   { name: 'Grab Gun', slot: 7, type: 'grab' },
   { name: 'Drone',    slot: 7, type: 'drone', auto: false, rate: 1.0 },
   { name: 'Pepper Spray', slot: 7, type: 'spray', range: 3.2, mag: 100, reload: 2.0 },
+  { name: 'Rope Tool', slot: 7, type: 'tool', tool: 'rope' },      // tools.js: click one thing, then another
+  { name: 'Weld Tool', slot: 7, type: 'tool', tool: 'weld' },
 ];
 
 // How each weapon sits in first person, in the same order as WEAPONS. All positions are in the
@@ -113,6 +115,10 @@ const VIEW = [
     handR: [0, -0.088, 0.1, -0.25], handL: [0, -0.045, -0.075, 0] },
   { model: 'Grenade', hip: [0.28, -0.3, -0.5], held: true },      // shortcut: the drone is a grenade in the hand, give it its own model when someone builds one
   { model: 'PepperSpray', hip: [0.26, -0.26, -0.46], can: true, muzzle: [0, 0.07, -0.03] },
+  { model: 'GrabGun', hip: [0.21, -0.22, -0.45], muzzle: [0, 0.005, -0.37], tint: 0xb07a3a,       // the rope tool: the grab gun in brown
+    handR: [0, -0.088, 0.1, -0.25], handL: [0, -0.045, -0.075, 0] },
+  { model: 'GrabGun', hip: [0.21, -0.22, -0.45], muzzle: [0, 0.005, -0.37], tint: 0xff9a2a,       // the weld tool: in orange
+    handR: [0, -0.088, 0.1, -0.25], handL: [0, -0.045, -0.075, 0] },
 ];
 
 const SLEEVE_LEN = 0.3;                                    // length of the SleeveArm model
@@ -976,6 +982,10 @@ export class Weapons {
       this.updateKnife(input, w);
     } else if (w.type === 'grab') {
       this.updateGrab(dt, input);
+    } else if (w.type === 'tool') {
+      this.aim();
+      if (input.leftDown) this.ctx.tools.use(w.tool, _o, _d);
+      else if (input.rightDown) this.ctx.tools.unlink(_o, _d);
     } else if (w.type === 'saw') {
       this.updateSaw(dt, input, w);
     } else if (w.type === 'flame') {

@@ -13,6 +13,8 @@ import { loadModels } from './models.js';
 import { Post } from './post.js';
 import { Mission } from './mission.js';
 import { initTouch, isTouch } from './touch.js';
+import { Tools } from './tools.js';
+import { makeTrap, TRAP_TYPES } from './traps.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_RAGDOLLS = isTouch ? 18 : 36;          // (phones: half the people)
@@ -88,6 +90,8 @@ ctx.player = new Player(ctx, ctx.map.spawn);
 ctx.player.yaw = ctx.player.camYaw = ctx.map.yaw;
 setSpace(ctx.map.id);
 ctx.weapons = new Weapons(ctx);
+ctx.tools = new Tools(ctx);
+ctx.traps = [];
 ctx.post = post;
 
 // ------------------------------------------------------------------ settings (kept in this browser)
@@ -173,6 +177,7 @@ ctx.applyHit = (hit, point, dir, dmg, impulse, opts = {}) => {
   const owner = ctx.owners.get(hit.collider.handle);
   if (owner?.kind === 'part') {
     marker('hit');                       // (before the hit: a kill it causes turns it red)
+    owner.ragdoll.shotAt = performance.now();
     owner.ragdoll.hit(owner.name, dmg, point, dir, impulse, { ...opts, normal: hit.normal });
   } else if (owner?.kind === 'chunk') {
     owner.body.applyImpulse({ x: dir.x * 2, y: dir.y * 2 + 1, z: dir.z * 2 }, true);
@@ -183,6 +188,9 @@ ctx.applyHit = (hit, point, dir, dmg, impulse, opts = {}) => {
     owner.pane.break(point);
   } else if (owner?.kind === 'lamp') {
     owner.lamp.out(point);
+  } else if (owner?.kind === 'trap') {          // (no hole: a trap moves, or goes)
+    ctx.gore.sparks(point, new THREE.Vector3(hit.normal.x, hit.normal.y, hit.normal.z), 6);
+    sfx.impact('metal');
   } else if (owner?.kind === 'door') {
     ctx.gore.bulletHole(point, new THREE.Vector3(hit.normal.x, hit.normal.y, hit.normal.z));
     owner.door.shot(point, dmg);
@@ -207,6 +215,12 @@ ctx.spawnRagdoll = (pos, yaw = 0, opts = {}) => {
   const r = new Ragdoll(ctx, pos, yaw, opts);
   ctx.ragdolls.push(r);
   return r;
+};
+
+ctx.spawnTrap = (type, pos, yaw = 0) => {
+  const t = makeTrap(ctx, type, pos, yaw);
+  ctx.traps.push(t);
+  return t;
 };
 
 ctx.spawnProp = (type, pos, rotY = 0) => {
@@ -308,7 +322,7 @@ const KILL_TEXT = {
 ctx.onKill = (rag, cause) => {
   ctx.kills++;
   feed(KILL_TEXT[cause] || 'KILLED');
-  marker('kill');
+  if (performance.now() - (rag.shotAt || -1e9) < 2500) marker('kill');     // (red only for your own kills)
   ctx.mission.onKill(rag);
 };
 
@@ -362,8 +376,11 @@ function clearAll() {
   ctx.weapons.clearBolts();
   for (const r of ctx.ragdolls) r.destroy();
   for (const p of ctx.props) p.remove();
+  ctx.tools.clear();
+  for (const t of ctx.traps) t.remove();
   ctx.ragdolls.length = 0;
   ctx.props.length = 0;
+  ctx.traps.length = 0;
   ctx.gore.clear();
 }
 
@@ -401,6 +418,7 @@ function deleteTarget() {
   const owner = ctx.owners.get(hit.collider.handle);
   if (owner?.kind === 'part') owner.ragdoll.destroy();
   else if (owner?.kind === 'prop') owner.prop.remove();
+  else if (owner?.kind === 'trap') owner.trap.remove();
   else return;
   sfx.pop();
 }
@@ -462,6 +480,10 @@ const SPAWN_ITEMS = [
       }
     },
   },
+  ...Object.keys(TRAP_TYPES).map((t) => ({
+    cat: 'Traps', label: TRAP_TYPES[t].label, icon: TRAP_TYPES[t].icon, small: TRAP_TYPES[t].small,
+    run: () => { const p = spawnPoint(); p.y -= 0.05; ctx.spawnTrap(t, p, ctx.player.yaw); },     // (facing the way you look)
+  })),
   { cat: 'World', label: 'Explosion', icon: '☄️', small: 'at crosshair', run: () => ctx.explode(spawnPoint(), 8, 1.3) },
   { cat: 'World', label: 'Kill All', icon: '☠️', small: 'every NPC', run: () => { for (const r of ctx.ragdolls) r.damage(1000); } },
   { cat: 'World', label: 'Clean Blood', icon: '🧽', small: 'decals + particles', run: () => ctx.gore.clear() },
@@ -888,6 +910,7 @@ function tick(now) {
 
   for (const r of ctx.ragdolls) r.update(sdt);
   for (const p of ctx.props) p.update(sdt);
+  for (const t of ctx.traps) if (!t.removed) t.update(sdt);     // (moves their kinematic parts for the step below; a deleted one has no bodies left)
 
   if (sdt > 0) {
     for (const r of ctx.ragdolls) r.preStep();
@@ -898,6 +921,8 @@ function tick(now) {
 
   for (const r of ctx.ragdolls) r.sync();
   for (const p of ctx.props) p.sync();
+  ctx.tools.update();
+  if (ctx.traps.some((t) => t.removed)) ctx.traps = ctx.traps.filter((t) => !t.removed);
   if (ctx.ragdolls.some((r) => r.removed)) ctx.ragdolls = ctx.ragdolls.filter((r) => !r.removed);
   if (ctx.props.some((p) => p.removed)) ctx.props = ctx.props.filter((p) => !p.removed);
 

@@ -351,6 +351,7 @@ export const sfx = {
   },
 
   // ---- interface
+  boing()     { tone({ f0: 150, f1: 560, dur: 0.24, gain: 0.25, type: 'triangle' }); tone({ f0: 75, f1: 280, dur: 0.2, gain: 0.2 }); },
   pop()       { tone({ f0: 380, f1: 820, dur: 0.07, gain: 0.1, type: 'triangle' }); },
   tick()      { play('click', { gain: 0.5 }) || tone({ f0: 1200, f1: 900, dur: 0.04, gain: 0.12, type: 'square' }); },
 };

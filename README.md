@@ -243,7 +243,7 @@ Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of
 | 5 | Heavy | Rocket, Minigun, Flamethrower |
 | 6 | Blades | Knife, Machete, Katana, Axe, Chainsaw |
 | 7 | Blunt | Bat, Crowbar, Sledgehammer |
-| 8 | Gear | Pepper Spray (a 3 m cone: anyone in it is 3.5 s dazed, a can lasts 8 s), Grenade, Flashbang (1.5 s fuse: whites out your screen if you look at it and rings your ears; anyone within 13 m who can see it doubles over for 2 to 6 s, stops fighting, gives up far more easily when shouted at, and can be cuffed), Grab Gun, Drone (flies where you look from its own camera, Shift = fast, click or a crash sets it off; it is a slow steered rocket, `flyDrone()` in `main.js`) |
+| 8 | Gear | Pepper Spray (a 3 m cone: anyone in it is 3.5 s dazed, a can lasts 8 s), Grenade, Flashbang (1.5 s fuse: whites out your screen if you look at it and rings your ears; anyone within 13 m who can see it doubles over for 2 to 6 s, stops fighting, gives up far more easily when shouted at, and can be cuffed), Grab Gun, Rope Tool and Weld Tool (below), Drone (flies where you look from its own camera, Shift = fast, click or a crash sets it off; it is a slow steered rocket, `flyDrone()` in `main.js`) |
 
 - **Recoil.** Every gun has `rec: [up, sideways]` in radians per shot. `Player.recoil()` turns most of that into a kick the
   view springs back from, and leaves the rest where it landed, so a burst climbs and has to be pulled back down. Sustained
@@ -277,6 +277,11 @@ a generated echo, and `setSpace()` sets how much of it each map has (a lot in th
 quiet background bed: wind, room hum or city. People have voices (`voice()`: a buzzing source through vowel filters): grunts and
 screams when hit, a cry when they die, screams when they run or burn, growls from zombies, all quieter with distance. Also:
 spent cases landing, rounds hitting concrete (some whine off), footsteps, and the double barrel being broken open.
+
+## Ropes, welds and traps
+
+- **Rope Tool / Weld Tool** (Gear group, `tools.js`): click one thing, then another. A rope ties them at the length they are apart (a Rapier rope joint), a weld holds them exactly as they sit now (a fixed joint). Either end can be the world: a wall, the floor, a beam. A person you tie goes limp for a moment so the rope can take them. Right-click removes the links on what you point at (on the map itself, only those tied within 0.6 m of where you point), or the newest one. Up to 40; a link lets go by itself when either end is gibbed, deleted or the map changes (Rapier drops the joint with the body, so the link checks both ends every frame first).
+- **Traps** (spawn menu, Traps, `traps.js`), placed where you look and facing the way you look: a **Saw Blade** spinning on a post (a kinematic disc: it gashes and severs what reaches its edge and throws it), a **Spike Trap** (step on the plate and a moment later 36 spikes come up through it and run through everything on it), a **Launch Pad** (throws people, props and you up and forward) and a **Crusher** (a block that waits, slams down between two posts and gibs whatever is under it, then winds back up). They work out who they hurt from where body parts are, between physics steps, never from inside one. X deletes one.
 
 ## Gore
 
