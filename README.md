@@ -148,7 +148,7 @@ Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted aft
 - **Cover** (`findCover`, `findPost` in `brain.js`): frightened people freeze (15%), get behind something and peek out (most, when there is something), or run. Armed suspects pick a hiding place with a firing spot a step to one side and go back and forth between them.
 - **Casualties**: once calm again, bystanders walk over to a body and crouch by it before it sinks in, and they take hold of anyone who is down and cannot walk and drag them away from where it happened.
 - **Night** (N, or the button on the start screen): any map under a moon, with a shadow-casting flashlight (L). People see less than half as far in the dark.
-- **Recorded run** (`assets/run.json`, made from a Mixamo clip by `models/import_anim.py`): flat-out running blends from the worked-out stride to motion capture. Walking and everything else is still worked out in `computePose`.
+- **Recorded motion** (`assets/walk.json`, `run.json`, `die.json`, `reload.json`, made from Mixamo clips by `models/import_anim.py`; `once` for clips that do not loop): walking and running blend from the worked-out stride to motion capture; someone too hurt to stay up plays a stagger-and-fall until their hips are on the way down, then the ragdoll takes over (a hit cuts it short); armed suspects carry 8 rounds and play a reload when they run dry, which is your moment.
 
 - **Gun handling:** magazine guns keep a round in the chamber through a reload (30+1), and a reload from empty takes 30% longer because the bolt has to go forward; shots spread more on the move and a lot more in the air; sprinting carries the weapon low and it cannot fire until it is back up; aimed weapons drift with your breathing (the sniper most), Shift while aiming holds your breath for about four seconds, and running out leaves you shakier until it comes back; spent cases fly out to the right. Hits no longer play the flesh squish.
 
@@ -282,10 +282,9 @@ convention, moves it so its trigger is where the built model's was (so the hands
 built model of the same name; delete the file to go back to the built guns. The script prints each gun's muzzle and sight
 height for `VIEW`. To swap in another model, add a line to `GUNS` in that script.
 
-**Downloaded people.** NPCs wear rigged characters from [Mixamo](https://www.mixamo.com) (a construction worker, a man in a
-hoodie and a soldier) instead of the built body. `models/import_characters.py` takes any Mixamo-rigged FBX, stands it in the
+**Downloaded people.** NPCs wear rigged characters from [Mixamo](https://www.mixamo.com) (six of them) instead of the built body. `models/import_characters.py` takes any Mixamo-rigged FBX, stands it in the
 game's rest pose with its joints on the ragdoll's, cuts it into the eleven ragdoll pieces with a flesh cap on every cut, and
-writes `assets/characters.glb` (7.5 MB):
+writes `assets/characters.glb` (13 MB, textures at 768 px):
 
     blender -b -P models/import_characters.py -- assets/characters.glb one.fbx two.fbx ...
 

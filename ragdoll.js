@@ -82,18 +82,24 @@ const MODEL_OF = {
 const REST = { spine: 0, neck: 0, shoulderL: 0.25, shoulderR: 0.25, elbowL: 0.45, elbowR: 0.45, hipL: 0.2, hipR: 0.2, kneeL: -0.35, kneeR: -0.35 };
 const BRACE = { spine: -0.3, neck: -0.35, shoulderL: 1.35, shoulderR: 1.35, elbowL: 0.6, elbowR: 0.6, hipL: 0.7, hipR: 0.7, kneeL: -1.0, kneeR: -1.0 };
 const TWIST = { spine: 0.5, neck: 0.9, shoulderL: 1.2, shoulderR: 1.2, hipL: 0.7, hipR: 0.7 };
-// A recorded run (assets/run.json, made by models/import_anim.py): a rotation per joint per frame, one loop.
-// Flat-out running blends from the worked-out stride to this; without the file the worked-out one is all there is.
-let RUN_CLIP = null;
-fetch('assets/run.json').then((r) => r.json()).then((j) => { RUN_CLIP = j; }).catch(() => {});
+// Recorded motion (assets/<name>.json, made by models/import_anim.py from Mixamo clips): a rotation per joint per
+// frame. walk and run are loops that take over from the worked-out stride; die is a stagger and fall that a person
+// too hurt to stand plays before the ragdoll takes them; reload is an armed suspect changing magazines.
+// A missing file just leaves the worked-out motion.
+const CLIPS = {};
+for (const k of ['walk', 'run', 'die', 'reload']) fetch(`assets/${k}.json`).then((r) => r.json()).then((j) => { CLIPS[k] = j; }).catch(() => {});
 const _c0 = new THREE.Quaternion(), _c1 = new THREE.Quaternion();
-/** The clip's rotation for one joint at a point in the walk cycle. */
-function clipAt(name, phase, out) {
-  const rows = RUN_CLIP.joints[name], n = RUN_CLIP.frames;
-  const u = (((phase / (Math.PI * 2)) % 1) + 1) % 1 * n, i = Math.floor(u) % n;
-  return out.fromArray(rows[i]).slerp(_c1.fromArray(rows[(i + 1) % n]), u - Math.floor(u));
+/** A clip's rotation for one joint. u = how far through it, 0..1 (wrapping round for a loop). */
+function clipAt(clip, name, u, out, loop = true) {
+  const rows = clip.joints[name], n = clip.frames;
+  const f = loop ? (((u % 1) + 1) % 1) * n : Math.min(Math.max(u, 0), 1) * (n - 1);
+  const i = Math.floor(f);
+  return out.fromArray(rows[i % n]).slerp(_c1.fromArray(rows[loop ? (i + 1) % n : Math.min(i + 1, n - 1)]), f - i);
 }
+/** Seconds a one-off clip lasts. */
+const clipLen = (clip) => clip.frames / (clip.fps || 30);
 
+const MAG = 8;            // an armed suspect's rounds between reloads
 const FLINCH = 0.45, PUNCH = 0.35, LUNGE = 0.5, STUMBLE = 0.9;
 
 const PARENT = {};
@@ -451,7 +457,7 @@ export class Ragdoll {
   /** Drop into physics for at least `seconds`. Safe to call repeatedly. */
   goLimp(seconds = 1.5) {
     this.stun = Math.max(this.stun, seconds);
-    this.stumbleT = 0;
+    this.stumbleT = this.collapseT = this.reloadT = 0;
     if (this.mode !== 'ragdoll') {
       this.setMode('ragdoll');
       this.speed = 0;
@@ -492,6 +498,7 @@ export class Ragdoll {
     if (!p || p.gone) return;
     const { gore, sfx } = this.ctx;
     this.impactMute = Math.max(this.impactMute, 0.35);   // being shot is not a fall
+    if (this.collapseT > 0) this.goLimp(2);
     if (dmg > 0 && this.armour > 0 && (name === 'torso' || name === 'head') && opts.pen !== undefined && opts.pen < 0.25) {
       // pistol-weight rounds stop in the vest or the helmet: a thump and a bruise, no hole. Plates only take so much
       this.armour -= dmg;
@@ -684,6 +691,7 @@ export class Ragdoll {
   /** Hand this NPC a pistol: from now on it is an armed suspect (see suspect() in brain.js). */
   arm() {
     this.armed = true;
+    this.rounds = MAG;
     this.gun = getModel('Pistol');
     if (!this.gun) return;
     this.gun.position.set(0, -0.2, -0.03);       // in the hand at the end of the forearm, barrel along it
@@ -695,6 +703,8 @@ export class Ragdoll {
   shoot(pl) {
     const arm = this.parts.farmR;
     if (arm.gone || this.isFree('farmR') || this.limp.has('farmR')) { this.armed = false; return; }   // no gun hand: no longer a shooter
+    if (this.reloadT > 0) return;                    // busy with a fresh magazine: your chance
+    if (--this.rounds <= 0 && CLIPS.reload) this.reloadT = 1e-3;
     const from = this.localToWorld(arm, { x: 0, y: -0.3, z: -0.03 });
     const to = new THREE.Vector3(pl.pos.x, pl.pos.y + 0.3, pl.pos.z);
     const d = from.distanceTo(to);
@@ -1031,19 +1041,41 @@ export class Ragdoll {
     L('elbowL', elL);
     L('elbowR', elR);
     // running: the recorded stride takes over, as far as nothing else (a gesture, a bad leg, a stumble) wants the body
-    const rec = RUN_CLIP && !z ? run * w * (1 - clamp(up + cw + ft + kn + sq + cl + fl + Math.max(lameL, lameR) + (this.stumbleT > 0 ? 1 : 0), 0, 1)) : 0;
-    if (rec > 0.01) {
+    const free = z ? 0 : w * (1 - clamp(up + cw + ft + kn + sq + cl + fl + Math.max(lameL, lameR) + (this.stumbleT > 0 ? 1 : 0), 0, 1));
+    const u = this.phase / (Math.PI * 2);
+    for (const [clip, k] of [[CLIPS.walk, free * (1 - run)], [CLIPS.run, free * run]]) {
+      if (!clip || k < 0.01) continue;
       for (const name in this.joints) {
         if (name === 'neck' && this.look) continue;                         // the head is busy looking at something
         if (am > 0.01 && (name.startsWith('shoulder') || name.startsWith('elbow'))) continue;   // the arms are busy with a gun
-        this.joints[name].local.slerp(clipAt(name, this.phase, _c0), rec);
+        this.joints[name].local.slerp(clipAt(clip, name, u, _c0), k);
       }
+    }
+    // changing magazines: the upper body plays the reload, eased in and out
+    if (this.reloadT > 0 && CLIPS.reload) {
+      this.reloadT += dt;
+      const len = clipLen(CLIPS.reload), r = this.reloadT / len, k = clamp(Math.min(r, 1 - r) * 6, 0, 1);
+      for (const name of ['spine', 'neck', 'shoulderL', 'shoulderR', 'elbowL', 'elbowR']) this.joints[name].local.slerp(clipAt(CLIPS.reload, name, r, _c0, false), k);
+      if (r >= 1) { this.reloadT = 0; this.rounds = MAG; }
+    }
+    // too hurt to stay up: the recorded stagger and fall, all of it, until the hips are on their way down
+    let fall = 0;
+    if (this.collapseT > 0) {
+      this.collapseT += dt;
+      const len = clipLen(CLIPS.die), r = this.collapseT / len, f = Math.min(CLIPS.die.frames - 1, Math.floor(r * CLIPS.die.frames));
+      fall = clamp(this.collapseT * 4, 0, 1);
+      for (const name in this.joints) this.joints[name].local.slerp(clipAt(CLIPS.die, name, r, _c0, false), fall);
+      this.slump = CLIPS.die.hips[f] < 0.8;                    // (move() stops walking once the legs go)
+      if (CLIPS.die.hips[f] < 0.62 || r >= 1) { this.goLimp(2); fall = 0; }
     }
 
     // forward kinematics from the pelvis, placed at the origin first
     const pel = this.pose.pelvis;
     pel.q.setFromEuler(_e.set(-0.03 * w - 0.07 * run, this.heading + 0.1 * s * w, roll, 'YXZ'));
-    if (rec > 0.01) pel.q.slerp(_q.setFromEuler(_e.set(0, this.heading, 0, 'YXZ')).multiply(clipAt('pelvis', this.phase, _c0)), rec);
+    for (const [clip, k] of [[CLIPS.walk, free * (1 - run)], [CLIPS.run, free * run]]) {
+      if (clip && k > 0.01) pel.q.slerp(_q.setFromEuler(_e.set(0, this.heading, 0, 'YXZ')).multiply(clipAt(clip, 'pelvis', u, _c0)), k);
+    }
+    if (fall > 0) pel.q.slerp(_q.setFromEuler(_e.set(0, this.heading, 0, 'YXZ')).multiply(clipAt(CLIPS.die, 'pelvis', this.collapseT / clipLen(CLIPS.die), _c0, false)), fall);
     pel.p.set(0, 0, 0);
     for (const j of JOINTS) {
       const jd = this.joints[j.name];
@@ -1094,7 +1126,7 @@ export class Ragdoll {
     if (this.stumbleT > 0 && (this.stumbleT -= dt) <= 0 && this.stumbleFall) { this.goLimp(1.4); return; }   // did not catch it
 
     // a hit stops you in your tracks; a bad leg or a hole in the gut slows you down
-    const want = this.flinchT > 0 || this.stumbleT > 0 ? 0 : this.wantSpeed * (1 - 0.5 * Math.max(this.lame.L, this.lame.R)) * (1 - 0.15 * this.clutch);
+    const want = this.flinchT > 0 || this.stumbleT > 0 || (this.collapseT > 0 && this.slump) ? 0 : this.wantSpeed * (1 - 0.5 * Math.max(this.lame.L, this.lame.R)) * (1 - 0.15 * this.clutch);
     this.speed += (want - this.speed) * Math.min(1, dt * 5);
     let dh = this.targetHeading - this.heading;
     dh = Math.atan2(Math.sin(dh), Math.cos(dh));
@@ -1548,7 +1580,9 @@ export class Ragdoll {
       }
     }
     // too much blood gone to stay on your feet
-    if (this.mode !== 'ragdoll' && !this.dead && !zombie && this.health <= 20) this.goLimp(2);
+    if (this.mode !== 'ragdoll' && !this.dead && !zombie && this.health <= 20 && !(this.collapseT > 0)) {
+      if (CLIPS.die && this.mode === 'anim' && this.stumbleT <= 0) this.collapseT = 1e-3; else this.goLimp(2);
+    }
 
     if (this.dead) {
       this.deadT += dt;

@@ -1,6 +1,7 @@
 """Turn a recorded animation (Mixamo FBX, one loop of a run or walk) into joint angles for the game's NPC.
 
     blender -b -P models/import_anim.py -- assets/run.json Running.fbx
+    blender -b -P models/import_anim.py -- assets/die.json "Walking To Dying.fbx" once
 
 The NPC is posed by ten joints between eleven rigid bodies (JOINTS in ragdoll.js), each a rotation of the child
 body relative to its parent, all of them zero in the rest pose (standing, arms straight down). So for every frame
@@ -11,7 +12,8 @@ Frames are shifted so that frame 0 is phase 0 of the game's walk cycle (the game
 import bpy, sys, json, math
 from mathutils import Matrix, Vector
 
-OUT, SRC = sys.argv[sys.argv.index('--') + 1:]
+OUT, SRC, *MODE = sys.argv[sys.argv.index('--') + 1:]
+ONCE = 'once' in MODE          # a one-off (a fall, a reload): kept in order from its first frame, not lined up as a loop
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.fbx(filepath=SRC)
 arm = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
@@ -55,11 +57,13 @@ for f in range(f0, f1):        # the last frame repeats the first
     row = {'pelvis': D['pelvis'].to_quaternion()}
     for j, (a, c) in JOINTS.items():
         row[j] = (D[a].inverted() @ D[c]).to_quaternion()
-    frames.append((row, (D['thighL'] @ Vector((0, 0, -1))).y))      # how far forward the game's L thigh points
+    hips = (turn @ (arm.matrix_world @ arm.pose.bones[pre + 'Hips'].matrix).to_translation()).z / (turn @ head('Hips')).z
+    frames.append((row, (D['thighL'] @ Vector((0, 0, -1))).y, hips))      # how far forward the game's L thigh points; how high the hips are
 
 n = len(frames)
 peak = max(range(n), key=lambda i: frames[i][1])
-shift = peak - n // 4
+shift = 0 if ONCE else peak - n // 4
 out = {name: [three(frames[(i + shift) % n][0][name]) for i in range(n)] for name in ['pelvis'] + list(JOINTS)}
-json.dump({'frames': n, 'joints': out}, open(OUT, 'w'), separators=(',', ':'))
+hips = [round(frames[(i + shift) % n][2], 3) for i in range(n)]
+json.dump({'frames': n, 'fps': bpy.context.scene.render.fps, 'hips': hips, 'joints': out}, open(OUT, 'w'), separators=(',', ':'))
 print('WROTE', OUT, 'frames', n, 'shift', shift, 'flip', flip)

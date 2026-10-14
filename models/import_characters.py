@@ -17,7 +17,7 @@ import bmesh
 from mathutils import Vector, Matrix
 
 OUT, *FILES = sys.argv[sys.argv.index('--') + 1:]
-TEX = 1024
+TEX = 768                     # six people at 1024 came to 14.5 MB
 HEIGHT = 1.82                 # the game's NPC, crown of the head
 PARTS = ['pelvis', 'torso', 'head', 'uarmL', 'farmL', 'uarmR', 'farmR', 'thighL', 'shinL', 'thighR', 'shinR']   # order = bone index in the game
 # which bodies are joined to which. A vertex may only follow its own body and one joined to it: the game cuts
