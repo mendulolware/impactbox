@@ -52,6 +52,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #111; font-f
 #crosshair.hide { opacity: 0; }
 #cam { display: none; position: absolute; inset: 0; font: 600 15px/1.4 Consolas, "Courier New", monospace; color: #f2f2f2; text-shadow: 0 0 4px #000, 0 1px 2px #000; letter-spacing: 1px; }
 body.helmet #cam { display: block; }
+/* body cameras record 4:3: the picture is boxed in, with the overlay inside the box */
+#cam { left: 50%; right: auto; width: min(100%, 133.34vh); transform: translateX(-50%); box-shadow: 0 0 0 100vmax #000; }
+body.helmet #mission { right: calc(50% - min(50%, 66.67vh) + 24px); top: auto; bottom: 12%; z-index: 2; }
+body.helmet #toast, body.helmet #lens { z-index: 2; }
 #cam-rec { position: absolute; left: 6%; top: 7%; }
 #cam-rec i { display: inline-block; width: 11px; height: 11px; margin-right: 8px; border-radius: 50%; background: #f22; animation: rec 1s steps(2, start) infinite; }
 @keyframes rec { to { visibility: hidden; } }

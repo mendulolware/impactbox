@@ -57,14 +57,29 @@ const BLUR_FRAG = `
     gl_FragColor = vec4(c, 1.0);
   }`;
 
+// Bodycam auto exposure: the log-average brightness of the middle of the picture, eased toward over time
+// (it lives in a 1x1 target and is mixed with last frame's), so walking from shade into sun blows out first.
+const EXP_FRAG = `
+  uniform sampler2D tScene; uniform sampler2D tPrev; uniform float uRate; varying vec2 vUv;
+  void main() {
+    float s = 0.0;
+    for (int x = 0; x < 8; x++) for (int y = 0; y < 8; y++) {
+      vec3 c = textureLod(tScene, 0.2 + (vec2(float(x), float(y)) + 0.5) / 8.0 * 0.6, 0.0).rgb;
+      s += log(max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-4));
+    }
+    float now = exp(s / 64.0), was = texture2D(tPrev, vec2(0.5)).r;
+    gl_FragColor = vec4(was <= 0.0 ? now : mix(was, now, uRate), 0.0, 0.0, 1.0);
+  }`;
+
 const FINAL_FRAG = `
   uniform sampler2D tScene; uniform sampler2D tAO; uniform sampler2D tBloom;
-  uniform vec2 uAoTexel; uniform float uHelmet; uniform float uAspect; uniform float uSupp; uniform vec3 uFaces[8]; uniform vec2 uBlur; uniform vec2 uTexel; uniform float uTime; varying vec2 vUv;
+  uniform vec2 uAoTexel; uniform float uHelmet; uniform float uAspect; uniform float uSupp; uniform vec3 uFaces[8]; uniform vec2 uBlur; uniform vec2 uTexel; uniform float uTime; uniform sampler2D tExp; uniform float uKey; varying vec2 vUv;
   void main() {
     // bodycam lens: the middle of the picture is magnified and the edges squeezed in (corners stay put)
     vec2 lc = vUv * 2.0 - 1.0;
     float bend = 0.3 * uHelmet;
     vec2 uv = 0.5 + 0.5 * lc * (1.0 + bend * dot(lc, lc)) / (1.0 + bend * 2.0);
+    uv.x += uBlur.x * (uv.y - 0.5) * 1.6 * uHelmet;            // rolling shutter: lines read top to bottom, so a fast turn leans the picture
     // faces are blocked out the way released footage is. uFaces: where on the picture, and how big (0 = unused)
     for (int i = 0; i < 8; i++) {
       vec3 f = uFaces[i];
@@ -87,6 +102,9 @@ const FINAL_FRAG = `
       vec3 nb = texture2D(tScene, uv + vec2(uTexel.x * 1.5, 0.0)).rgb + texture2D(tScene, uv - vec2(uTexel.x * 1.5, 0.0)).rgb
               + texture2D(tScene, uv + vec2(0.0, uTexel.y * 1.5)).rgb + texture2D(tScene, uv - vec2(0.0, uTexel.y * 1.5)).rgb;
       col = max(col + (col - nb * 0.25) * 0.4, 0.0);
+      // too much changing at once for the bitrate: the picture breaks into 8x8 blocks until it settles
+      vec2 blk = (floor(uv / (8.0 * uTexel)) + 0.5) * 8.0 * uTexel;
+      col = mix(col, texture2D(tScene, blk).rgb, clamp(length(uBlur) * 22.0 - 0.05, 0.0, 0.65));
     }
     float ao = 0.0;
     for (int x = 0; x < 4; x++) for (int y = 0; y < 4; y++) {
@@ -95,6 +113,7 @@ const FINAL_FRAG = `
     ao /= 16.0;
     col *= mix(1.0, ao, 0.85);
     col += texture2D(tBloom, uv).rgb * 0.7;
+    if (uHelmet > 0.5) col *= clamp(uKey / texture2D(tExp, vec2(0.5)).r, 0.5, 1.6);   // the camera's auto exposure
 
     float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
     col = mix(vec3(l), col, mix(1.06, 0.84, uHelmet) * (1.0 - 0.6 * uSupp));   // under fire the colour drains and the edges close in                       // helmet cam is flatter and colder
@@ -112,6 +131,7 @@ const FINAL_FRAG = `
       float lum = dot(c, vec3(0.299, 0.587, 0.114));
       c = smoothstep(0.025, 1.0, c);
       c = mix(c, vec3(1.0), smoothstep(0.78, 1.0, lum) * 0.55);
+      c = floor(c * 48.0 + 0.5) / 48.0;                         // compression bands smooth gradients (the grain then breaks them up a little)
       c *= vec3(0.97, 1.02, 0.96);
       float n = fract(sin(dot(gl_FragCoord.xy + fract(uTime) * 517.0, vec2(12.9898, 78.233))) * 43758.5453);
       c += (n - 0.5) * (0.035 + 0.11 * (1.0 - smoothstep(0.0, 0.4, lum)));
@@ -139,9 +159,16 @@ export class Post {
     this.blur.toneMapped = false;
     this.final = mat(FINAL_FRAG, {
       tScene: { value: this.target.texture }, tAO: { value: this.aoTarget.texture }, tBloom: { value: this.bloomA.texture },
-      uAoTexel: { value: new THREE.Vector2() }, uHelmet: { value: 0 }, uAspect: { value: 1 }, uSupp: { value: 0 }, uBlur: { value: new THREE.Vector2() }, uTexel: { value: new THREE.Vector2() }, uTime: { value: 0 },
+      uAoTexel: { value: new THREE.Vector2() }, uHelmet: { value: 0 }, uAspect: { value: 1 }, uSupp: { value: 0 }, uBlur: { value: new THREE.Vector2() }, uTexel: { value: new THREE.Vector2() }, uTime: { value: 0 }, tExp: { value: null }, uKey: { value: 0.14 },   // what a sunny yard averages, so daylight stays as it was
       uFaces: { value: Array.from({ length: 8 }, () => new THREE.Vector3()) },
     });
+
+    const one = { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, type: THREE.HalfFloatType };
+    this.expA = new THREE.WebGLRenderTarget(1, 1, one);
+    this.expB = new THREE.WebGLRenderTarget(1, 1, one);
+    this.exp = mat(EXP_FRAG, { tScene: { value: this.target.texture }, tPrev: { value: null }, uRate: { value: 1 } });
+    this.exp.toneMapped = false;
+    this.lastT = performance.now();
 
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.final);
     this.quadScene = new THREE.Scene();
@@ -192,6 +219,15 @@ export class Post {
       this.pass(this.blur, this.bloomA);
     }
 
+    const now = performance.now(), dt = Math.min(0.1, (now - this.lastT) / 1000);
+    this.lastT = now;
+    if (helmet) {
+      this.exp.uniforms.tPrev.value = this.expA.texture;
+      this.exp.uniforms.uRate.value = 1 - Math.exp(-dt * 1.6);
+      this.pass(this.exp, this.expB);
+      [this.expA, this.expB] = [this.expB, this.expA];
+      this.final.uniforms.tExp.value = this.expA.texture;
+    }
     this.final.uniforms.uHelmet.value = helmet ? 1 : 0;
     this.final.uniforms.uTime.value = performance.now() / 1000;
     this.pass(this.final, null);

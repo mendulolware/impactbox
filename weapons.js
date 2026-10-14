@@ -59,6 +59,7 @@ export const WEAPONS = [
 //   knife  - held point-forward in its own hand, with a sleeve running back off screen
 const RIG_SCALE = 0.8;
 const RECOIL = 1.6;        // one dial for how hard every gun kicks
+const CAN = 0.17;          // suppressor length, in weapon-model metres
 const HELMET_DROP = 0.1;   // how far the eyes are below the helmet camera (matches player.js)
 const VIEW = [
   { model: 'Pistol',  hip: [0.19, -0.19, -0.50], sight: 0.0319, adsZ: -0.42, muzzle: [0, 0.0201, -0.081],
@@ -223,6 +224,23 @@ export class Weapons {
     }
     this.tracerI = 0;
 
+    // attachments: a suppressor per gun (J), and a laser (K) with its dot and, in the dark, its beam
+    this.can = WEAPONS.map(() => false);
+    this.canMesh = [];
+    this.laser = false;
+    const glow = document.createElement('canvas'); glow.width = glow.height = 32;
+    const gg = glow.getContext('2d'), gr = gg.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,255,255,0.8)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    gg.fillStyle = gr; gg.fillRect(0, 0, 32, 32);
+    this.dot = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(glow), color: 0xff2a1a, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.dot.visible = false;
+    ctx.scene.add(this.dot);
+    this.ray = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+      new THREE.LineBasicMaterial({ color: 0xff3020, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.ray.frustumCulled = false;
+    this.ray.visible = false;
+    ctx.scene.add(this.ray);
+
     // crossbow bolts left standing in whatever they hit
     this.bolts = [];
     const bg = new THREE.CylinderGeometry(0.006, 0.006, 0.44, 6).rotateX(Math.PI / 2);
@@ -365,6 +383,44 @@ export class Weapons {
     sfx.reload();
   }
 
+  /** J: screw a suppressor on or off (single-projectile guns, not the revolver). */
+  toggleCan() {
+    const w = this.current, i = this.index;
+    if (w.type !== 'gun' || w.spin || w.pellets > 1 || w.bolt || w.name === 'Revolver') return;
+    this.can[i] = !this.can[i];
+    if (!this.canMesh[i]) {
+      const m = VIEW[i].muzzle || [0, 0, -0.3];
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(0.019, 0.019, CAN, 14).rotateX(Math.PI / 2),
+        new THREE.MeshStandardMaterial({ color: 0x1d1e20, roughness: 0.45, metalness: 0.6 }));
+      c.position.set(m[0], m[1], m[2] - CAN / 2);
+      this.models[i].add(c);
+      this.canMesh[i] = c;
+    }
+    this.canMesh[i].visible = this.can[i];
+    sfx.tick();
+    this.ctx.toast(this.can[i] ? 'SUPPRESSOR ON' : 'SUPPRESSOR OFF');
+  }
+
+  /** The laser: a red dot where the barrel points (and the beam itself after dark). */
+  updateLaser() {
+    const show = this.laser && this.current.type === 'gun' && !this.ctx.drone && this.rig.visible;
+    this.dot.visible = this.ray.visible = false;
+    if (!show) return;
+    this.aim();
+    const from = this.muzzlePoint(new THREE.Vector3());
+    const hit = this.ctx.raycast(from, _d, 120);
+    const to = from.clone().addScaledVector(_d, hit ? hit.timeOfImpact - 0.02 : 120);
+    if (hit) {
+      this.dot.position.copy(to);
+      this.dot.scale.setScalar(0.02 + hit.timeOfImpact * 0.0035);
+      this.dot.visible = true;
+    }
+    const pos = this.ray.geometry.attributes.position;
+    pos.setXYZ(0, from.x, from.y, from.z); pos.setXYZ(1, to.x, to.y, to.z); pos.needsUpdate = true;
+    this.ray.material.opacity = this.ctx.night ? 0.35 : 0.06;
+    this.ray.visible = true;
+  }
+
   /** B: automatic weapons between full auto and one shot per pull. */
   toggleMode() {
     const w = this.current;
@@ -446,7 +502,7 @@ export class Weapons {
   muzzlePoint(out) {
     const m = this.view.muzzle || [0, 0, -0.3];
     this.ctx.camera.updateMatrixWorld(true);
-    return this.models[this.index].localToWorld(out.set(m[0], m[1], m[2]));
+    return this.models[this.index].localToWorld(out.set(m[0], m[1], m[2] - (this.can[this.index] ? CAN : 0)));
   }
 
   tracer(from, to) {
@@ -512,7 +568,14 @@ export class Weapons {
       }
       if (!w.bolt && (i < 3 || w.pellets === 1)) this.tracer(muzzle, first || end);
     }
-    sfx[w.sound]();
+    const can = this.can[this.index];
+    if (can) sfx.suppressed(); else sfx[w.sound]();
+    if (!w.bolt) {                                // a puff of smoke out of the muzzle, not a fireball
+      for (let k = 0; k < 2; k++) {
+        ctx.gore.smoke.emit(muzzle.x + fwd.x * 0.12, muzzle.y + fwd.y * 0.12, muzzle.z + fwd.z * 0.12, fwd.x * rnd(0.3, 1) + rnd(-0.15, 0.15), fwd.y * rnd(0.3, 1) + rnd(0.05, 0.3), fwd.z * rnd(0.3, 1) + rnd(-0.15, 0.15),
+          rnd(0.035, 0.065) * (can ? 1.4 : 1), rnd(0.5, 1.1), -0.15, 0.3, 0.3, 0.3, 0, 3);
+      }
+    }
     if (w.shell && (!w.auto || Math.random() < 0.5)) sfx.shell();
     if (w.shell && !w.shells) {                  // the spent case flies out to the right
       const p = muzzle.clone().addScaledVector(fwd, -0.3).addScaledVector(up, 0.03), s = rnd(2, 3.2);
@@ -521,7 +584,8 @@ export class Weapons {
     }
     this.kick = w.kick;
     this.kickSide = (Math.random() - 0.5) * 2 * w.kick;
-    if (!w.quiet) {
+    if (can) ctx.alert('shot', ctx.player.pos, 9);      // quieter, not silent
+    else if (!w.quiet) {
       deafen(0.04 + w.kick * 0.5, true);
       ctx.alert('shot', ctx.player.pos, 40);
       this.muzzle.position.copy(muzzle);
@@ -862,6 +926,7 @@ export class Weapons {
     const decay = Math.exp(-dt * 9);
     this.swayYaw *= decay; this.swayPitch *= decay;
     this.pivot.rotation.set(pl.aimOff.pitch + this.swayPitch, pl.aimOff.yaw + this.swayYaw, 0);
+    this.updateLaser();
 
     if (this.muzzleT > 0) {
       this.muzzleT -= dt;

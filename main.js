@@ -84,6 +84,7 @@ ctx.player = new Player(ctx, ctx.map.spawn);
 ctx.player.yaw = ctx.player.camYaw = ctx.map.yaw;
 setSpace(ctx.map.id);
 ctx.weapons = new Weapons(ctx);
+ctx.post = post;
 
 ctx.later = (sec, fn) => ctx.timers.push({ t: sec, fn });
 
@@ -502,6 +503,8 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR') ctx.weapons.reload();
   if (e.code === 'KeyF') { ctx.weapons.unjam(); ctx.mission.act(); }
   if (e.code === 'KeyB') ctx.weapons.toggleMode();
+  if (e.code === 'KeyJ') ctx.weapons.toggleCan();
+  if (e.code === 'KeyK') { ctx.weapons.laser = !ctx.weapons.laser; sfx.tick(); }
   if (e.code === 'KeyX') deleteTarget();
   if (e.code === 'KeyC') { clearAll(); toast('CLEARED'); }
 });

@@ -258,6 +258,8 @@ const throat = (pitch) => 0.92 + (pitch - 0.8) * 0.4;
 
 export const sfx = {
   // ---- guns: a recording of the real thing, or (until it has loaded) a synthetic stand-in
+  /** A suppressed round: a hard cough and the action cycling, not silence. */
+  suppressed() { noise({ dur: 0.06, f0: 3200, f1: 500, gain: 0.38, type: 'bandpass' }); tone({ f0: 170, f1: 60, dur: 0.06, gain: 0.22 }); play('click', { gain: 0.35, rate: 0.75 }); },
   pistol()    { play('pistol', { gain: 0.8, send: 0.12 }) || shot({ crack: 0.8, crackHz: 5200, body: 0.7, bodyHz: [3200, 320], bodyDur: 0.11, thump: 0.45, thumpHz: [210, 60], thumpDur: 0.09, tail: 0.3 }); },
   revolver()  { play('revolver', { gain: 0.95, send: 0.15 }) || shot({ crack: 1.0, crackHz: 4200, body: 1.0, bodyHz: [2400, 150], bodyDur: 0.24, thump: 0.9, thumpHz: [160, 38], thumpDur: 0.2, tail: 0.5 }); },
   smg()       { play('smg', { gain: 0.6, send: 0.08 }) || shot({ crack: 0.6, crackHz: 6000, body: 0.5, bodyHz: [3600, 500], bodyDur: 0.07, thump: 0.3, thumpHz: [260, 90], thumpDur: 0.05, tail: 0.2 }); },
