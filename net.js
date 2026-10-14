@@ -180,31 +180,51 @@ export class Link {
 
   /** Host: claim a code, listen on both routes, and wait. Resolves with the code. */
   async host() {
-    const Peer = await loadPeer();
-    for (let tries = 0; tries < 4; tries++) {
-      const code = newCode();
-      const peer = new Peer(PREFIX + code);
-      const ok = await new Promise((res) => {
-        peer.on('open', () => res(true));
-        peer.on('error', (e) => res(e.type === 'unavailable-id' ? false : String(e.type || e)));
-      });
-      if (ok === true) {
-        this.peer = peer;
-        this.code = code;
-        this.out = topic(code, 'down');
-        peer.on('connection', (conn) => this.attach(conn));
-        peer.on('disconnected', () => { if (!this.closed) peer.reconnect(); });   // lost the broker: new players could not find us
-        for (const url of BROKERS) {
-          const mq = new Mqtt(url);
-          mq.onmessage = (t, b) => this.fromRelay(mq, b);
-          mq.connect().then(() => { mq.subscribe(topic(code, 'up')); this.relays.push(mq); }).catch(() => {});
+    // the direct route needs the matchmaking server; if it cannot be had, the relay alone will do
+    let code = null;
+    try {
+      const Peer = await loadPeer();
+      for (let tries = 0; tries < 4 && !code; tries++) {
+        const c = newCode(), peer = new Peer(PREFIX + c);
+        const ok = await new Promise((res) => {
+          peer.on('open', () => res(true));
+          peer.on('error', (e) => res(e.type === 'unavailable-id' ? false : 'fail'));
+          setTimeout(() => res('fail'), 8000);
+        });
+        if (ok === true) {
+          code = c;
+          this.peer = peer;
+          peer.on('connection', (conn) => this.attach(conn));
+          peer.on('disconnected', () => { if (!this.closed) peer.reconnect(); });   // lost the matchmaker (a phone put away): back on
+        } else {
+          peer.destroy();
+          if (ok === 'fail') break;
         }
-        return code;
       }
-      peer.destroy();
-      if (ok !== false) throw new Error(ok);
-    }
-    throw new Error('no free code');
+    } catch (e) { /* no direct route from here */ }
+    this.code = code ?? newCode();
+    this.out = topic(this.code, 'down');
+    for (const url of BROKERS) this.listen(url, topic(this.code, 'up'));
+    return this.code;
+  }
+
+  /**
+   * Keep a relay connection to this broker, subscribed to `sub`, coming back whenever it drops (a phone switched
+   * away from the game closes its sockets). If it was the one in use, the game carries on through the new one.
+   */
+  listen(url, sub) {
+    if (this.closed) return;
+    const mq = new Mqtt(url);
+    mq.onmessage = (t, b) => this.fromRelay(mq, b);
+    mq.onclose = () => {
+      this.relays = this.relays.filter((m) => m !== mq);
+      if (!this.closed) setTimeout(() => this.listen(url, sub), 2500);
+    };
+    mq.connect().then(() => {
+      mq.subscribe(sub);
+      this.relays.push(mq);
+      if (this.mode === 'relay' && this.relay?.url === url) this.relay = mq;
+    }).catch(() => {});
   }
 
   /** Guest: find the host by code, directly if the networks allow it, else through the relay. */
@@ -212,37 +232,19 @@ export class Link {
     code = code.toUpperCase();
     this.code = code;
     this.out = topic(code, 'up');
-    const Peer = await loadPeer();
-    const peer = this.peer = new Peer();
-    await new Promise((res, rej) => {
-      peer.on('open', res);
-      peer.on('error', (e) => rej(new Error(e.type === 'peer-unavailable' ? 'no game with that code' : String(e.type || e))));
-      setTimeout(() => rej(new Error('could not reach the matchmaking server')), 10000);
-    });
-    progress('Found the game - connecting directly…');
-    const skip = new URLSearchParams(location.search).has('relay');      // (?relay in the address: straight to the relay, for testing it)
-    const direct = !skip && await new Promise((res, rej) => {
-      peer.on('error', (e) => { if (e.type === 'peer-unavailable') rej(new Error('no game with that code')); });
-      const r = peer.connect(PREFIX + code, { label: 'r', reliable: true, serialization: 'json' });
-      const u = peer.connect(PREFIX + code, { label: 'u', reliable: false, serialization: 'raw' });
-      this.attach(r);
-      this.attach(u);
-      r.on('open', () => res(true));
-      setTimeout(() => res(false), DIRECT_WAIT);
-    });
-    if (direct && this.mode === 'direct') return;
-    // the direct line did not open (the networks would not have it): through the relay
-    peer.destroy();
-    this.peer = null;
-    progress('Direct connection blocked - going through a relay…');
+    if (!new URLSearchParams(location.search).has('relay')) {      // (?relay in the address: straight to the relay, for testing it)
+      try { if (await this.direct(code, progress)) return; } catch (e) { /* no direct route */ }
+      this.peer?.destroy();
+      this.peer = null;
+    }
+    progress('Going through a relay…');
     for (const url of BROKERS) {
       const mq = new Mqtt(url);
       try { await mq.connect(); } catch (e) { continue; }
       this.relay = mq;
       mq.onmessage = (t, b) => this.fromRelay(mq, b);
-      mq.onclose = () => { if (this.relay === mq) this.lost(); };
       mq.subscribe(topic(code, 'down'));
-      // say hello (again, in case the first went before the subscription was in) until the host answers
+      // say hello (again and again, in case the first went before the subscription was in) until the host answers
       const ok = await new Promise((res) => {
         const said = setInterval(() => mq.publish(this.out, relayPacket(HELLO)), 700);
         mq.publish(this.out, relayPacket(HELLO));
@@ -250,10 +252,33 @@ export class Link {
         this.on.message = (m) => { clearInterval(said); this.on.message = first; this.opened('relay'); first?.(m); res(true); };
         setTimeout(() => { clearInterval(said); if (!this.mode) { this.on.message = first; res(false); } }, 8000);
       });
-      if (ok) return;
+      if (ok) {
+        mq.onclose = () => { if (!this.closed && this.relay === mq) setTimeout(() => this.listen(url, topic(code, 'down')), 1500); };
+        return;
+      }
+      this.relay = null;
       mq.close();
     }
-    throw new Error('the host did not answer (direct or through the relay)');
+    throw new Error('no answer - check the code, and that the host still has the game open');
+  }
+
+  /** The direct line: true if it opened. Any failure (no matchmaker, no such code there, blocked) is just false. */
+  async direct(code, progress) {
+    const Peer = await loadPeer();
+    const peer = this.peer = new Peer();
+    const up = await new Promise((res) => { peer.on('open', () => res(true)); peer.on('error', () => res(false)); setTimeout(() => res(false), 6000); });
+    if (!up) return false;
+    progress('Connecting directly…');
+    const ok = await new Promise((res) => {
+      peer.on('error', () => res(false));              // (no such code there: the host may still be on the relay)
+      const r = peer.connect(PREFIX + code, { label: 'r', reliable: true, serialization: 'json' });
+      const u = peer.connect(PREFIX + code, { label: 'u', reliable: false, serialization: 'raw' });
+      this.attach(r);
+      this.attach(u);
+      r.on('open', () => res(true));
+      setTimeout(() => res(false), DIRECT_WAIT);
+    });
+    return ok && this.mode === 'direct';
   }
 
   close() {
