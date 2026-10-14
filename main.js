@@ -474,7 +474,7 @@ function toggleNight() {
 }
 
 // P: record what you see (and hear) to a video file. Each frame is copied onto a 2D canvas with the camera's
-// timestamp burned in (the HTML overlay is not part of the picture); in bodycam it is cut to the 4:3 frame.
+// timestamp burned in (the HTML overlay is not part of the picture).
 let rec = null;
 function toggleRecording() {
   if (rec) { rec.media.stop(); return; }
@@ -504,10 +504,10 @@ function toggleRecording() {
 function recordFrame() {
   if (!rec) return;
   const W = canvas.width, H = canvas.height;
-  const w = ctx.helmet ? Math.min(W, Math.round(H * 4 / 3)) : W, x = (W - w) >> 1;
+  const w = W;
   if (rec.c.width !== w || rec.c.height !== H) { rec.c.width = w; rec.c.height = H; }
   const g = rec.g;
-  g.drawImage(canvas, x, 0, w, H, 0, 0, w, H);       // straight after drawing, while the frame is still there
+  g.drawImage(canvas, 0, 0);                        // straight after drawing, while the frame is still there
   g.font = `600 ${Math.round(H / 40)}px Consolas, monospace`;
   g.fillStyle = '#f2f2f2'; g.shadowColor = '#000'; g.shadowBlur = 4; g.textAlign = 'right';
   g.fillText(camTimeEl.textContent || new Date().toISOString().slice(0, 19) + 'Z', w * 0.95, H * 0.08);
