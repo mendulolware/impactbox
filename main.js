@@ -612,6 +612,7 @@ function setMap(id) {
   setSpace(ctx.map.id);
   try { localStorage.setItem('impactbox.map', ctx.map.id); } catch (e) { /* private window: just don't remember */ }
   for (const el of document.querySelectorAll('#maps button')) el.classList.toggle('on', el.dataset.map === ctx.map.id);
+  if (ctx.map.def.night && !ctx.night) toggleNight();          // some maps are only ever visited after dark
   toast(ctx.map.name.toUpperCase());
 }
 ctx.setMap = setMap;
@@ -630,6 +631,7 @@ ctx.map.populate();
 ctx.mission = new Mission(ctx);
 $('swat').addEventListener('click', () => { ctx.mission.start(); $('swat').classList.add('on'); });
 $('night').addEventListener('click', toggleNight);
+if (ctx.map.def.night) toggleNight();                             // (a night map asked for by ?map= or remembered from last time)
 
 // ------------------------------------------------------------------ main loop
 let last = performance.now();
@@ -705,7 +707,7 @@ function tick(now) {
   if (mirror) {
     const d = mirror.door, side = d.side(ctx.player.pos);
     camera.position.copy(d.hinge).addScaledVector(d.x, d.w / 2).addScaledVector(d.n, -side * 0.3);
-    camera.position.y = 0.08;
+    camera.position.y = d.hinge.y + 0.08;
     camera.rotation.x = THREE.MathUtils.clamp(camera.rotation.x + 0.35, 0.1, 0.6);
     input.left = input.leftDown = false;
   }

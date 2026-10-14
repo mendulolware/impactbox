@@ -60,7 +60,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 
 ## Maps
 
-Pick one on the start screen or under **Maps** in the spawn menu (Q). The last one played is remembered; `?map=street` in the address forces one.
+Pick one on the start screen or under **Maps** in the spawn menu (Tab). The last one played is remembered; `?map=street` in the address forces one.
 
 | Map | What it is |
 | --- | --- |
@@ -69,9 +69,10 @@ Pick one on the start screen or under **Maps** in the spawn menu (Q). The last o
 | Rooftops | five roofs at sunset joined by planks, 18 to 22 m up. Falling off kills you (and anything else) |
 | Night Street | a street at dusk: shopfronts, parked cars, a dead-end alley, street lamps |
 | Kill House | a walled compound with twelve plywood rooms and a catwalk over them |
+| The House | a two-storey house after dark: a hall with the stairs, living room, kitchen and den downstairs, a landing, three bedrooms and a bathroom upstairs, ten doors (three locked), windows you can see and shoot through, two lamps on and the rest dark. It is always night here (`night: true` turns the night sky and the flashlight on, and halves how far people see); made for the flashlight, the mirror and the bodycam |
 
 A map is one entry in `MAPS` (`maps.js`): a time of day, a spawn point, the rectangle NPCs keep to, `build(b)` and `populate(ctx)`.
-`build` gets a `MapBuilder` (`world.js`) with `box`, `cyl`, `wall` (with doorways), `stairs`, `stripe`, `light`, `ground` and `mat`.
+`build` gets a `MapBuilder` (`world.js`) with `box`, `cyl`, `wall` (with doorways), `door` (hung in one, `y0` for an upper floor), `stairs`, `stripe`, `light`, `ground` and `mat`.
 Every box gets a collider on one fixed body, and the visible boxes are joined into one mesh per material, so a map of several hundred
 pieces is a handful of draw calls. `loadMap()` removes the old map (meshes, materials, colliders) and builds the next.
 Times of day are `SKIES` in `world.js`: sun direction and colour, sky colours, cloud cover, fog.

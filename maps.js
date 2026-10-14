@@ -400,6 +400,97 @@ export const MAPS = {
     },
   },
 
+  // ----------------------------------------------------------------------------------------- house
+  house: {
+    id: 'house', name: 'The House', icon: '🏠', blurb: 'two floors, eight rooms, after dark', night: true,
+    sky: 'night', spawn: { x: -4.5, y: 1.0, z: 10 }, yaw: 0, bounds: { x0: -10, x1: 10, z0: -10, z1: 15 },
+
+    build(b) {
+      const brick = b.mat('brick', 0xb98a6e);
+      const plaster = b.mat('concrete', 0xe8e2d6, { roughness: 0.85 });
+      const tiles = b.mat('concrete', 0x9a948a, { roughness: 0.5 });
+      const boards = b.mat('planks', 0xc9a066);
+      const trim = b.mat('planks', 0x6b4a2a);
+      const glass = b.mat('plain', 0x9fc4d8, { transparent: true, opacity: 0.3, roughness: 0.05, metalness: 0.4 });
+      const cloth = b.mat('plain', 0x3b4a6a, { roughness: 0.9 });
+      const white = b.mat('plain', 0xe6e6e0, { roughness: 0.7 });
+      const dark = b.mat('plain', 0x2a2a2e, { roughness: 0.6 });
+      const lawn = b.mat('plain', 0x2f4a22, { roughness: 1 });
+      const F = 2.7, T = 0.15, D = 1.3, Y1 = F + 0.15;        // a floor's height, a wall's thickness, a doorway, the upstairs floor
+      b.ground();
+      b.box(0, 0.02, 8.5, 22, 0.04, 7, lawn);                              // front garden
+      b.box(0, 0.02, -8, 22, 0.04, 6, lawn);                               // back garden
+      b.box(-4.5, 0.03, 8.5, 1.4, 0.06, 7, tiles);                         // the path to the door
+      for (const z of [12]) b.wall(-11, z, 11, z, 1.1, 0.25, brick, [[0.3, 1.6]]);    // garden wall, with the gate
+      b.wall(-11, -11, -11, 12, 1.1, 0.25, brick); b.wall(11, -11, 11, 12, 1.1, 0.25, brick); b.wall(-11, -11, 11, -11, 1.1, 0.25, brick);
+      b.box(0, 0.1, 0, 14.3, 0.2, 10.3, tiles);                            // the ground floor
+      b.light(-4.5, 4.4, 14, 0xffd9a0, 36, 18);                            // the street lamp outside the gate
+      b.light(-4.5, 2.5, 5.7, 0xffc080, 7, 5);                             // the porch light
+
+      /** A window in a wall at (x, z): sill below, header above, a pane of glass nothing can touch. */
+      const win = (x, z, yaw, y0 = 0) => {
+        const o = { ry: yaw };
+        b.box(x, y0 + 0.5, z, 1.2, 1.0, T, brick, o);
+        b.box(x, y0 + 2.45, z, 1.2, 0.5, T, brick, o);
+        b.box(x, y0 + 1.6, z, 1.1, 1.2, 0.02, glass, { ...o, solid: false });
+      };
+      const H2 = Math.PI / 2;
+      for (const y0 of [0, Y1]) {                                          // the outside walls, both floors
+        const up = y0 > 0;
+        b.wall(-7, 5, 7, 5, F, T, brick, up ? [[0.3, 1.2], [0.7, 1.2]] : [[0.1786, D], [0.5, 1.2], [0.857, 1.2]], y0);
+        b.wall(-7, -5, 7, -5, F, T, brick, up ? [[0.3, 1.2], [0.75, 1.2]] : [[0.1786, D], [0.6, 1.2]], y0);
+        b.wall(-7, -5, -7, 5, F, T, brick, [[0.75, 1.2]], y0);
+        b.wall(7, -5, 7, 5, F, T, brick, up ? [[0.5, 1.2]] : [[0.3, 1.2], [0.75, 1.2]], y0);
+        if (up) { win(-2.8, 5, 0, y0); win(2.8, 5, 0, y0); win(-2.8, -5, 0, y0); win(3.5, -5, 0, y0); win(7, 0, H2, y0); }
+        else { win(0, 5, 0); win(5, 5, 0); win(1.4, -5, 0); win(7, -2, H2); win(7, 2.5, H2); }
+        win(-7, 2.5, H2, y0);
+      }
+      // downstairs: a hall with the stairs, a living room and a kitchen off it, and a den across the back
+      b.wall(-3.5, -5, -3.5, 5, F, T, plaster, [[0.25, D], [0.75, D]]);
+      b.wall(-3.5, 0, 3, 0, F, T, plaster);
+      b.wall(3, -5, 3, 5, F, T, plaster, [[0.25, D], [0.75, D]]);
+      const dr = (x, z, yaw, locked = false, y0 = 0) => b.door(x, z, yaw, { wallH: F, wallT: T, gap: D, locked, y0 });
+      dr(-4.5, 5, 0); dr(-4.5, -5, 0, true); dr(-3.5, 2.5, H2); dr(-3.5, -2.5, H2); dr(3, 2.5, H2); dr(3, -2.5, H2, true);
+      b.stairs(-6.4, 3.08, 0, -1, 1.2, 12, F / 12, 0.34, trim);           // (the top step meets the upstairs floor at z = -1)
+      b.box(-0.2, 0.35, 4.2, 2.2, 0.7, 0.9, cloth);                        // sofa
+      b.box(0, 0.3, 0.55, 1.4, 0.6, 0.4, dark);                            // tv stand
+      b.box(-0.5, 0.45, -4.5, 5.5, 0.9, 0.6, white);                       // kitchen counter
+      b.box(2.4, 0.9, -4.4, 0.7, 1.8, 0.7, white);                         // fridge
+      b.box(5, 0.37, -3.5, 1.4, 0.74, 0.7, trim);                          // desk
+      b.box(6.75, 1.0, 1, 0.35, 2.0, 2.0, trim);                           // bookshelf
+      b.light(-5.2, 2.55, 2, 0xffe2b0, 12, 7);                             // hall
+      b.light(-0.3, 2.55, -2.5, 0xeef2ff, 9, 6);                           // kitchen, a cold tube
+      // the upstairs floor, with the stairwell open, and a rail round it
+      b.box(0, F + 0.075, 4.1, 14, 0.15, 1.8, boards);
+      b.box(0, F + 0.075, -3, 14, 0.15, 4, boards);
+      b.box(0.7, F + 0.075, 1.1, 12.6, 0.15, 4.2, boards);
+      b.box(-5.6, Y1 + 0.5, 1.1, 0.05, 1.0, 4.2, trim);
+      b.box(-6.3, Y1 + 0.5, 3.2, 1.4, 1.0, 0.05, trim);
+      // upstairs: a landing, two bedrooms, a bathroom and a third bedroom
+      b.wall(-3.5, -5, -3.5, 5, F, T, plaster, [[0.25, D], [0.75, D]], Y1);
+      b.wall(-3.5, 0, 3, 0, F, T, plaster, [], Y1);
+      b.wall(3, -5, 3, 5, F, T, plaster, [[0.35, D], [0.85, D]], Y1);
+      b.wall(3, 2, 7, 2, F, T, plaster, [], Y1);
+      dr(-3.5, 2.5, H2, false, Y1); dr(-3.5, -2.5, H2, false, Y1); dr(3, 3.5, H2, false, Y1); dr(3, -1.5, H2, true, Y1);
+      b.box(0, Y1 + 0.3, 3.6, 1.6, 0.6, 2.0, cloth); b.box(0, Y1 + 0.3, -3.6, 1.6, 0.6, 2.0, cloth); b.box(5.5, Y1 + 0.3, -3.5, 1.6, 0.6, 2.0, cloth);   // beds
+      b.box(2.5, Y1 + 1.0, 1.0, 0.6, 2.0, 1.4, trim); b.box(-2.9, Y1 + 1.0, -1.0, 0.6, 2.0, 1.4, trim);    // wardrobes
+      b.box(5.5, Y1 + 0.3, 4.4, 1.7, 0.6, 0.8, white);                     // bath
+      b.light(-5.2, Y1 + 2.55, -3, 0xffe2b0, 8, 6);                        // landing
+      b.box(0, F * 2 + 0.3, 0, 14.3, 0.15, 10.3, dark);                    // the roof
+    },
+
+    populate(ctx) {
+      const { at, npc } = crew(ctx);
+      const Y1 = 2.85;
+      npc(5, -2, 'thug'); npc(0.5, 2.2, 'thug'); npc(5.5, -1, 'thug', Y1);
+      npc(-1, -2); npc(-0.8, 1.6, null, Y1); npc(-5.2, -3.5, null, Y1); npc(5, 3.6, null, Y1);
+      at('table', -0.5, -2.2, 0); at('chair', -1.4, -1.6, 1.4); at('chair', 0.4, -2.8, -1.6);
+      at('toilet', 6.4, 3.3, Math.PI / 2, Y1); at('crate', 4.2, 4.2, 0.3); at('crate', 5.8, 0.6, 0.2); at('propane', 2.4, -3.5);
+      at('car', 3, 14.6, 0.05); at('car', -8.5, 14.6, Math.PI + 0.04); at('lamp', -4.5, 13.4, 0);
+      at('cone', -6.5, 13); at('dumpster', 9.5, 10.5, 0);
+    },
+  },
+
   // ------------------------------------------------------------------------------------- killhouse
   killhouse: {
     id: 'killhouse', name: 'Kill House', icon: '🚪', blurb: 'plywood rooms and a catwalk',

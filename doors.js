@@ -16,7 +16,7 @@ const yawQ = (a) => ({ x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) });
 
 export class Door {
   /** Centred on (x, z), hung in a wall running along `yaw` (0 = along x). The hinge is the local -x end. */
-  constructor(ctx, x, z, yaw, { w = 1.2, h = 2.1, t = 0.045, locked = false, material, handleMat } = {}) {
+  constructor(ctx, x, z, yaw, { w = 1.2, h = 2.1, t = 0.045, y0 = 0, locked = false, material, handleMat } = {}) {
     this.ctx = ctx;
     this.w = w; this.h = h; this.t = t; this.yaw = yaw;
     this.locked = locked;
@@ -25,9 +25,9 @@ export class Door {
     this.removed = false;
     this.x = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));     // across the doorway
     this.n = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));      // out of the doorway; it swings along this
-    this.hinge = new THREE.Vector3(x, 0, z).addScaledVector(this.x, -w / 2);
+    this.hinge = new THREE.Vector3(x, y0, z).addScaledVector(this.x, -w / 2);    // (y0: the floor it stands on)
 
-    this.body = ctx.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(this.hinge.x, 0, this.hinge.z).setRotation(yawQ(yaw)));
+    this.body = ctx.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(this.hinge.x, y0, this.hinge.z).setRotation(yawQ(yaw)));
     this.collider = ctx.world.createCollider(RAPIER.ColliderDesc.cuboid(w / 2, h / 2, t / 2).setTranslation(w / 2, h / 2, 0).setFriction(0.7), this.body);
     ctx.owners.set(this.collider.handle, { kind: 'door', door: this });
 

@@ -58,6 +58,7 @@ const SPACES = {
   rooftops:  { wet: 0.16, bed: 'gale' },
   street:    { wet: 0.42, bed: 'city' },
   killhouse: { wet: 0.22, bed: 'wind', indoor: 0.7 },
+  house:     { wet: 0.45, bed: 'hum', indoor: 1 },
 };
 
 export function initAudio() {

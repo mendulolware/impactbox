@@ -287,17 +287,17 @@ export class MapBuilder {
 
   /**
    * A door in a doorway centred on (x, z) in a wall running along yaw (0 = along x), with its frame.
-   * o: locked, wallH and wallT (the wall it sits in, for the frame), gap (the doorway's width).
+   * o: locked, wallH and wallT (the wall it sits in, for the frame), gap (the doorway's width), y0 (the floor it stands on).
    */
   door(x, z, yaw, o = {}) {
     const wood = this.mat('planks', 0xc9a066);
     const frame = this.mat('planks', 0x6b4a2a);
-    const gap = o.gap || 1.3, wallT = o.wallT || 0.12, wallH = o.wallH || 2.6;
-    const d = new Door(this.ctx, x, z, yaw, { w: gap - 0.1, locked: !!o.locked, material: wood, handleMat: this.mat('plain', 0x8a8f94, { metalness: 0.8, roughness: 0.35 }) });
+    const gap = o.gap || 1.3, wallT = o.wallT || 0.12, wallH = o.wallH || 2.6, y0 = o.y0 || 0;
+    const d = new Door(this.ctx, x, z, yaw, { w: gap - 0.1, y0, locked: !!o.locked, material: wood, handleMat: this.mat('plain', 0x8a8f94, { metalness: 0.8, roughness: 0.35 }) });
     this.doors.push(d);
     const ax = Math.cos(yaw), az = -Math.sin(yaw);                       // along the wall
-    this.box(x, (wallH + d.h) / 2, z, gap, wallH - d.h, wallT, frame, { ry: yaw });        // lintel
-    for (const s of [-1, 1]) this.box(x + ax * s * (gap / 2 - 0.025), d.h / 2, z + az * s * (gap / 2 - 0.025), 0.05, d.h, wallT + 0.02, frame, { ry: yaw });   // jambs
+    this.box(x, y0 + (wallH + d.h) / 2, z, gap, wallH - d.h, wallT, frame, { ry: yaw });        // lintel
+    for (const s of [-1, 1]) this.box(x + ax * s * (gap / 2 - 0.025), y0 + d.h / 2, z + az * s * (gap / 2 - 0.025), 0.05, d.h, wallT + 0.02, frame, { ry: yaw });   // jambs
     return d;
   }
 
