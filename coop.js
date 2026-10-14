@@ -467,6 +467,7 @@ export class Coop {
       send(['act', o?.kind === 'part' ? o.ragdoll.nid || 0 : 0]);
     };
     ctx.mission.start = () => send(['menu', ctx.spawnItems.findIndex((it) => it.label === 'Ready or Not'), P(ctx.player.pos), 0]);
+    ctx.survival.start = () => send(['menu', ctx.spawnItems.findIndex((it) => it.label === 'Zombie Survival'), P(ctx.player.pos), 0]);
     ctx.tools.use = (kind, o, d) => send(['tool', kind, P(o), P(d)]);
     ctx.tools.unlink = (o, d) => send(['untool', P(o), P(d)]);
     ctx.weapons.launchDrone = () => ctx.toast('THE DRONE IS THE HOST\'S ONLY IN CO-OP');
@@ -835,7 +836,7 @@ export class Coop {
     if (this.role === 'host') {
       // anything gone since last time changes the roster
       for (const map of [this.rags, this.props, this.traps]) for (const [nid, o] of map) if (o.removed) { map.delete(nid); this.dirty = true; }
-      const sig = `${ctx.map.id}|${!!ctx.night}|${!!ctx.rain}|${ctx.tools.links.length}|${ctx.tools.links.at(-1)?.joint.handle}`;
+      const sig = `${ctx.map.id}|${!!ctx.night}|${!!ctx.rain}|${ctx.tools.links.length}|${ctx.tools.links.at(-1)?.joint.handle}|${document.getElementById('mission').textContent}`;     // (the mission or survival panel too)
       if (sig !== this.sig) { this.sig = sig; this.dirty = true; }
       if (this.watchedPanes !== ctx.panes) this.watchMap();
       this.rosterT -= dt;

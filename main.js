@@ -12,6 +12,7 @@ import { MAPS, MAP_LIST } from './maps.js';
 import { loadModels } from './models.js';
 import { Post } from './post.js';
 import { Mission } from './mission.js';
+import { Survival } from './survival.js';
 import { initTouch, isTouch } from './touch.js';
 import { Tools } from './tools.js';
 import { makeTrap, TRAP_TYPES } from './traps.js';
@@ -442,7 +443,8 @@ function deleteTarget() {
 
 const SPAWN_ITEMS = [
   { cat: 'Modes', label: 'Ready or Not', icon: '🚨', small: 'SWAT: arrest, do not execute', run: () => { ctx.mission.start(); setMenu(false); } },
-  { cat: 'Modes', label: 'Sandbox', icon: '🧪', small: 'no rules', run: () => { ctx.mission.stop(); toast('SANDBOX'); setMenu(false); } },
+  { cat: 'Modes', label: 'Zombie Survival', icon: '🧟', small: 'waves, 3 lives', run: () => { ctx.survival.start(); setMenu(false); } },
+  { cat: 'Modes', label: 'Sandbox', icon: '🧪', small: 'no rules', run: () => { ctx.mission.stop(); ctx.survival.stop(); toast('SANDBOX'); setMenu(false); } },
   ...MAP_LIST.map((m) => ({ cat: 'Maps', label: m.name, icon: m.icon, small: m.blurb, run: () => { ctx.mission.stop(); ctx.setMap(m.id); setMenu(false); } })),
   { cat: 'NPCs', label: 'Civilian', icon: '🧍', small: 'flees, surrenders', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER()) },
   { cat: 'NPCs', label: 'Thug', icon: '🥊', small: 'fights back', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER(), { kind: 'thug' }) },
@@ -542,6 +544,7 @@ function buildMenu() {
   body.append(h, keys);
 }
 buildMenu();
+ctx.spawnItems = SPAWN_ITEMS;            // (co-op runs the other player's clicks by their place in this list)
 
 const crosshairEl = $('crosshair');
 const healthEl = $('health-fill'), healthBox = $('health'), healthNum = $('health-num');
@@ -750,6 +753,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyP') toggleRecording();
   if (e.code === 'KeyL') { torch.visible = !torch.visible; sfx.tick(); }
   if (e.code === 'Enter' && ctx.mission.over) ctx.mission.start();
+  if (e.code === 'Enter' && ctx.survival.over) ctx.survival.start();
   if (e.code === 'KeyR') ctx.weapons.reload();
   if (e.code === 'KeyF') { const d = doorAhead(); if (d) d.door.toggle(ctx.player.pos); else { ctx.weapons.unjam(); ctx.mission.act(); } }
   if (e.code === 'KeyH') { const d = doorAhead(1.9); if (d) d.door.kick(ctx.player.pos); }
@@ -810,6 +814,8 @@ for (const m of MAP_LIST) {
 }
 ctx.map.populate();
 ctx.mission = new Mission(ctx);
+ctx.survival = new Survival(ctx);
+$('surv').addEventListener('click', () => { ctx.survival.start(); $('surv').classList.add('on'); });
 $('swat').addEventListener('click', () => { ctx.mission.start(); $('swat').classList.add('on'); });
 $('night').addEventListener('click', toggleNight);
 $('rain').addEventListener('click', toggleRain);
@@ -965,6 +971,7 @@ function tick(now) {
     if (!covered && camera.rotation.x > -0.35 && (rainLensT -= dt) <= 0) { rainLensT = 0.3; ctx.gore.lens(1, 'rain'); }
   }
   ctx.mission.update(dt);
+  ctx.survival.update(dt);
   tickWounds(sdt);
 
   // shadow camera follows the player

@@ -32,6 +32,7 @@ export class Mission {
   /** Reset the current map and start a mission on it. */
   start() {
     const ctx = this.ctx;
+    ctx.survival?.stop();
     this.on = false;                       // (so resetting the map does not count as casualties)
     ctx.setMap(ctx.map.id);
     const people = ctx.ragdolls.filter((r) => r.kind !== 'zombie' && r.kind !== 'swat');

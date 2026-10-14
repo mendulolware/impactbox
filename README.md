@@ -54,6 +54,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | `detail.js` | fine tiling surfaces for the models (steel, plastic, wood grain, cloth, leather, skin), generated in code |
 | `coop.js` | two-player co-op: the host's world is the real one; the guest keeps puppets of it and sends requests (see Co-op) |
 | `net.js` | finding the other player by a four-letter code; a direct line (PeerJS, `vendor/peerjs.min.js`, MIT) or, where networks block that, a public MQTT relay |
+| `survival.js` | Zombie Survival: waves, lives, the best wave |
 | `tools.js` | the Rope Tool and the Weld Tool |
 | `traps.js` | saw blade, spike trap, launch pad, crusher |
 | `gore.js` | blood droplets and mist, fire and smoke; decals that dry (splats, spatter, runs, pools, smears, handprints); physical chunks (meat, bone, skull, ribs, gut, eyes) that stick to walls and ceilings |
@@ -281,6 +282,10 @@ a generated echo, and `setSpace()` sets how much of it each map has (a lot in th
 quiet background bed: wind, room hum or city. People have voices (`voice()`: a buzzing source through vowel filters): grunts and
 screams when hit, a cry when they die, screams when they run or burn, growls from zombies, all quieter with distance. Also:
 spent cases landing, rounds hitting concrete (some whine off), footsteps, and the double barrel being broken open.
+
+## Zombie Survival
+
+Start screen or spawn menu (Modes). The map is reset and emptied of people, then waves of zombies come: wave n sends 4 + 3n, never more than 14 on their feet at once (8 when a phone is hosting), each from somewhere out of sight 12-26 m from the nearest player and on the players' own floor (not a roof or a wall top). Clear a wave and the next comes 6 s later. Three lives, shared in co-op: every death costs one, and when they are gone you are overrun (Enter goes again). The best wave reached is kept in the browser. The panel top right shows the wave, what is left, the lives and the best (`survival.js`).
 
 ## Co-op (two players)
 
