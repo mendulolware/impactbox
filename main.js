@@ -594,6 +594,7 @@ camera.add(torch, torch.target);
 ctx.torch = torch;
 ctx.night = false;
 function toggleNight() {
+  ctx.nightByMap = false;              // (setMap marks it when a night-only map switched it on)
   ctx.night = !ctx.night;
   ctx.setSky(ctx.night ? 'night' : ctx.rain ? 'overcast' : ctx.map.sky);
   torch.visible = ctx.night;
@@ -787,7 +788,9 @@ function setMap(id, populate = true) {
   setSpace(ctx.map.id);
   try { localStorage.setItem('impactbox.map', ctx.map.id); } catch (e) { /* private window: just don't remember */ }
   for (const el of document.querySelectorAll('#maps button')) el.classList.toggle('on', el.dataset.map === ctx.map.id);
-  if (ctx.map.def.night && !ctx.night) toggleNight();          // some maps are only ever visited after dark
+  // some maps are only ever visited after dark; leaving one brings the day back (unless you put the night on yourself)
+  if (ctx.map.def.night && !ctx.night) { toggleNight(); ctx.nightByMap = true; }
+  else if (!ctx.map.def.night && ctx.night && ctx.nightByMap) toggleNight();
   toast(ctx.map.name.toUpperCase());
 }
 ctx.setMap = setMap;
@@ -811,7 +814,7 @@ $('swat').addEventListener('click', () => { ctx.mission.start(); $('swat').class
 $('night').addEventListener('click', toggleNight);
 $('rain').addEventListener('click', toggleRain);
 ctx.net = new Coop(ctx);                                          // co-op (coop.js): idle until someone hosts or joins
-if (ctx.map.def.night) toggleNight();                             // (a night map asked for by ?map= or remembered from last time)
+if (ctx.map.def.night) { toggleNight(); ctx.nightByMap = true; }  // (a night map asked for by ?map= or remembered from last time)
 
 // ------------------------------------------------------------------ main loop
 let last = performance.now();

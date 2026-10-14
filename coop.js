@@ -486,6 +486,7 @@ export class Coop {
     }
     this.avatar = this.makeAvatar();
     this.wrapDoors();
+    this.aside = true;
   }
 
   /** Throw away everything this world had: from now on it is the host's world. */
@@ -552,6 +553,7 @@ export class Coop {
         this.clearLocal();
         this.local.setMap(R.map, false);
         this.wrapDoors();
+        this.aside = true;                    // (after the next physics step: a new map's floor is not there for rays until then)
       }
       if (!!ctx.night !== R.night) ctx.toggleNight();
       if (!!ctx.rain !== R.rain) ctx.toggleRain();
@@ -588,6 +590,17 @@ export class Coop {
       this.links = R.links;
       document.getElementById('mission').textContent = R.mission;
     } finally { this.replaying = false; }
+  }
+
+  /** Guest: start a map a step to the side of where the host starts, if there is floor there and no wall between. */
+  stepAside() {
+    const ctx = this.ctx, sp = ctx.map.spawn, yaw = ctx.map.yaw;
+    for (const side of [1.4, -1.4]) {
+      const dx = Math.cos(yaw) * side, dz = -Math.sin(yaw) * side;
+      const wall = ctx.gore.castFixed(sp.x, sp.y, sp.z, dx / Math.abs(side), 0, dz / Math.abs(side), Math.abs(side) + 0.4);
+      const floor = ctx.gore.castFixed(sp.x + dx, sp.y, sp.z + dz, 0, -1, 0, 1.6);
+      if (!wall && floor) { ctx.player.teleport({ x: sp.x + dx, y: sp.y, z: sp.z + dz }, yaw); return; }
+    }
   }
 
   /** Doors here are asked of the host's doors; theirs swing, ours copy the angle. */
@@ -725,6 +738,8 @@ export class Coop {
     const ctx = this.ctx;
     const av = new Ragdoll(ctx, { x: 0, y: -50, z: 0 }, 0, { kind: 'swat', model: 'Ch15' });
     av.arm('Rifle');
+    // a body you can see and shoot (rays still find sensors) but not one you get stuck in: you both start a map on the same spot
+    for (const n in av.parts) for (const c of av.parts[n].colliders) c.setSensor(true);
     av.avatar = true;
     av.net = null;
     av.brain.update = () => {};
@@ -803,6 +818,7 @@ export class Coop {
         p.remove();
       }
       this.pending.length = 0;
+      if (this.aside) { this.aside = false; this.stepAside(); }
       ctx.props = ctx.props.filter((p) => !p.removed);
       if ((this.snapT -= dt) <= 0) {
         this.snapT = SNAP;

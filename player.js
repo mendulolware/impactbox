@@ -153,7 +153,7 @@ export class Player {
     if (this.grounded && enabled && k.has('Space')) { this.vel.y = 8.2; this.grounded = false; }
 
     const desired = { x: this.vel.x * dt, y: this.vel.y * dt, z: this.vel.z * dt };
-    this.cc.computeColliderMovement(this.collider, desired);
+    this.cc.computeColliderMovement(this.collider, desired, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS);   // (the other player in co-op is a sensor: walk through, do not stick)
     const mv = this.cc.computedMovement();
     const t = this.body.translation();
     this.pos.set(t.x + mv.x, t.y + mv.y, t.z + mv.z);
