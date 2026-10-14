@@ -615,7 +615,7 @@ export class Ragdoll {
         gore.wallSplatter(point, dir, 4.5 * Math.min(2, (opts.hole || 0.026) / 0.03));   // a bigger round carries more, further
       }
       if (big) this.gutShot = true;
-      sfx.squish();
+      if (opts.blade || opts.blunt || opts.stab || opts.bite) sfx.squish();   // (not for rounds: the shot is the sound)
     }
 
     // zombies only really go down to head trauma

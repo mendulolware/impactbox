@@ -334,8 +334,9 @@ export class Weapons {
   /** R: refill the magazine (or start feeding shells). */
   reload() {
     const w = this.current, i = this.index;
-    if (!w.mag || this.reloadT > 0 || this.clearT > 0 || this.jammed[i] || this.ammo[i] >= w.mag) return;
-    this.reloadT = w.reload;
+    if (!w.mag || this.reloadT > 0 || this.clearT > 0 || this.jammed[i] || this.ammo[i] >= w.mag + (chamber(w) ? 1 : 0)) return;
+    this.topped = chamber(w) && this.ammo[i] > 0;             // one still in the chamber rides along
+    this.reloadT = w.reload * (chamber(w) && !this.topped ? 1.3 : 1);   // from empty, the bolt has to go forward too
     this.ads = 0;
     sfx.reload();
     if (w.type === 'gun' && w.shell && !w.shells && !w.spin) this.dropMag();
@@ -385,14 +386,15 @@ export class Weapons {
         this.ammo[i]++;
         if (this.ammo[i] < w.mag) { this.reloadT = w.reload; sfx.reload(); }      // next shell
       } else {
-        this.ammo[i] = w.mag;
+        this.ammo[i] = w.mag + (this.topped ? 1 : 0);
+        if (chamber(w) && !this.topped) sfx.reload();
         sfx.tick();
       }
     }
     const working = this.reloadT > 0 || this.clearT > 0;
     this.busy += ((working ? 1 : 0) - this.busy) * Math.min(1, dt * 10);
     const text = !w.mag ? '' : this.clearT > 0 ? 'CLEARING' : this.jammed[i] ? 'JAMMED  [F]' : this.reloadT > 0 ? 'RELOADING'
-      : `${this.ammo[i]} / ${w.mag}` + (w.type === 'gun' && w.auto && !w.spin ? (this.single[i] ? '  SEMI' : '  AUTO') : '');
+      : `${Math.min(this.ammo[i], w.mag)}${this.ammo[i] > w.mag ? '+1' : ''} / ${w.mag}` + (w.type === 'gun' && w.auto && !w.spin ? (this.single[i] ? '  SEMI' : '  AUTO') : '');
     if (text !== this.ammoText) {
       this.ammoText = text;
       this.ammoEl.textContent = text;
@@ -469,7 +471,9 @@ export class Weapons {
     const right = _r.clone();
     const up = _u.clone();
     const muzzle = this.muzzlePoint(new THREE.Vector3());
-    const spread = (w.spread + this.bloom * 0.014) * (1 - 0.65 * this.ads); // steadier down the sights, wilder the longer you hold it
+    const pl = ctx.player, moving = Math.min(1, Math.hypot(pl.vel.x, pl.vel.z) / 5.2) * 1.2 + (pl.grounded ? 0 : 2.5);
+    // steadier down the sights, wilder the longer you hold it, and on the move or in the air
+    const spread = (w.spread + this.bloom * 0.014) * (1 - 0.65 * this.ads) * (1 + moving);
 
     for (let i = 0; i < w.pellets; i++) {
       const d = fwd.clone()
@@ -510,6 +514,11 @@ export class Weapons {
     }
     sfx[w.sound]();
     if (w.shell && (!w.auto || Math.random() < 0.5)) sfx.shell();
+    if (w.shell && !w.shells) {                  // the spent case flies out to the right
+      const p = muzzle.clone().addScaledVector(fwd, -0.3).addScaledVector(up, 0.03), s = rnd(2, 3.2);
+      ctx.gore.drops.emit(p.x, p.y, p.z, right.x * s + up.x * 1.5, right.y * s + up.y * 1.5 + 1, right.z * s + up.z * 1.5,
+        0.009, 1.1, 11, 0.75, 0.55, 0.2, 2);
+    }
     this.kick = w.kick;
     this.kickSide = (Math.random() - 0.5) * 2 * w.kick;
     if (!w.quiet) {
@@ -768,6 +777,11 @@ export class Weapons {
     );
     const twist = this.kick > 0 ? this.kickSide * (1 - 0.6 * a) : 0;
     this.rig.rotation.set(this.kick * (2.2 - 1.4 * a) + s * 0.4, s * 0.9 + twist * 0.9, s * -0.8 + (1 - a) * -0.03 + twist * 1.6);
+    const run = this.sprintK * this.sprintK * (3 - 2 * this.sprintK);
+    if (run > 0.01) {                            // sprinting: carried low and across the body
+      this.rig.position.x -= 0.06 * run; this.rig.position.y -= 0.08 * run;
+      this.rig.rotation.x -= 0.55 * run; this.rig.rotation.y += 0.6 * run; this.rig.rotation.z += 0.25 * run;
+    }
     if (this.busy > 0.01) {                      // reloading or clearing a jam: the weapon comes down and tips over
       const b = this.busy * this.busy * (3 - 2 * this.busy);
       this.rig.position.y -= 0.16 * b;
@@ -787,6 +801,7 @@ export class Weapons {
   update(dt, input) {
     const w = this.current;
     const pl = this.ctx.player;
+    this.sprintK = (this.sprintK || 0) + ((pl.sprinting ? 1 : 0) - (this.sprintK || 0)) * Math.min(1, dt * 9);
     this.cool -= dt;
     this.tickAmmo(dt);
 
@@ -822,7 +837,7 @@ export class Weapons {
     } else if (this.cool <= 0) {
       if (w.spin && !input.left) this.spin = 0.99;      // let go: they start to wind down
       const trigger = w.auto && !this.single[this.index] ? input.left : input.leftDown;
-      if (trigger && this.ready(w, input.leftDown)) {
+      if (trigger && this.sprintK < 0.3 && this.ready(w, input.leftDown)) {
         this.cool = w.rate;
         if (w.type === 'gun') this.fireGun(w);
         else if (w.type === 'melee') this.fireMelee(w);
@@ -862,3 +877,6 @@ export class Weapons {
 }
 
 function rnd(a, b) { return a + Math.random() * (b - a); }
+
+/** Magazine guns with a closed bolt keep a round in the chamber through a reload (30+1). */
+function chamber(w) { return w.type === 'gun' && !!w.shell && !w.shells && !w.spin && w.mag > 2; }

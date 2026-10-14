@@ -35,6 +35,10 @@ export class Player {
     this.camPitch = 0;
     this.aimOff = { yaw: 0, pitch: 0 };       // aim minus camera: the weapon rig turns by this
     this.lean = 0;            // -1 left .. 1 right (Q / E)
+    this.sprinting = false;
+    this.breath = 1;          // held breath left (Shift while aiming), 0..1
+    this.gasp = false;        // ran out: shaky until it comes back
+    this.swayT = 0;
     this.suppress = 0;        // rounds going past: 0..1
     this.aimQuat = new THREE.Quaternion();    // true aim direction, used for shooting
     this.kickPitch = 0;       // recoil: how far the view is kicked off the aim right now...
@@ -134,6 +138,7 @@ export class Player {
     let wx = -sin * f + cos * s;
     let wz = -cos * f - sin * s;
     const l = Math.hypot(wx, wz);
+    this.sprinting = sprint && l > 0;
     if (l > 0) { wx /= l; wz /= l; }
     const speed = (sprint ? 9 : 5.2) * (1 - 0.45 * ads);
     const accel = this.grounded ? 14 : 3.5;
@@ -180,7 +185,14 @@ export class Player {
     this.lean += (lean - this.lean) * Math.min(1, rdt * 9);
 
     // ---- camera
-    const aimPitch = this.pitch + this.kickPitch, aimYaw = this.yaw + this.kickYaw;
+    // a weapon held up on target drifts with the breathing; Shift holds the breath for a few seconds
+    const hold = ads > 0.5 && !this.gasp && this.breath > 0 && (k.has('ShiftLeft') || k.has('ShiftRight'));
+    this.breath = THREE.MathUtils.clamp(this.breath + (hold ? -rdt / 4 : rdt / 5), 0, 1);
+    if (this.breath <= 0) this.gasp = true; else if (this.breath > 0.6) this.gasp = false;
+    this.swayT += rdt;
+    const sway = ads * (zoom > 0.5 ? 0.011 : 0.0035) * (hold ? 0.1 : this.gasp ? 2.4 : 1) * (1 + Math.min(1, Math.hypot(this.vel.x, this.vel.z) / 4));
+    const aimPitch = this.pitch + this.kickPitch + sway * Math.sin(this.swayT * 1.3);
+    const aimYaw = this.yaw + this.kickYaw + sway * 0.7 * Math.sin(this.swayT * 0.83 + 1.7);
     if (helmet) {
       // a head-mounted camera follows the aim with a slight delay; the weapon leads it
       const c = 1 - Math.exp(-rdt * 15);

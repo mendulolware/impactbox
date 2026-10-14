@@ -149,6 +149,8 @@ Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted aft
 - **Night** (N, or the button on the start screen): any map under a moon, with a shadow-casting flashlight (L). People see less than half as far in the dark.
 - **Recorded run** (`assets/run.json`, made from a Mixamo clip by `models/import_anim.py`): flat-out running blends from the worked-out stride to motion capture. Walking and everything else is still worked out in `computePose`.
 
+- **Gun handling:** magazine guns keep a round in the chamber through a reload (30+1), and a reload from empty takes 30% longer because the bolt has to go forward; shots spread more on the move and a lot more in the air; sprinting carries the weapon low and it cannot fire until it is back up; aimed weapons drift with your breathing (the sniper most), Shift while aiming holds your breath for about four seconds, and running out leaves you shakier until it comes back; spent cases fly out to the right. Bullet hits no longer play the flesh squish.
+
 ## First person
 
 - **Hands:** gloved hands with sleeves are attached per weapon: `HandR` grips, `HandL` cups a fore-end, `HandSupport` closes over the
