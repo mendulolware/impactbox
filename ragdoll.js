@@ -513,6 +513,7 @@ export class Ragdoll {
     const p = this.parts[name];
     if (!p || p.gone) return;
     const { gore, sfx } = this.ctx;
+    this.ctx.soundAt = point;
     this.impactMute = Math.max(this.impactMute, 0.35);   // being shot is not a fall
     if (this.collapseT > 0) this.goLimp(2);
     if (opts.daze && !this.dead) {               // a bag, a taser, the spray: no use to anyone for a while, and cuffable
@@ -768,6 +769,7 @@ export class Ragdoll {
     if (!hit) to.add(_v.set(rnd(-1, 1), rnd(-0.3, 0.8), rnd(-1, 1)).multiplyScalar(0.25 + d * 0.06)).addScaledVector(_t.copy(to).sub(from).normalize(), 4);
     this.ctx.weapons.tracer(from, to);
     this.ctx.weapons.fireFlash(from, _t.copy(to).sub(from).normalize(), 0.15);
+    this.ctx.soundAt = from;
     if (this.kind === 'swat') this.ctx.sfx.rifle(); else this.ctx.sfx.pistol();
     if (!hit) { if (!npc) { target.suppress = Math.min(1, target.suppress + 0.45); this.ctx.sfx.impact(); } return; }   // the crack of one going past
     if (!npc) { target.hurt(rnd(14, 24), this.root); return; }
@@ -1551,6 +1553,7 @@ export class Ragdoll {
     const head = p.name === 'head';
     const dmg = over * 10 * (this.kind === 'zombie' ? 0.4 : 1);
     const t = p.body.translation();
+    this.ctx.soundAt = t;
     const sp = p.pv.length() || 1;
     _v.copy(p.pv).multiplyScalar(1 / sp);     // the way it was going
     sfx.thud(Math.min(1.6, 0.5 + dmg / 25));

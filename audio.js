@@ -11,6 +11,13 @@
 let ac = null, master = null, wetIn = null, wetOut = null, noiseBuf = null, ears = null, comp = null;
 let deaf = 0, deafAt = 0, micHp = null, micClip = null, micOn = false;
 let space = 'yard', bed = null, rainBed = null, rainWanted = false;
+let far = 1;            // level for whatever plays inside farAway() (co-op: the other player's sounds, by distance)
+
+/** Play what fn plays at a fraction k of its level. */
+export function farAway(k, fn) {
+  far = k;
+  try { return fn(); } finally { far = 1; }
+}
 
 // recordings: name -> how many takes there are (files are assets/sounds/<name>_<n>.mp3)
 const TAKES = {
@@ -37,6 +44,7 @@ async function loadClips() {
 function play(name, { gain = 1, rate = 1, send = 0, delay = 0, jitter = 0.04 } = {}) {
   const takes = clips[name];
   if (!ac || !takes || !takes.length) return false;
+  gain *= far;
   if (playing > 40 || gain < 0.02) return true;          // a minigun in a crowd: enough is enough
   const src = ac.createBufferSource();
   src.buffer = takes[(Math.random() * takes.length) | 0];
@@ -243,7 +251,7 @@ function noise({ dur = 0.2, f0 = 2000, f1 = 200, q = 0.7, gain = 0.6, type = 'lo
   f.frequency.setValueAtTime(f0, t);
   f.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t + dur);
   const g = ac.createGain();
-  g.gain.setValueAtTime(gain, t);
+  g.gain.setValueAtTime(Math.max(0.0012, gain * far), t);
   g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   src.connect(f); f.connect(g);
   out(g, send);
@@ -258,7 +266,7 @@ function tone({ f0 = 120, f1 = 40, dur = 0.3, gain = 0.6, type = 'sine', send = 
   o.frequency.setValueAtTime(f0, t);
   o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
   const g = ac.createGain();
-  g.gain.setValueAtTime(gain, t);
+  g.gain.setValueAtTime(Math.max(0.0012, gain * far), t);
   g.gain.exponentialRampToValueAtTime(0.001, t + dur);
   o.connect(g);
   out(g, send);

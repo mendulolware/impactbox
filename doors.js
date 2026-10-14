@@ -59,18 +59,21 @@ export class Door {
 
   /** Swing it open, away from whoever is at `from`. False if the lock stops them. */
   open(from) {
+    this.ctx.soundAt = this.hinge;
     if (this.locked) return false;
     if (this.target === 0) { this.target = this.side(from) * OPEN; this.speed = SLOW; this.ctx.sfx.door(); }
     return true;
   }
   /** F: open it, or close it again. */
   toggle(from) {
+    this.ctx.soundAt = this.hinge;
     if (this.target !== 0) { this.target = 0; this.speed = SLOW; this.ctx.sfx.door(); return; }
     if (!this.open(from)) { this.ctx.sfx.tick(); this.ctx.toast('LOCKED - kick it (H) or shoot the lock'); }
   }
 
   /** A boot (or a blast) against it. */
   kick(from, blast = false) {
+    this.ctx.soundAt = this.hinge;
     const side = this.side(from);
     if (this.locked) {
       this.hp -= blast ? 3 : 1;
@@ -101,6 +104,7 @@ export class Door {
 
   /** A round (or a blade) into it near the lock breaks the lock. */
   shot(point, dmg) {
+    this.ctx.soundAt = point;
     this.ctx.gore.debris(point, 0xb08a5a, 4);
     if (this.locked && dmg >= 20 && this.handle(_v).distanceTo(point) < 0.22) {
       this.locked = false;

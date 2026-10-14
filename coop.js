@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Ragdoll, RAGDOLL_PARTS } from './ragdoll.js';
 import { woundHooks, openWound, burn } from './wounds.js';
-import { sfx } from './audio.js';
+import { sfx, farAway } from './audio.js';
 import { makeTrap } from './traps.js';
 import { WEAPONS } from './weapons.js';
 import { Link } from './net.js';
@@ -171,7 +171,7 @@ export class Coop {
     for (const k of Object.keys(sfx)) {
       if (typeof sfx[k] !== 'function' || OWN_SFX.has(k)) continue;
       const f = sfx[k];
-      sfx[k] = (...a) => { if (!this.quiet) this.q(['s', k, a]); return f.apply(sfx, a); };     // (some call each other through this)
+      sfx[k] = (...a) => { if (!this.quiet) this.q(['s', k, a, P(ctx.soundAt || ctx.player.pos)]); return f.apply(sfx, a); };     // (some call each other through this)
     }
     // messages, kills
     const toast = ctx.toast;
@@ -417,7 +417,7 @@ export class Coop {
       // the guest fired: the tracer, and the sound of it
       ctx.weapons.tracer(V(m[1]), V(m[2]));
       const w = WEAPONS[m[3]];
-      if (w) { this.quiet = true; try { (m[4] ? sfx.suppressed : sfx[w.sound])?.(); } finally { this.quiet = false; } }
+      if (w) { this.quiet = true; try { farAway(this.far(m[1]), () => (m[4] ? sfx.suppressed : sfx[w.sound])?.()); } finally { this.quiet = false; } }
     }
   }
 
@@ -640,7 +640,7 @@ export class Coop {
     const ctx = this.ctx;
     const t = e[0];
     if (t === 'g') { this.goreOK = true; ctx.gore[e[1]](...e[2]); this.goreOK = false; }
-    else if (t === 's') this.sfxOrig[e[1]]?.apply(sfx, e[2]);
+    else if (t === 's') farAway(this.far(e[3]), () => this.sfxOrig[e[1]]?.apply(sfx, e[2]));
     else if (t === 'w') {
       const [, nid, name, p, radius, maxR, p2, axis, reach] = e;
       const part = this.rags.get(nid)?.parts[name];
@@ -797,6 +797,13 @@ export class Coop {
       if (this.role === 'host') this.remote?.hurt(dmg * (name === 'head' ? 1 : 0.5), ctx.player.pos);
     };
     return av;
+  }
+
+  /** How loud a sound from p is for this player: full up close, half at 20 m, a whisper across the map. */
+  far(p) {
+    if (!p) return 1;
+    const me = this.ctx.player.pos, d2 = (p.x - me.x) ** 2 + (p.y - me.y) ** 2 + (p.z - me.z) ** 2;
+    return Math.max(0.06, 1 / (1 + d2 / 400));
   }
 
   /** Before the physics step. */

@@ -91,6 +91,7 @@ class Trap {
   /** logic: what the trap does (the host's copy only); pose: where its moving parts are (every copy). */
   update(dt) {
     this.t += dt;
+    this.ctx.soundAt = this.pos;
     if (!this.puppet) this.logic(dt);
     this.pose(dt);
   }

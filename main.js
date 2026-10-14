@@ -176,6 +176,7 @@ ctx.exitPoint = (collider, point, dir, pen) => {
 };
 
 ctx.applyHit = (hit, point, dir, dmg, impulse, opts = {}) => {
+  ctx.soundAt = point;
   const owner = ctx.owners.get(hit.collider.handle);
   if (owner?.kind === 'part') {
     marker('hit');                       // (before the hit: a kill it causes turns it red)
@@ -260,6 +261,7 @@ const _d = new THREE.Vector3();
 
 /** A flashbang going off: a white-out and ringing for whoever looks at it, and anyone near it stops fighting for a while. */
 ctx.flashbang = (p) => {
+  ctx.soundAt = p;
   sfx.revolver(); sfx.crack();
   const g = ctx.gore;
   g.flash.position.set(p.x, p.y + 0.3, p.z); g.flash.intensity = 700; g.flashT = 0.35;
@@ -286,6 +288,7 @@ ctx.flashPlayer = (p) => {
 };
 
 ctx.explode = (p, radius = 7, power = 1) => {
+  ctx.soundAt = p;
   ctx.gore.explosion(p, radius);
   sfx.explosion();
   ctx.alert('explosion', p, 45);

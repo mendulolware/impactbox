@@ -167,6 +167,7 @@ class Pane {
   }
   break(point) {
     if (this.broken) return;
+    this.ctx.soundAt = this.pos;
     this.broken = true;
     this.ctx.owners.delete(this.collider.handle);
     this.ctx.surfaces.delete(this.collider.handle);
@@ -200,6 +201,7 @@ class Lamp {
   }
   out(point) {
     if (this.off) return;
+    this.ctx.soundAt = this.pos;
     this.off = true;
     this.light.intensity = 0;
     this.mat.emissiveIntensity = 0;

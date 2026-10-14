@@ -628,6 +628,7 @@ export class Weapons {
       if (!w.bolt && (i < 3 || w.pellets === 1)) this.tracer(muzzle, first || end);
     }
     const can = this.can[this.index];
+    ctx.soundAt = null;                   // (the shot is heard from the gun, not from where the round landed)
     if (can) sfx.suppressed(); else sfx[w.sound]();
     if (!w.bolt) {                                // a puff of smoke out of the muzzle, not a fireball
       for (let k = 0; k < 2; k++) {
@@ -956,6 +957,7 @@ export class Weapons {
   }
 
   update(dt, input) {
+    this.ctx.soundAt = null;              // (co-op: what this player's weapons sound like comes from where they stand)
     const w = this.current;
     const pl = this.ctx.player;
     this.sprintK = (this.sprintK || 0) + ((pl.sprinting ? 1 : 0) - (this.sprintK || 0)) * Math.min(1, dt * 9);
