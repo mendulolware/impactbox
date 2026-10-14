@@ -548,9 +548,18 @@ export class Ragdoll {
     if (dmg > 0 && !this.dead) this.cry(zombie ? 'growl' : dmg > 25 || opts.explosion || opts.blade ? 'scream' : 'grunt');
 
     if (impulse > 0 && this.mode === 'ragdoll') {
-      // a body already off its feet has nothing to push back with: rounds throw it about
-      _v.copy(dir).multiplyScalar(impulse * (this.mode === 'ragdoll' && !opts.explosion ? 1.5 : 1));
+      // What a hit carries into a body: a round, a few times the momentum a real one has (enough to see it land,
+      // not the dozens of times that used to throw corpses about); a swing, much more. The part that is hit jumps
+      // at most 3 m/s, and the rest goes into the torso, so the body moves as one instead of a limb whipping off.
+      const J = impulse * (opts.melee || opts.blunt ? 0.3 : opts.explosion ? 1 : 0.07);
+      const own = Math.min(J, p.body.mass() * 3);
+      _v.copy(dir).multiplyScalar(own);
       p.body.applyImpulseAtPoint({ x: _v.x, y: _v.y, z: _v.z }, point, true);
+      const core = this.parts.torso.gone ? this.parts.pelvis : this.parts.torso;
+      if (J > own && !core.gone && core !== p) {
+        _v.copy(dir).multiplyScalar(J - own);
+        core.body.applyImpulse({ x: _v.x, y: _v.y, z: _v.z }, true);
+      }
     }
 
     // the hit in the part's own space
@@ -840,7 +849,7 @@ export class Ragdoll {
     else if (name === 'torso') this.die('bisect');
     else if (LEGS.has(name)) this.crippled = true;
 
-    if (dir) child.body.applyImpulse({ x: dir.x * 25, y: 15, z: dir.z * 25 }, true);
+    if (dir) child.body.applyImpulse({ x: dir.x * 8, y: 5, z: dir.z * 8 }, true);     // (it comes away; it is not fired off)
   }
 
   /** Blow a part to pieces. */
@@ -1702,7 +1711,24 @@ export class Ragdoll {
       p.mesh.position.set(t.x, t.y, t.z);
       p.mesh.quaternion.set(r.x, r.y, r.z, r.w);
     }
-    if (this.mode === 'ragdoll') this.impacts();
+    if (this.mode === 'ragdoll') { this.impacts(); this.calm(); }
+  }
+
+  /**
+   * Nothing in a body moves more than 12 m/s faster than its middle. A limb that was clipping into a wall
+   * when the body went limp gets shoved out of it by the solver hard enough to fly off: this stops that.
+   * The body as a whole (thrown, falling, blown up) is left alone, and so are cut-off parts.
+   */
+  calm() {
+    const core = this.parts.pelvis.gone ? this.parts.torso : this.parts.pelvis;
+    if (core.gone) return;
+    const c = core.body.linvel();
+    for (const n in this.parts) {
+      const p = this.parts[n];
+      if (p.gone || p === core || this.isFree(n)) continue;
+      const v = p.body.linvel(), dx = v.x - c.x, dy = v.y - c.y, dz = v.z - c.z, d = Math.hypot(dx, dy, dz);
+      if (d > 12) { const k = 12 / d; p.body.setLinvel({ x: c.x + dx * k, y: c.y + dy * k, z: c.z + dz * k }, true); }
+    }
   }
 
   destroy() {

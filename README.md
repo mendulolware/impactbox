@@ -392,4 +392,5 @@ Mixamo characters are free to use in games, but Adobe's terms do not allow handi
 - How fast wounds bleed: the `this.bleed(...)` calls in `hit()` (drops per second, health per second) and the cap in `update()`.
 - Blood look: drop sizes in `blood()`, decal shapes in `SHAPES`, decal budgets where `this.sets` is built (`gore.js`).
 - Weapon damage, rate, impulse: `WEAPONS` at the top of `weapons.js`.
+- How hard a hit moves a body that is already down: in `Ragdoll.hit`, a round carries `impulse * 0.07` (a few times a real bullet's momentum), a swing `impulse * 0.3`; the part hit jumps at most 3 m/s and the rest goes into the torso. `Ragdoll.calm` keeps any limb within 12 m/s of the body's middle (a limb clipping a wall when the body goes limp is otherwise shoved out hard enough to fly), and `clearSpot` in `main.js` backs a spawn out of walls.
 - Max NPCs: `MAX_RAGDOLLS` in `main.js`.

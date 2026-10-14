@@ -207,7 +207,31 @@ ctx.applyHit = (hit, point, dir, dmg, impulse, opts = {}) => {
   }
 };
 
+/**
+ * Somewhere a person fits. A spawn aimed at a wall lands half inside it, and a body that goes limp inside a
+ * wall is shoved out of it by the physics hard enough to explode: back the spot out toward the player until clear.
+ */
+function clearSpot(pos) {
+  const shape = new RAPIER.Capsule(0.6, 0.28);
+  const fits = (x, z) => {
+    let inside = false;
+    world.intersectionsWithShape({ x, y: pos.y + 0.95, z }, { x: 0, y: 0, z: 0, w: 1 }, shape, () => { inside = true; return false; }, RAPIER.QueryFilterFlags.ONLY_FIXED);
+    return !inside;
+  };
+  if (fits(pos.x, pos.z)) return pos;
+  // toward the player first, then round the compass, a little further each time
+  const a0 = Math.atan2(ctx.player.pos.x - pos.x, ctx.player.pos.z - pos.z);
+  for (let d = 0.1; d <= 2; d += 0.1) {
+    for (let k = 0; k < 8; k++) {
+      const a = a0 + k * Math.PI / 4, x = pos.x + Math.sin(a) * d, z = pos.z + Math.cos(a) * d;
+      if (fits(x, z)) return new THREE.Vector3(x, pos.y, z);
+    }
+  }
+  return pos;                                     // nowhere clear within 2 m: as asked
+}
+
 ctx.spawnRagdoll = (pos, yaw = 0, opts = {}) => {
+  pos = clearSpot(pos);
   // keep the count bounded: drop the oldest (dead ones first)
   const live = ctx.ragdolls.filter((r) => !r.removed);
   if (live.length >= MAX_RAGDOLLS) {
