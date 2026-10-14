@@ -229,6 +229,7 @@ export class Coop {
       hurt: (amount, from) => { if (!remote.dead) this.q(['hurt', amount, P(from)]); },
       blast: (center, radius, power) => this.q(['blast', P(center), radius, power]),
       launch: (v) => this.q(['launch', P(v)]),
+      heal: () => this.q(['heal']),
       flash: (p) => this.q(['fb', P(p)]),
     };
     ctx.remotes = [remote];
@@ -277,6 +278,7 @@ export class Coop {
       lamps: (ctx.lamps || []).map((l, i) => (l.off ? i : -1)).filter((i) => i >= 0),
       mission: document.getElementById('mission').textContent,
       kills: this.kills,
+      survival: ctx.survival.on && !ctx.survival.over ? { points: ctx.survival.points, owned: [...ctx.survival.owned] } : null,
     };
   }
 
@@ -413,6 +415,7 @@ export class Coop {
       if (action === 'shot') d.shot(V(arg), dmg); else d[action](V(arg));
     } else if (type === 'tool') ctx.tools.use(m[1], V(m[2]), V(m[3]), 1);
     else if (type === 'untool') ctx.tools.unlink(V(m[1]), V(m[2]), 1);
+    else if (type === 'buy') { if (this.remote) ctx.survival.buy(m[1], this.remote); }
     else if (type === 'tr') {
       // the guest fired: the tracer, and the sound of it
       ctx.weapons.tracer(V(m[1]), V(m[2]));
@@ -468,6 +471,7 @@ export class Coop {
     };
     ctx.mission.start = () => send(['menu', ctx.spawnItems.findIndex((it) => it.label === 'Ready or Not'), P(ctx.player.pos), 0]);
     ctx.survival.start = () => send(['menu', ctx.spawnItems.findIndex((it) => it.label === 'Zombie Survival'), P(ctx.player.pos), 0]);
+    ctx.survival.buy = (id) => send(['buy', id]);
     ctx.tools.use = (kind, o, d) => send(['tool', kind, P(o), P(d)]);
     ctx.tools.unlink = (o, d) => send(['untool', P(o), P(d)]);
     ctx.weapons.launchDrone = () => ctx.toast('THE DRONE IS THE HOST\'S ONLY IN CO-OP');
@@ -600,6 +604,13 @@ export class Coop {
       this.links = R.links;
       document.getElementById('mission').textContent = R.mission;
       if (R.kills && (R.kills.P1 !== this.kills.P1 || R.kills.P2 !== this.kills.P2)) { this.kills = R.kills; this.status(); }
+      // survival: the team's weapons and points (the shop and what can be picked up follow them)
+      const sv = ctx.survival, was = JSON.stringify(sv.remote);
+      if (was !== JSON.stringify(R.survival)) {
+        sv.remote = R.survival;
+        sv.arm(R.survival ? new Set(R.survival.owned) : null);
+        if (!sv.shopEl.classList.contains('hidden')) { if (R.survival) sv.fillShop(); else sv.shop(false); }
+      }
     } finally { this.replaying = false; }
   }
 
@@ -659,6 +670,7 @@ export class Coop {
     else if (t === 'hurt') ctx.player.hurt(e[1], e[2]);
     else if (t === 'blast') ctx.blastPlayer(V(e[1]), e[2], e[3]);
     else if (t === 'launch') { ctx.player.vel.set(e[1].x, e[1].y, e[1].z); ctx.player.grounded = false; }
+    else if (t === 'heal') ctx.player.health = 100;
     else if (t === 'fb') {
       const p = e[1], g = ctx.gore;
       g.flash.position.set(p.x, p.y + 0.3, p.z); g.flash.intensity = 700; g.flashT = 0.35;

@@ -575,7 +575,7 @@ export class Brain {
     const dist = this.distTo(p);
     n.look = tg.isPlayer ? tg.eye : this.lookV.copy(p).setY(p.y + 0.3);
     if (dist > 1.05) {
-      g.mode = 'to'; g.pos.copy(p); g.speed = dist < 5 ? 1.9 : 0.9; // shambles, then lunges
+      g.mode = 'to'; g.pos.copy(p); g.speed = (dist < 5 ? 1.9 : 0.9) * (this.runner ? 2.2 : 1); // shambles, then lunges (a survival runner: runs)
     } else {
       g.mode = 'stop'; g.face = true; g.pos.copy(p);
       this.attackT -= dt;

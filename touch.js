@@ -23,7 +23,7 @@ export function initTouch(ctx, input) {
     <div class="row">
       <button data-key="Tab">&#9776;</button><button data-key="KeyV">CAM</button><button data-key="KeyN">NIGHT</button>
       <button data-key="KeyL">LIGHT</button><button data-key="KeyT">SLOW</button><button data-key="KeyH">KICK</button><button data-key="KeyM">MIRROR</button><button data-key="KeyO">RAIN</button>
-      <button data-key="KeyJ">SUPP</button><button data-key="KeyK">LASER</button><button data-key="KeyU">SQUAD</button><button data-key="KeyP">REC</button>
+      <button data-key="KeyJ">SUPP</button><button data-key="KeyK">LASER</button><button data-key="KeyU">SQUAD</button><button data-key="KeyP">REC</button><button data-key="KeyY">SHOP</button>
     </div>
     <button class="b" id="t-fire">FIRE</button>
     <button class="b" id="t-aim">AIM</button>
@@ -71,7 +71,7 @@ export function initTouch(ctx, input) {
   const lookStart = (t) => looks.set(t.identifier, [t.clientX, t.clientY]);
   $('#t-fire').addEventListener('touchstart', (e) => { for (const t of e.changedTouches) lookStart(t); });
   document.addEventListener('touchstart', (e) => {
-    if (e.target.closest?.('#menu, #start, #settings, button')) return;
+    if (e.target.closest?.('#menu, #start, #settings, #shop, button')) return;
     e.preventDefault();             // no zoom, no scroll, and no pretend mouse click (which would fire)
     for (const t of e.changedTouches) {
       if (t.clientX < innerWidth * 0.4 && !move) {
@@ -91,7 +91,7 @@ export function initTouch(ctx, input) {
       ctx.player.look(dx, dy);
       input.mx += dx; input.my += dy;
     }
-    if (!e.target.closest?.('#menu, #settings, #start')) e.preventDefault();
+    if (!e.target.closest?.('#menu, #settings, #start, #shop')) e.preventDefault();
   }, { passive: false });
   const end = (e) => {
     for (const t of e.changedTouches) {

@@ -289,7 +289,10 @@ Where a round lands decides how someone still on their feet takes it (`react` in
 
 ## Zombie Survival
 
-Start screen or spawn menu (Modes). The map is reset and emptied of people, then waves of zombies come: wave n sends 4 + 3n, never more than 14 on their feet at once (8 when a phone is hosting), each from somewhere out of sight 12-26 m from the nearest player and on the players' own floor (not a roof or a wall top). Clear a wave and the next comes 6 s later. Three lives, shared in co-op: every death costs one, and when they are gone you are overrun (Enter goes again). The best wave reached is kept in the browser. The panel top right shows the wave, what is left, the lives and the best (`survival.js`).
+Start screen or spawn menu (Modes). The map is reset and emptied of people, then waves of zombies come: wave n sends 4 + 3n, never more than 14 on their feet at once (8 when a phone is hosting), each from somewhere out of sight 12-26 m from the nearest player and on the players' own floor (not a roof or a wall top). Clear a wave and the next comes 6 s later. Three lives, shared in co-op: every death costs one, and when they are gone you are overrun (Enter goes again). The best wave reached is kept in the browser. The panel top right shows the wave, what is left, the lives, the points and the best (`survival.js`).
+
+- **Points and the shop.** 10 points a zombie, 15 for a head shot, shared by the team. You start with a pistol and a knife; the shop (Y, or SHOP on a phone, any time) sells the rest (katana, shotgun, SMG, double barrel, grenades, AR-15, sniper, chainsaw, flamethrower, rocket launcher, minigun), a medkit (full health) and a barricade (six crates across your path). Weapons are the team's: in co-op both players get them (`weapons.allowed`; the guest's purchases are asked of the host).
+- **Special zombies.** From wave 3 a quarter are runners (more than twice the speed); every fifth wave brings brutes, the armoured soldier as a zombie: pistol rounds stop in the vest and everything else does a third of the damage (`tough`).
 
 ## Co-op (two players)
 

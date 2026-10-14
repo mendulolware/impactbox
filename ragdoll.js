@@ -512,6 +512,7 @@ export class Ragdoll {
   hit(name, dmg, point, dir, impulse = 0, opts = {}) {
     const p = this.parts[name];
     if (!p || p.gone) return;
+    if (this.tough && dmg > 0) dmg /= this.tough;      // (a survival brute)
     const { gore, sfx } = this.ctx;
     this.ctx.soundAt = point;
     this.impactMute = Math.max(this.impactMute, 0.35);   // being shot is not a fall
@@ -1455,7 +1456,7 @@ export class Ragdoll {
     if (zombie) {
       const tg = b.target;
       if (!tg) return null;
-      const tp = tg === this.ctx.player ? tg.pos : tg.center(_c);
+      const tp = tg.isPlayer ? tg.pos : tg.center(_c);      // (a player: you, or the other one in co-op)
       dx = tp.x - t.x; dz = tp.z - t.z;
       if (Math.hypot(dx, dz) < 0.7) return null;        // there: stop dragging, start biting
     } else {

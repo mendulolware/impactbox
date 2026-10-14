@@ -325,23 +325,26 @@ export class Weapons {
     const slot = this.current.slot;
     this.slots.forEach((el, n) => {
       el.classList.toggle('on', n === slot);
+      el.classList.toggle('locked', !!this.allowed && !this.inSlot[n].some((i) => this.allowed.has(i)));
       el.querySelector('span').textContent = WEAPONS[this.last[n]].name;
       el.querySelector('.list').innerHTML = n === slot && this.inSlot[n].length > 1
-        ? this.inSlot[n].map((i) => `<i class="${i === this.index ? 'cur' : ''}">${WEAPONS[i].name}</i>`).join('') : '';
+        ? this.inSlot[n].map((i) => `<i class="${i === this.index ? 'cur' : this.allowed && !this.allowed.has(i) ? 'locked' : ''}">${WEAPONS[i].name}</i>`).join('') : '';
     });
   }
 
   /** A number key: go to that group's weapon, or step to the next one if already in the group. */
   selectSlot(n) {
-    const list = this.inSlot[n];
+    // (allowed: Zombie Survival's owned weapons; null everywhere else)
+    const list = this.inSlot[n]?.filter((i) => !this.allowed || this.allowed.has(i));
     if (!list) return;
+    if (!list.length) { this.ctx.toast('LOCKED - BUY IT IN THE SHOP (Y)'); return; }
     if (this.current.slot === n) this.select(list[(list.indexOf(this.index) + 1) % list.length]);
-    else this.select(this.last[n]);
+    else this.select(list.includes(this.last[n]) ? this.last[n] : list[0]);
   }
 
   select(i) {
     i = (i + WEAPONS.length) % WEAPONS.length;
-    if (i === this.index) return;
+    if (i === this.index || (this.allowed && !this.allowed.has(i))) return;
     this.releaseGrab();
     this.index = i;
     this.last[WEAPONS[i].slot] = i;
@@ -965,7 +968,11 @@ export class Weapons {
     this.tickAmmo(dt);
 
     if (input.wheel !== 0 && !this.grab) {
-      this.select(this.index + (input.wheel > 0 ? 1 : -1));
+      // the next weapon along that can be picked up
+      const d = input.wheel > 0 ? 1 : -1;
+      let i = this.index;
+      for (let k = 0; k < WEAPONS.length; k++) { i = (i + d + WEAPONS.length) % WEAPONS.length; if (!this.allowed || this.allowed.has(i)) break; }
+      this.select(i);
     }
 
     // right mouse: aim down the sights (guns only; the grab gun uses it to throw)

@@ -363,6 +363,7 @@ const KILL_TEXT = {
 ctx.onKill = (rag, cause) => {
   ctx.kills++;
   ctx.feed((rag.killedBy ? rag.killedBy + ' · ' : '') + (KILL_TEXT[cause] || 'KILLED'));     // (killedBy: P1 or P2, in co-op)
+  if (rag.kind === 'zombie') ctx.survival?.kill(cause);
   if (performance.now() - (rag.shotAt || -1e9) < 2500) ctx.marker('kill');     // (red only for your own kills)
   ctx.mission.onKill(rag);
 };
@@ -700,9 +701,14 @@ function toggleSlowmo() {
 
 function setMenu(open) {
   if (ctx.remoteRun) return;            // (the other player's menu click, run here: not this player's menu)
-  ctx.menuOpen = open;
   if (!open) setSettings(false);
   $('menu').classList.toggle('hidden', !open);
+  setOverlay(open);
+}
+
+/** Something over the game that wants the mouse (the spawn menu, the survival shop): the game stops taking input. */
+function setOverlay(open) {
+  ctx.menuOpen = open;
   if (open) {
     if (document.pointerLockElement) document.exitPointerLock();
     input.left = input.right = false;
@@ -710,6 +716,7 @@ function setMenu(open) {
     canvas.requestPointerLock?.();
   }
 }
+ctx.setOverlay = setOverlay;
 
 // ------------------------------------------------------------------ input / pointer lock
 let started = false;
@@ -765,6 +772,8 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.code === 'Escape' && !$('settings').classList.contains('hidden')) { setSettings(false); return; }
+  if (e.code === 'Escape' && !$('shop').classList.contains('hidden')) { ctx.survival.shop(false); return; }
+  if (e.code === 'KeyY' && !$('shop').classList.contains('hidden')) { ctx.survival.shop(false); return; }
   if (e.code === 'Escape' && ctx.menuOpen) { setMenu(false); return; }
   if (!gameActive()) return;
   input.keys.add(e.code);
@@ -773,6 +782,7 @@ document.addEventListener('keydown', (e) => {
     if (n >= 1) ctx.weapons.selectSlot(n - 1);  // a group of weapons; press again for the next one in it
   }
   if (e.code === 'KeyT') toggleSlowmo();
+  if (e.code === 'KeyY') ctx.survival.shop(true);
   if (e.code === 'KeyV') toggleHelmet();
   if (e.code === 'KeyG') toggleGraphics();
   if (e.code === 'KeyN') toggleNight();

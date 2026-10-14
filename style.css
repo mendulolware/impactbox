@@ -274,3 +274,14 @@ input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 
 #mp-status { min-height: 18px; margin: 10px 0 0; font: 500 13px var(--body); color: #8ff0b6; }
 #mp-badge { position: absolute; left: 50%; top: 44px; transform: translateX(-50%); font: 700 12px var(--cond); letter-spacing: 3px; color: #3ddc84; text-shadow: 0 1px 2px #000; white-space: nowrap; }
 #mp-badge:empty, body.helmet #mp-badge { display: none; }
+
+/* ================================================================ survival shop (survival.js) */
+#shop { position: fixed; inset: 0; z-index: 12; display: flex; align-items: center; justify-content: center; background: rgba(4, 5, 8, .6); }
+#shop.hidden { display: none; }
+#shop .panel { width: min(760px, 94vw); }
+#shop-close { padding: 6px 20px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; font: 700 15px var(--cond); letter-spacing: 2px; text-transform: uppercase; cursor: pointer; }
+#shop .grid { margin-top: 16px; }
+#shop .item.owned { border-color: #3ddc84; color: #8ff0b6; cursor: default; }
+#shop .item.poor { opacity: .45; }
+.slot.locked { opacity: .3; }
+.slot .list i.locked { opacity: .3; }
