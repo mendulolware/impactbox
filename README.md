@@ -53,7 +53,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | `models.js` | loads `assets/models.glb`; lays surface detail and edge wear over the models; hands out body pieces |
 | `detail.js` | fine tiling surfaces for the models (steel, plastic, wood grain, cloth, leather, skin), generated in code |
 | `coop.js` | two-player co-op: the host's world is the real one; the guest keeps puppets of it and sends requests (see Co-op) |
-| `net.js` | finding the other player by a four-letter code and the two channels between you (PeerJS, `vendor/peerjs.min.js`, MIT) |
+| `net.js` | finding the other player by a four-letter code; a direct line (PeerJS, `vendor/peerjs.min.js`, MIT) or, where networks block that, a public MQTT relay |
 | `tools.js` | the Rope Tool and the Weld Tool |
 | `traps.js` | saw blade, spike trap, launch pad, crusher |
 | `gore.js` | blood droplets and mist, fire and smoke; decals that dry (splats, spatter, runs, pools, smears, handprints); physical chunks (meat, bone, skull, ribs, gut, eyes) that stick to walls and ceilings |
@@ -284,7 +284,7 @@ spent cases landing, rounds hitting concrete (some whine off), footsteps, and th
 
 ## Co-op (two players)
 
-On the start screen, one player presses **Host a game** and gets a four-letter code; the other types it in and presses **Join**, and both press Play. It works over the internet with no server of ours: PeerJS's free public broker introduces the two browsers, then they talk directly (WebRTC), or through PeerJS's public relay on networks that block that. `vendor/peerjs.min.js` (MIT) loads only when someone hosts or joins.
+On the start screen, one player presses **Host a game** and gets a four-letter code; the other types it in and presses **Join**, and both press Play. It works over the internet with no server of ours: PeerJS's free public broker introduces the two browsers and they try to talk directly (WebRTC). Many networks will not allow that (phones on mobile data, some routers even between two devices on the same wifi), and the free WebRTC relays have all gone, so if the direct line has not opened in 6 seconds both games talk through a free public MQTT message server instead (HiveMQ's, or EMQX's if that is down: a WebSocket, a topic per direction named after the code; `Mqtt` in `net.js` is just enough of the protocol). The badge says RELAY when it is in use; it adds a little delay. Through the relay, a player who goes quiet for 10 seconds has left (each side pings every 2). `?relay` in the address skips the direct try, for testing the relay. `vendor/peerjs.min.js` (MIT) loads only when someone hosts or joins.
 
 - **The host's game is the real one.** It runs every NPC, prop, trap and all the physics. The guest's game builds the same map and keeps a **puppet** of everything in it: kinematic bodies that go where the host's stream says (20 times a second, on an unreliable channel, eased between packets) and decide nothing.
 - **What the guest does goes to the host as a request**: hits (the guest aims and shoots at its puppets; the host applies the hit to the real body), grenades, rockets and dropped magazines (the host makes the real ones), doors, spawn-menu clicks (run in the host's game from where the guest is looking), ropes and welds, shouting and arresting in Ready or Not, map changes.

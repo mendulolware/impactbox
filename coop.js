@@ -111,8 +111,8 @@ export class Coop {
     if (this.statusEl) this.statusEl.textContent = text;
     if (this.badge) {
       this.badge.textContent = !this.role ? '' : this.role === 'host'
-        ? (this.link?.open ? `CO-OP · ${this.link.code} · 2 PLAYERS` : `CO-OP · CODE ${this.link?.code || ''} · WAITING`)
-        : 'CO-OP · GUEST';
+        ? (this.link?.open ? `CO-OP · ${this.link.code} · 2 PLAYERS${this.via === 'relay' ? ' · RELAY' : ''}` : `CO-OP · CODE ${this.link?.code || ''} · WAITING`)
+        : `CO-OP · GUEST${this.via === 'relay' ? ' · RELAY' : ''}`;
     }
   }
 
@@ -123,6 +123,7 @@ export class Coop {
       open: () => this.onOpen(),
       close: () => this.onClose(),
       error: (e) => this.status(e),
+      via: (mode) => { this.via = mode; this.status(this.statusEl?.textContent || ''); },
     });
   }
 
@@ -416,10 +417,13 @@ export class Coop {
     if (this.role) return;
     this.status('Connecting…');
     this.link = this.newLink();
-    await this.link.join(code);
+    this.early = [];                      // (through the relay, the host's first message is what tells us we are in)
+    await this.link.join(code, (t) => this.status(t));
     this.role = 'guest';
     this.setupGuest();
-    this.status('Connected - press Play');
+    for (const m of this.early) this.onMessage(m);
+    this.early = null;
+    this.status(this.via === 'relay' ? 'Connected through a relay - press Play' : 'Connected - press Play');
   }
 
   setupGuest() {
@@ -821,6 +825,7 @@ export class Coop {
 
   onMessage(m) {
     if (!Array.isArray(m)) return;
+    if (!this.role && this.early) { this.early.push(m); return; }
     if (this.role === 'host') { try { this.onRequest(m); } catch (e) { console.warn('[coop] request', m[0], e); } return; }
     if (m[0] === 'hello' || m[0] === 'roster') this.applyRoster(m[1]);
     else if (m[0] === 'ev') this.onEvents(m[1]);
