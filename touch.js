@@ -2,8 +2,9 @@
 //
 //   left thumb   a stick wherever it lands on the left of the screen: walk, and push it all the way to sprint
 //   right thumb  drag anywhere on the right to look; the fire button looks too while it is held
-//   buttons      fire, aim, jump, reload, next weapon, use (shout / arrest / clear a jam), and a row along the
-//                top for the spawn menu, bodycam, night, flashlight and slow-mo (those just press their key)
+//   buttons      fire, aim, jump, reload, next weapon, use (shout / arrest / clear a jam), lean left and right (held),
+//                and a row along the top that just presses a key: spawn menu, bodycam, night, flashlight, slow-mo,
+//                kick, mirror, rain, suppressor, laser, squad, record
 
 export const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 
@@ -19,13 +20,16 @@ export function initTouch(ctx, input) {
     <div class="row">
       <button data-key="Tab">&#9776;</button><button data-key="KeyV">CAM</button><button data-key="KeyN">NIGHT</button>
       <button data-key="KeyL">LIGHT</button><button data-key="KeyT">SLOW</button><button data-key="KeyH">KICK</button><button data-key="KeyM">MIRROR</button><button data-key="KeyO">RAIN</button>
+      <button data-key="KeyJ">SUPP</button><button data-key="KeyK">LASER</button><button data-key="KeyU">SQUAD</button><button data-key="KeyP">REC</button>
     </div>
     <button class="b" id="t-fire">FIRE</button>
     <button class="b" id="t-aim">AIM</button>
     <button class="b" id="t-jump">JUMP</button>
     <button class="b" id="t-reload">R</button>
     <button class="b" id="t-swap">&#8635;</button>
-    <button class="b" id="t-use">USE</button>`;
+    <button class="b" id="t-use">USE</button>
+    <button class="b" id="t-leanL">&#8656;</button>
+    <button class="b" id="t-leanR">&#8658;</button>`;
   document.body.appendChild(root);
   const $ = (id) => root.querySelector(id);
   const key = (code, type = 'keydown') => document.dispatchEvent(new KeyboardEvent(type, { code }));
@@ -45,6 +49,8 @@ export function initTouch(ctx, input) {
     el.addEventListener('touchcancel', off);
   };
   hold($('#t-jump'), () => input.keys.add('Space'), () => input.keys.delete('Space'));
+  hold($('#t-leanL'), () => input.keys.add('KeyQ'), () => input.keys.delete('KeyQ'));     // lean while held
+  hold($('#t-leanR'), () => input.keys.add('KeyE'), () => input.keys.delete('KeyE'));
   hold($('#t-fire'), () => { input.left = true; input.leftDown = true; }, () => { input.left = false; });
 
   // ---- the stick and the look pad, by touch id

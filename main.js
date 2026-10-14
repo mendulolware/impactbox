@@ -15,7 +15,7 @@ import { Mission } from './mission.js';
 import { initTouch, isTouch } from './touch.js';
 
 const $ = (id) => document.getElementById(id);
-const MAX_RAGDOLLS = 36;
+const MAX_RAGDOLLS = isTouch ? 18 : 36;          // (phones: half the people)
 
 await Promise.all([RAPIER.init(), loadModels()]);
 
@@ -88,7 +88,7 @@ ctx.player.yaw = ctx.player.camYaw = ctx.map.yaw;
 setSpace(ctx.map.id);
 ctx.weapons = new Weapons(ctx);
 ctx.post = post;
-if (isTouch) { post.lite = true; post.final.uniforms.uAoAmt.value = 0; }
+if (isTouch) { post.lite = true; post.final.uniforms.uAoAmt.value = 0; ctx.gore.maxChunks = 60; ctx.gore.lite = true; }
 
 ctx.later = (sec, fn) => ctx.timers.push({ t: sec, fn });
 
@@ -454,7 +454,7 @@ function blockFaces() {
 const torch = new THREE.SpotLight(0xfff1dc, 380, 50, 0.4, 0.6, 1.6);
 torch.position.set(0.08, -0.08, -0.6);     // out by the muzzle, so it does not light up your own hands
 torch.target.position.set(0.08, -0.08, -1.6);
-torch.castShadow = true;
+torch.castShadow = !isTouch;                   // (the flashlight's shadow map is dear on a phone)
 torch.shadow.mapSize.set(1024, 1024);
 torch.shadow.camera.near = 0.4;
 torch.shadow.bias = -0.0008;

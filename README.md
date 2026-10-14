@@ -34,7 +34,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | X | delete what you're aiming at (or holding) |
 | C | clear everything |
 
-**Phones and tablets** (`touch.js`): a stick under your left thumb wherever it lands (push it all the way to sprint), drag on the right to look (the FIRE button looks too while held), buttons for fire, aim, jump, reload, next weapon and use (shout, arrest, clear a jam), and a row along the top for the spawn menu, bodycam, night, flashlight and slow-mo. Play goes full screen and sideways. Phones draw at 1.25x pixel ratio, skip ambient occlusion and use a 2048 shadow map.
+**Phones and tablets** (`touch.js`): a stick under your left thumb wherever it lands (push it all the way to sprint), drag on the right to look (the FIRE button looks too while held), buttons for fire, aim, jump, reload, next weapon, lean left and right (held) and use (shout, arrest, clear a jam), and a row along the top for the spawn menu, bodycam, night, flashlight, slow-mo, kick, mirror, rain, suppressor, laser, squad and record. Play goes full screen and sideways. Phones draw at 1.25x pixel ratio, skip ambient occlusion, use a 2048 shadow map and no shadow from the flashlight, keep half as many people (18) and meat chunks (60) and half the rain.
 
 ## Layout
 

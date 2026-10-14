@@ -124,8 +124,8 @@ body.touch #weapon-bar { bottom: 6px; transform: translateX(-50%) scale(.7); tra
 #t-reload { right: calc(4% + 104px); bottom: calc(15% + 74px); }
 #t-swap { right: calc(4% + 12px); bottom: calc(24% + 98px); }
 #t-use { right: calc(4% + 186px); bottom: 7%; }
-#touch .row { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
-#touch .row button { padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,255,255,.3); font: 600 12px system-ui, sans-serif; }
+#touch .row { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; width: 62%; }
+#touch .row button { padding: 6px 8px; border-radius: 8px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,255,255,.3); font: 600 12px system-ui, sans-serif; }
 #stick { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); background: rgba(0,0,0,.15); display: none; }
 #stick.on { display: block; }
 #stick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px; border-radius: 50%; background: rgba(255,255,255,.35); }
@@ -137,3 +137,5 @@ body.touch #weapon-bar { left: 38%; }
 #mirror span { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); font: 600 14px Consolas, monospace; letter-spacing: 3px; opacity: .7; }
 body.mirror #mirror { display: block; }
 #lens i.rain { background: radial-gradient(circle at 36% 30%, rgba(235,245,255,.5), rgba(200,220,240,.28) 58%, rgba(200,220,240,0) 72%); filter: blur(.7px); animation-duration: 5s; }
+#t-leanL { left: 3%; bottom: 46%; width: 54px !important; height: 54px !important; font-size: 20px !important; }
+#t-leanR { left: calc(3% + 62px); bottom: 46%; width: 54px !important; height: 54px !important; font-size: 20px !important; }

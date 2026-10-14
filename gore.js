@@ -593,7 +593,7 @@ export class Gore {
 
   /** Rain, for a frame: fresh drops over the camera unless something is overhead, and all of them falling. */
   rainStep(dt, cam, covered) {
-    if (!covered) for (let k = Math.ceil(dt * 1100); k > 0; k--) {
+    if (!covered) for (let k = Math.ceil(dt * (this.lite ? 500 : 1100)); k > 0; k--) {
       this.rain.emit(cam.x + rnd(-15, 15), cam.y + rnd(3, 9), cam.z + rnd(-15, 15), 0.6, -13, 0.4, 0.017, 1.0, 0, 0.78, 0.86, 0.96, 0, 0);
     }
     this.rain.update(dt);
