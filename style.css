@@ -55,8 +55,8 @@ body.helmet #cam { display: block; }
 #cam-rec { position: absolute; left: 6%; top: 7%; }
 #cam-rec i { display: inline-block; width: 11px; height: 11px; margin-right: 8px; border-radius: 50%; background: #f22; animation: rec 1s steps(2, start) infinite; }
 @keyframes rec { to { visibility: hidden; } }
-#cam-id { position: absolute; right: 6%; top: 7%; opacity: .85; }
-#cam-time { position: absolute; right: 6%; bottom: 9%; }
+#cam-time { position: absolute; right: 6%; top: 7%; }
+#cam-id { position: absolute; right: 6%; top: calc(7% + 22px); opacity: .85; }
 /* footage has no game on it: no counters, no bars */
 body.helmet #stats, body.helmet #help, body.helmet #weapon-bar, body.helmet #ammo, body.helmet #health { display: none; }
 body.helmet #slowmo { right: 6%; top: 12%; }

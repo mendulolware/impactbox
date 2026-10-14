@@ -615,7 +615,6 @@ export class Ragdoll {
         gore.wallSplatter(point, dir, 4.5 * Math.min(2, (opts.hole || 0.026) / 0.03));   // a bigger round carries more, further
       }
       if (big) this.gutShot = true;
-      if (opts.blade || opts.blunt || opts.stab || opts.bite) sfx.squish();   // (not for rounds: the shot is the sound)
     }
 
     // zombies only really go down to head trauma
@@ -821,7 +820,6 @@ export class Ragdoll {
     const core = name === 'torso' || name === 'pelvis';
     this.ctx.gore.gibs(at, core ? 70 : 45);
     this.ctx.gore.chunks(at, core ? 11 : name === 'head' ? 9 : 5, 6, v, core ? 'torso' : name === 'head' ? 'head' : 'limb');
-    this.ctx.sfx.squish();
     for (const c of p.colliders) {
       this.ctx.owners.delete(c.handle);
       this.colHandles.delete(c.handle);

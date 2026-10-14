@@ -59,7 +59,7 @@ const BLUR_FRAG = `
 
 const FINAL_FRAG = `
   uniform sampler2D tScene; uniform sampler2D tAO; uniform sampler2D tBloom;
-  uniform vec2 uAoTexel; uniform float uHelmet; uniform float uAspect; uniform float uSupp; uniform vec3 uFaces[8]; varying vec2 vUv;
+  uniform vec2 uAoTexel; uniform float uHelmet; uniform float uAspect; uniform float uSupp; uniform vec3 uFaces[8]; uniform vec2 uBlur; uniform vec2 uTexel; uniform float uTime; varying vec2 vUv;
   void main() {
     // bodycam lens: the middle of the picture is magnified and the edges squeezed in (corners stay put)
     vec2 lc = vUv * 2.0 - 1.0;
@@ -76,6 +76,18 @@ const FINAL_FRAG = `
     }
     vec2 fringe = lc * dot(lc, lc) * 0.0035 * uHelmet;      // a cheap lens splits colours toward the edges
     vec3 col = vec3(texture2D(tScene, uv + fringe).r, texture2D(tScene, uv).g, texture2D(tScene, uv - fringe).b);
+    if (uHelmet > 0.5) {
+      // a slow shutter smears the picture while the camera turns (uBlur: how far it slid this frame)
+      if (dot(uBlur, uBlur) > 6e-7) {
+        vec3 acc = col;
+        for (int i = 1; i < 8; i++) acc += texture2D(tScene, uv + uBlur * (float(i) / 7.0 - 0.5)).rgb;
+        col = acc / 8.0;
+      }
+      // and the camera sharpens what is left, which puts a halo on every hard edge
+      vec3 nb = texture2D(tScene, uv + vec2(uTexel.x * 1.5, 0.0)).rgb + texture2D(tScene, uv - vec2(uTexel.x * 1.5, 0.0)).rgb
+              + texture2D(tScene, uv + vec2(0.0, uTexel.y * 1.5)).rgb + texture2D(tScene, uv - vec2(0.0, uTexel.y * 1.5)).rgb;
+      col = max(col + (col - nb * 0.25) * 0.4, 0.0);
+    }
     float ao = 0.0;
     for (int x = 0; x < 4; x++) for (int y = 0; y < 4; y++) {
       ao += texture2D(tAO, uv + (vec2(float(x), float(y)) - 1.5) * uAoTexel).r;
@@ -93,6 +105,18 @@ const FINAL_FRAG = `
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
+    if (uHelmet > 0.5) {
+      // a small sensor: shadows crushed, highlights clipping to white, a faint green cast, and grain that
+      // gets heavier the darker it is (the gain going up)
+      vec3 c = gl_FragColor.rgb;
+      float lum = dot(c, vec3(0.299, 0.587, 0.114));
+      c = smoothstep(0.025, 1.0, c);
+      c = mix(c, vec3(1.0), smoothstep(0.78, 1.0, lum) * 0.55);
+      c *= vec3(0.97, 1.02, 0.96);
+      float n = fract(sin(dot(gl_FragCoord.xy + fract(uTime) * 517.0, vec2(12.9898, 78.233))) * 43758.5453);
+      c += (n - 0.5) * (0.035 + 0.11 * (1.0 - smoothstep(0.0, 0.4, lum)));
+      gl_FragColor.rgb = c;
+    }
   }`;
 
 export class Post {
@@ -115,7 +139,7 @@ export class Post {
     this.blur.toneMapped = false;
     this.final = mat(FINAL_FRAG, {
       tScene: { value: this.target.texture }, tAO: { value: this.aoTarget.texture }, tBloom: { value: this.bloomA.texture },
-      uAoTexel: { value: new THREE.Vector2() }, uHelmet: { value: 0 }, uAspect: { value: 1 }, uSupp: { value: 0 },
+      uAoTexel: { value: new THREE.Vector2() }, uHelmet: { value: 0 }, uAspect: { value: 1 }, uSupp: { value: 0 }, uBlur: { value: new THREE.Vector2() }, uTexel: { value: new THREE.Vector2() }, uTime: { value: 0 },
       uFaces: { value: Array.from({ length: 8 }, () => new THREE.Vector3()) },
     });
 
@@ -134,6 +158,7 @@ export class Post {
     this.final.uniforms.uAoTexel.value.set(1 / hw, 1 / hh);
     this.bloomStep = [1 / qw, 1 / qh];
     this.final.uniforms.uAspect.value = w / h;
+    this.final.uniforms.uTexel.value.set(1 / w, 1 / h);
   }
 
   pass(material, target) {
@@ -168,6 +193,7 @@ export class Post {
     }
 
     this.final.uniforms.uHelmet.value = helmet ? 1 : 0;
+    this.final.uniforms.uTime.value = performance.now() / 1000;
     this.pass(this.final, null);
   }
 }

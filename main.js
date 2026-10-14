@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { initAudio, sfx, setSpace, deafen } from './audio.js';
+import { initAudio, sfx, setSpace, deafen, bodycam } from './audio.js';
 import { Gore } from './gore.js';
 import { Ragdoll, selfCollide } from './ragdoll.js';
 import { tickWounds } from './wounds.js';
@@ -359,12 +359,14 @@ const healthEl = $('health-fill');
 const hurtEl = $('hurt');
 let wasDead = false;
 const camTimeEl = $('cam-time');
+const lastRot = new THREE.Euler();
 let camClock = 0;
 ctx.helmet = false;
 function toggleHelmet() {
   ctx.helmet = !ctx.helmet;
   document.body.classList.toggle('helmet', ctx.helmet);
   camClock = 0;
+  bodycam(ctx.helmet);
   sfx.tick();
 }
 
@@ -390,7 +392,7 @@ function blockFaces() {
 }
 
 // N: any map after dark. L: the flashlight (it comes on by itself when night falls).
-const torch = new THREE.SpotLight(0xfff1dc, 700, 50, 0.4, 0.6, 1.6);
+const torch = new THREE.SpotLight(0xfff1dc, 380, 50, 0.4, 0.6, 1.6);
 torch.position.set(0.08, -0.08, -0.6);     // out by the muzzle, so it does not light up your own hands
 torch.target.position.set(0.08, -0.08, -1.6);
 torch.castShadow = true;
@@ -684,12 +686,17 @@ function tick(now) {
       camClock = 0.5;
       const d = new Date();
       const p2 = (n) => String(n).padStart(2, '0');
-      camTimeEl.textContent = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}  ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+      camTimeEl.textContent = `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())} T${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())}Z`;
     }
   }
   ctx.sky.material.uniforms.uTime.value = now / 1000;   // clouds drift
   blockFaces();
   post.final.uniforms.uSupp.value = ctx.player.suppress;
+  // bodycam motion blur: how far the picture slid since the last frame
+  const pm = camera.projectionMatrix.elements, rot = camera.rotation;
+  const dyaw = Math.atan2(Math.sin(rot.y - lastRot.y), Math.cos(rot.y - lastRot.y)), dpitch = rot.x - lastRot.x;
+  post.final.uniforms.uBlur.value.set(THREE.MathUtils.clamp(dyaw * pm[0] * 0.3, -0.05, 0.05), THREE.MathUtils.clamp(dpitch * pm[5] * 0.3, -0.05, 0.05));
+  lastRot.copy(rot);
   post.render(scene, camera, ctx.helmet);
 }
 

@@ -9,13 +9,13 @@
 //   the echo           one generated impulse response; setSpace() says how much of it a place has
 //   the ambience       a quiet bed of wind, room hum or city, per map
 let ac = null, master = null, wetIn = null, wetOut = null, noiseBuf = null, ears = null, comp = null;
-let deaf = 0, deafAt = 0;
+let deaf = 0, deafAt = 0, micHp = null, micClip = null, micOn = false;
 let space = 'yard', bed = null;
 
 // recordings: name -> how many takes there are (files are assets/sounds/<name>_<n>.mp3)
 const TAKES = {
   pistol: 2, revolver: 2, smg: 2, uzi: 2, shotgun: 2, dbarrel: 2, rifle: 2, ar15: 2, sniper: 2, minigun: 2,
-  grunt: 10, scream: 10, death: 8, squish: 6, step: 8, slice: 2, chop: 1, click: 1, latch: 1, draw: 1,
+  grunt: 10, scream: 10, death: 8, step: 8, slice: 2, chop: 1, click: 1, latch: 1, draw: 1,
 };
 const clips = {};       // name -> decoded takes
 let playing = 0;
@@ -71,7 +71,11 @@ export function initAudio() {
       master.gain.value = 0.5;
       ears = ac.createBiquadFilter();                      // everything is heard through these (see deafen)
       ears.type = 'lowpass'; ears.frequency.value = 20000;
-      ears.connect(comp);
+      // then through the bodycam's microphone when that view is on (bodycam()): thin, and loud things clip
+      micHp = ac.createBiquadFilter(); micHp.type = 'highpass';
+      micClip = ac.createWaveShaper();
+      ears.connect(micHp); micHp.connect(micClip); micClip.connect(comp);
+      bodycam(micOn);
       master.connect(ears);
       const len = ac.sampleRate;
       noiseBuf = ac.createBuffer(1, len, ac.sampleRate);
@@ -105,6 +109,19 @@ export function initAudio() {
     if (ac.state === 'suspended') ac.resume();
   } catch (e) { /* audio is optional */ }
 }
+
+/** Hear the world through the bodycam's little microphone (or not). */
+export function bodycam(on) {
+  micOn = on;
+  if (!ac) return;
+  micHp.frequency.value = on ? 260 : 10;
+  if (on && !CLIP) {
+    CLIP = new Float32Array(1024);
+    for (let i = 0; i < 1024; i++) { const x = i / 511.5 - 1; CLIP[i] = Math.tanh(x * 3.2) / Math.tanh(3.2); }
+  }
+  micClip.curve = on ? CLIP : null;
+}
+let CLIP = null;
 
 /**
  * A blast, or gunfire in a closed room: the world goes dull and the ears ring, then both come back over a few seconds.
@@ -262,11 +279,10 @@ export const sfx = {
 
   // ---- hand weapons
   slash()     { play('slice', { gain: 0.5 }) || noise({ dur: 0.18, f0: 700, f1: 4500, q: 1.2, gain: 0.3, type: 'bandpass' }); },
-  chop()      { play('chop', { gain: 0.8 }) || noise({ dur: 0.14, f0: 2500, f1: 200, gain: 0.7 }); play('squish', { gain: 0.6 }); },
+  chop()      { play('chop', { gain: 0.8 }) || noise({ dur: 0.14, f0: 2500, f1: 200, gain: 0.7 }); },
   saw()       { tone({ f0: 95 + Math.random() * 25, f1: 70, dur: 0.1, gain: 0.3, type: 'sawtooth' }); noise({ dur: 0.09, f0: 2600, f1: 1200, q: 3, gain: 0.22, type: 'bandpass' }); },
 
   // ---- what hits do
-  squish()    { play('squish', { gain: 0.7, jitter: 0.12 }) || noise({ dur: 0.14, f0: 900, f1: 150, gain: 0.45 }); },
   crack()     { noise({ dur: 0.07, f0: 3200, f1: 900, q: 2.5, gain: 0.6, type: 'bandpass' }); tone({ f0: 260, f1: 80, dur: 0.05, gain: 0.3, type: 'square' }); },
   thud(v = 1) { play('step', { gain: 0.6 * v, rate: 0.55 }); tone({ f0: 100, f1: 40, dur: 0.1, gain: 0.3 * v }); },
   /** A round into concrete or steel. */
