@@ -89,6 +89,7 @@ export class Coop {
     this.remote = null;        // host: the other player, as something NPCs can see and hurt
     this.pending = [];         // guest: props its own weapons made this frame, to hand to the host
     this.linkMeshes = [];
+    this.kills = { P1: 0, P2: 0 };   // co-op: who got how many (P1 is the host)
     this.ui();
   }
 
@@ -107,12 +108,13 @@ export class Coop {
     $('mp-code').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') join(); });
   }
 
-  status(text) {
+  status(text = this.statusEl?.textContent || '') {
     if (this.statusEl) this.statusEl.textContent = text;
     if (this.badge) {
+      const relay = this.via === 'relay' ? ' · RELAY' : '', score = ` · P1 ${this.kills.P1} · P2 ${this.kills.P2}`;
       this.badge.textContent = !this.role ? '' : this.role === 'host'
-        ? (this.link?.open ? `CO-OP · ${this.link.code} · 2 PLAYERS${this.via === 'relay' ? ' · RELAY' : ''}` : `CO-OP · CODE ${this.link?.code || ''} · WAITING`)
-        : `CO-OP · GUEST${this.via === 'relay' ? ' · RELAY' : ''}`;
+        ? (this.link?.open ? `CO-OP · ${this.link.code}${score}${relay}` : `CO-OP · CODE ${this.link?.code || ''} · WAITING`)
+        : `CO-OP${score}${relay}`;
     }
   }
 
@@ -178,8 +180,14 @@ export class Coop {
     ctx.feed = (t) => { feed(t); this.q(['feed', t]); };
     const onKill = ctx.onKill;
     ctx.onKill = (rag, cause) => {
+      // whose kill: the last of the two players to hit it in the last 2.5 s (neither: a trap, a fall, an NPC)
+      const now = performance.now(), mine = now - (rag.shotAt || -1e9) < 2500, theirs = now - (rag.guestShotAt || -1e9) < 2500;
+      if (this.link?.open) {
+        rag.killedBy = mine && (!theirs || rag.shotAt >= rag.guestShotAt) ? 'P1' : theirs ? 'P2' : null;
+        if (rag.killedBy) { this.kills[rag.killedBy]++; this.status(); }
+      }
       onKill(rag, cause);
-      if (performance.now() - (rag.guestShotAt || -1e9) < 2500) this.q(['mark', 'kill']);
+      if (rag.killedBy === 'P2') this.q(['mark', 'kill']);
       this.dirty = true;
     };
     // bodies: wounds, burns, cuts
@@ -237,7 +245,7 @@ export class Coop {
       setTimeout(() => location.reload(), 2000);       // back to a game of your own
       return;
     }
-    if (this.avatar) { this.avatar._destroy(); this.avatar = null; }
+    if (this.avatar) { this.avatar._destroy(); this.ctx.scene.remove(this.avatar.tag); this.avatar = null; }
     ctx.remotes = [];
     this.remote = null;
     ctx.toast('PLAYER 2 LEFT');
@@ -268,6 +276,7 @@ export class Coop {
       panes: (ctx.panes || []).map((p, i) => (p.broken ? i : -1)).filter((i) => i >= 0),
       lamps: (ctx.lamps || []).map((l, i) => (l.off ? i : -1)).filter((i) => i >= 0),
       mission: document.getElementById('mission').textContent,
+      kills: this.kills,
     };
   }
 
@@ -589,6 +598,7 @@ export class Coop {
       for (const i of R.lamps) { const l = ctx.lamps?.[i]; if (l && !l.off) l.out(); }
       this.links = R.links;
       document.getElementById('mission').textContent = R.mission;
+      if (R.kills && (R.kills.P1 !== this.kills.P1 || R.kills.P2 !== this.kills.P2)) { this.kills = R.kills; this.status(); }
     } finally { this.replaying = false; }
   }
 
@@ -747,6 +757,23 @@ export class Coop {
     av._destroy = av.destroy;
     av.destroy = () => {};                 // (X, or a clear: the other player is not yours to delete)
     av.look = new THREE.Vector3();
+    // a tag over their head, seen through walls, the same size however far: P1 is the host, P2 the one who joined
+    const c = document.createElement('canvas');
+    c.width = 128; c.height = 64;
+    const g = c.getContext('2d');
+    g.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    g.beginPath(); g.roundRect(14, 8, 100, 48, 10); g.fill();
+    g.fillStyle = '#3ddc84';
+    g.font = '700 38px "Barlow Condensed", "Arial Narrow", sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(this.role === 'host' ? 'P2' : 'P1', 64, 34);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    av.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, sizeAttenuation: false, toneMapped: false }));
+    av.tag.scale.set(0.095, 0.0475, 1);
+    av.tag.renderOrder = 10;
+    av.tag.visible = false;
+    ctx.scene.add(av.tag);
     av.move = (dt) => {
       const n = av.net;
       if (!n) return;
@@ -797,7 +824,13 @@ export class Coop {
   post(dt) {
     if (!this.role) return;
     const ctx = this.ctx;
-    if (this.avatar && !this.avatar.removed) this.avatar.sync();
+    const av = this.avatar;
+    if (av && !av.removed) {
+      av.sync();
+      const head = av.parts.head;
+      av.tag.visible = !!av.net && !ctx.helmet && !head.gone;        // (none in bodycam footage)
+      if (av.tag.visible) { const h = head.body.translation(); av.tag.position.set(h.x, h.y + 0.45, h.z); }
+    }
     if (!this.link?.open) return;
     if (this.role === 'host') {
       // anything gone since last time changes the roster

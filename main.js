@@ -334,7 +334,7 @@ const KILL_TEXT = {
 };
 ctx.onKill = (rag, cause) => {
   ctx.kills++;
-  ctx.feed(KILL_TEXT[cause] || 'KILLED');
+  ctx.feed((rag.killedBy ? rag.killedBy + ' · ' : '') + (KILL_TEXT[cause] || 'KILLED'));     // (killedBy: P1 or P2, in co-op)
   if (performance.now() - (rag.shotAt || -1e9) < 2500) ctx.marker('kill');     // (red only for your own kills)
   ctx.mission.onKill(rag);
 };
@@ -441,7 +441,7 @@ function deleteTarget() {
 }
 
 const SPAWN_ITEMS = [
-  { cat: 'Modes', label: 'Ready or Not', icon: '🚨', small: 'SWAT: arrest, do not execute', local: true, run: () => { ctx.mission.start(); setMenu(false); } },
+  { cat: 'Modes', label: 'Ready or Not', icon: '🚨', small: 'SWAT: arrest, do not execute', run: () => { ctx.mission.start(); setMenu(false); } },
   { cat: 'Modes', label: 'Sandbox', icon: '🧪', small: 'no rules', run: () => { ctx.mission.stop(); toast('SANDBOX'); setMenu(false); } },
   ...MAP_LIST.map((m) => ({ cat: 'Maps', label: m.name, icon: m.icon, small: m.blurb, run: () => { ctx.mission.stop(); ctx.setMap(m.id); setMenu(false); } })),
   { cat: 'NPCs', label: 'Civilian', icon: '🧍', small: 'flees, surrenders', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER()) },
@@ -507,7 +507,7 @@ const SPAWN_ITEMS = [
   { cat: 'World', label: 'Clear All', icon: '🗑️', small: 'wipe the sandbox', run: () => ctx.clearAll() },
   { cat: 'World', label: 'Slow-mo', icon: '⏳', small: 'toggle (T)', local: true, run: () => toggleSlowmo() },
   { cat: 'World', label: 'Helmet Cam', icon: '📹', small: 'toggle (V)', local: true, run: () => toggleHelmet() },
-  { cat: 'World', label: 'Graphics', icon: '✨', small: 'high / fast (G)', run: () => toggleGraphics() },
+  { cat: 'World', label: 'Graphics', icon: '✨', small: 'high / fast (G)', local: true, run: () => toggleGraphics() },
   { cat: 'World', label: 'Settings', icon: '⚙️', small: 'look, FOV, volume, graphics', local: true, run: () => setSettings(true) },
 ];
 
