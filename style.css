@@ -237,8 +237,8 @@ body.touch #stats { font-size: 10px; }
 body.touch #health { left: 12px; top: 84px; bottom: auto; transform: scale(.72); transform-origin: top left; }
 body.touch #ammo { right: 14px; top: 10px; bottom: auto; transform: scale(.72); transform-origin: top right; }
 body.touch #feed { right: 14px; top: 80px; transform: scale(.82); transform-origin: top right; }
-body.touch #mission { left: 12px; right: auto; top: 136px; transform: scale(.72); transform-origin: top left; }
-body.touch #toast { top: 26%; width: 78vw; padding: 6px 12px; white-space: normal; text-align: center; font-size: 19px; letter-spacing: 3px; }
+body.touch #mission { left: 50%; right: auto; top: 80px; transform: translateX(-50%) scale(.62); transform-origin: top center; }   /* (the left side has the lean buttons) */
+body.touch #toast { top: 41%; width: 78vw; padding: 6px 12px; white-space: normal; text-align: center; font-size: 19px; letter-spacing: 3px; }
 body.touch #weapon-bar { bottom: 4px; left: 38%; transform: translateX(-50%) scale(.72); transform-origin: bottom center; }
 body.touch .slot { min-width: 66px; padding: 5px 6px 6px; }
 body.touch #weapon-bar .slot { pointer-events: auto; touch-action: none; }
