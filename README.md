@@ -283,6 +283,10 @@ quiet background bed: wind, room hum or city. People have voices (`voice()`: a b
 screams when hit, a cry when they die, screams when they run or burn, growls from zombies, all quieter with distance. Also:
 spent cases landing, rounds hitting concrete (some whine off), footsteps, and the double barrel being broken open.
 
+## Hit reactions and deaths
+
+Where a round lands decides how someone still on their feet takes it (`react` in `ragdoll.js`, posed in `computePose`): a leg hit often puts them down on that knee with a hand on it, then up again limping (instead of always falling); an arm or a shoulder spins them round with the arm thrown back; the belly (pelvis, or the lower half of the torso) folds them over it with both hands on it; the chest is the old flinch. Deaths vary too (`die`): on their feet, about a third stagger a few steps and fall (the recorded Walking To Dying clip; the dead stop thinking), some go over backwards still half rigid, and the rest drop where they stand. Head shots, gibs and the like are always a drop.
+
 ## Zombie Survival
 
 Start screen or spawn menu (Modes). The map is reset and emptied of people, then waves of zombies come: wave n sends 4 + 3n, never more than 14 on their feet at once (8 when a phone is hosting), each from somewhere out of sight 12-26 m from the nearest player and on the players' own floor (not a roof or a wall top). Clear a wave and the next comes 6 s later. Three lives, shared in co-op: every death costs one, and when they are gone you are overrun (Enter goes again). The best wave reached is kept in the browser. The panel top right shows the wave, what is left, the lives and the best (`survival.js`).

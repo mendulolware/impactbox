@@ -477,8 +477,24 @@ export class Ragdoll {
     if (this.dead) return;
     if (cause !== 'headshot') { this.voiceT = 0; this.cry(this.kind === 'zombie' ? 'growl' : 'deathcry', 9); }   // (a head shot is over before any sound)
     this.dead = true;
-    this.goLimp(1e9);
-    this.tone = Math.min(this.tone, 0.05);   // nothing holds the body up any more: it drops like a cut puppet
+    this.react = null;
+    // Not every death is the same drop. On their feet, about a third stagger a few steps first (the recorded fall),
+    // some go over backwards still half rigid, and the rest drop where they stand. A head shot or worse is always a drop.
+    const style = this.mode === 'anim' && !(this.collapseT > 0) && CLIPS.die && this.kind !== 'zombie'
+      && !['headshot', 'gib', 'decap', 'bisect', 'impact', 'burned', 'beaten'].includes(cause) ? Math.random() : 1;
+    if (style < 0.35) {
+      this.collapseT = 1e-3;
+      this.wantSpeed = Math.min(this.wantSpeed, 0.5);
+    } else {
+      const was = this.mode;
+      this.goLimp(1e9);
+      this.tone = Math.min(this.tone, 0.05);   // nothing holds the body up any more: it drops like a cut puppet
+      if (style < 0.6 && was !== 'ragdoll' && !this.parts.torso.gone) {
+        this.tone = 0.35;                      // (it fades over a second: a stiffer fall)
+        const k = 22;
+        this.parts.torso.body.applyImpulse({ x: Math.sin(this.heading) * k, y: 0, z: Math.cos(this.heading) * k }, true);
+      }
+    }
     this.twitch = cause === 'headshot' ? 1.3 : 1.0;   // nerves fire for a moment after death
     this.ctx.onKill(this, cause);
     this.ctx.alert('death', this.center(_c), 16);
@@ -529,9 +545,15 @@ export class Ragdoll {
     const heavy = (opts.blade && !opts.light) || opts.explosion || (!melee && (name === 'head' || LEGS.has(name)))
       || this.hitAccum > (zombie ? 480 : 250) || (!zombie && this.health - dmg < 40);
     // not every hard hit is a fall: some reel backward with the legs going, and then either catch it or do not
-    const reel = standing && !this.dead && !zombie && !opts.explosion && !opts.blade && !opts.daze && name !== 'head' && this.stumbleT <= 0
+    // a round in the leg: often down on that knee rather than down altogether (then up again, limping)
+    const knee = standing && !this.dead && !zombie && !melee && LEGS.has(name) && !opts.explosion && !opts.blade && !opts.daze
+      && this.health - dmg > 30 && this.hitAccum <= 250 && Math.random() < 0.6;
+    const reel = !knee && standing && !this.dead && !zombie && !opts.explosion && !opts.blade && !opts.daze && name !== 'head' && this.stumbleT <= 0
       && this.health - dmg > 0 && Math.random() < (heavy ? 0.65 : !melee && dmg >= 15 ? 0.4 : 0);
-    if (reel) {
+    if (knee) {
+      this.react = { kind: 'knee', t: 0, len: 1.8, side: name.slice(-1) };
+      this.flinchT = 0;
+    } else if (reel) {
       this.stumbleT = STUMBLE;
       this.stumbleFall = LEGS.has(name) || Math.random() < (heavy ? 0.5 : 0.15);
       this.flinchDir.set(dir.x, 0, dir.z).normalize();
@@ -541,6 +563,9 @@ export class Ragdoll {
       const pt = p.body.translation();
       // which side was hit, relative to where the NPC faces: the torso twists away from it
       this.flinchSide = ((point.x - pt.x) * Math.cos(this.heading) - (point.z - pt.z) * Math.sin(this.heading)) > 0 ? 1 : -1;
+      // an arm or a shoulder spins them round; the belly folds them over it (a chest hit is the flinch alone)
+      if (!zombie && ARMS.has(name)) this.react = { kind: 'spin', t: 0, len: 0.75, side: name.slice(-1) };
+      else if (!zombie && (name === 'pelvis' || (name === 'torso' && point.y < pt.y))) this.react = { kind: 'fold', t: 0, len: 1.1 };
     } else {
       this.goLimp(0.9 + Math.min(2.6, impulse / 110 + dmg / 60));
     }
@@ -1046,6 +1071,36 @@ export class Ragdoll {
     const hd = G.hold;
     shRx = mix(shRx, 1.5, hd); elR = mix(elR, 0.08, hd); shRz = mix(shRz, 0.12, hd);
     shLx = mix(shLx, 1.45, hd); elL = mix(elL, 1.35, hd); shLz = mix(shLz, -0.5, hd); shLy = mix(shLy, 0.6, hd);
+    // hit reactions (hit()): down on one knee with a hand on it, spun round by a hit to the arm, folded over the belly.
+    // They ease in fast and out slow.
+    let rk = 0;
+    const R = this.react;
+    if (R) {
+      R.t += dt;
+      const u = R.t / R.len;
+      if (u >= 1 || this.mode !== 'anim') this.react = null;
+      else rk = smooth(0, 0.12, u) * (1 - smooth(0.7, 1, u));
+    }
+    if (rk > 0) {
+      if (R.kind === 'knee') {
+        // the hit leg kneels (thigh straight down, shin flat behind), the other is planted in front
+        if (R.side === 'L') { hipL = mix(hipL, -0.05, rk); kneeL = mix(kneeL, -1.75, rk); hipR = mix(hipR, 1.45, rk); kneeR = mix(kneeR, -1.5, rk); shLx = mix(shLx, 0.55, rk); elL = mix(elL, 0.7, rk); }
+        else { hipR = mix(hipR, -0.05, rk); kneeR = mix(kneeR, -1.75, rk); hipL = mix(hipL, 1.45, rk); kneeL = mix(kneeL, -1.5, rk); shRx = mix(shRx, 0.55, rk); elR = mix(elR, 0.7, rk); }
+        spX = mix(spX, -0.3, rk); nkX = mix(nkX, 0.15, rk);
+      } else if (R.kind === 'spin') {
+        // the hit shoulder is driven back and the body turns with it
+        const sg = R.side === 'L' ? 1 : -1;
+        spY += sg * 0.95 * rk; nkY -= sg * 0.4 * rk; spX += 0.15 * rk;
+        if (R.side === 'L') { shLx = mix(shLx, -0.7, rk); shLz = mix(shLz, 0.6, rk); elL = mix(elL, 0.3, rk); }
+        else { shRx = mix(shRx, -0.7, rk); shRz = mix(shRz, -0.6, rk); elR = mix(elR, 0.3, rk); }
+      } else {
+        // folded over the wound, both hands on it, knees giving
+        spX = mix(spX, -0.85, rk); nkX = mix(nkX, 0.35, rk);
+        hipL += 0.35 * rk; hipR += 0.35 * rk; kneeL -= 0.45 * rk; kneeR -= 0.45 * rk;
+        shLx = mix(shLx, 0.55, rk); shRx = mix(shRx, 0.55, rk); elL = mix(elL, 1.7, rk); elR = mix(elR, 1.7, rk);
+        shLy = mix(shLy, 0.5, rk); shRy = mix(shRy, -0.5, rk);
+      }
+    }
     // getting up: folded forward, hands leaving the ground
     spX = mix(spX, -0.6, sq);
     shLx = mix(shLx, 0.7, sq); shRx = mix(shRx, 0.7, sq);
@@ -1079,7 +1134,7 @@ export class Ragdoll {
     L('elbowL', elL);
     L('elbowR', elR);
     // running: the recorded stride takes over, as far as nothing else (a gesture, a bad leg, a stumble) wants the body
-    const free = z ? 0 : w * (1 - clamp(up + cw + ft + kn + sq + cl + fl + Math.max(lameL, lameR) + (this.stumbleT > 0 ? 1 : 0), 0, 1));
+    const free = z ? 0 : w * (1 - clamp(up + cw + ft + kn + sq + cl + fl + rk + Math.max(lameL, lameR) + (this.stumbleT > 0 ? 1 : 0), 0, 1));
     const u = this.phase / (Math.PI * 2);
     for (const [clip, k] of [[CLIPS.walk, free * (1 - run)], [CLIPS.run, free * run]]) {
       if (!clip || k < 0.01) continue;
@@ -1104,7 +1159,7 @@ export class Ragdoll {
       fall = clamp(this.collapseT * 4, 0, 1);
       for (const name in this.joints) this.joints[name].local.slerp(clipAt(CLIPS.die, name, r, _c0, false), fall);
       this.slump = CLIPS.die.hips[f] < 0.8;                    // (move() stops walking once the legs go)
-      if (CLIPS.die.hips[f] < 0.62 || r >= 1) { this.goLimp(2); fall = 0; }
+      if (CLIPS.die.hips[f] < 0.62 || r >= 1) { this.goLimp(2); if (this.dead) this.tone = 0.1; fall = 0; }     // (the dead do not brace)
     }
 
     // forward kinematics from the pelvis, placed at the origin first
@@ -1164,7 +1219,8 @@ export class Ragdoll {
     if (this.stumbleT > 0 && (this.stumbleT -= dt) <= 0 && this.stumbleFall) { this.goLimp(1.4); return; }   // did not catch it
 
     // a hit stops you in your tracks; a bad leg or a hole in the gut slows you down
-    const want = this.flinchT > 0 || this.stumbleT > 0 || (this.collapseT > 0 && this.slump) ? 0 : this.wantSpeed * (1 - 0.5 * Math.max(this.lame.L, this.lame.R)) * (1 - 0.15 * this.clutch);
+    const rooted = this.react && this.react.kind !== 'spin';      // down on a knee, or folded over: not going anywhere
+    const want = this.flinchT > 0 || this.stumbleT > 0 || rooted || (this.collapseT > 0 && this.slump) ? 0 : this.wantSpeed * (1 - 0.5 * Math.max(this.lame.L, this.lame.R)) * (1 - 0.15 * this.clutch);
     this.speed += (want - this.speed) * Math.min(1, dt * 5);
     let dh = this.targetHeading - this.heading;
     dh = Math.atan2(Math.sin(dh), Math.cos(dh));
@@ -1654,7 +1710,7 @@ export class Ragdoll {
     }
 
     if (this.mode === 'anim') {
-      this.brain.update(dt);
+      if (!this.dead) this.brain.update(dt);
       // people scream when they start to run; the dead moan when they have someone to go for
       const state = this.brain.state;
       if (state === 'flee' && this.wasState !== 'flee' && Math.random() < 0.6) this.cry('scream', 1.5);
