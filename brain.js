@@ -317,8 +317,9 @@ export class Brain {
 
       case 'check': {
         // someone is lying there: go and look, crouch over them, and then it sinks in
-        const o = this.subject, p = o.center(_v);
+        const o = this.subject;
         if (o.removed || this.blockedT > 2) { this.state = 'calm'; break; }
+        const p = o.center(_v);
         n.look = this.lookV.copy(p);
         if (this.distTo(p) > 1.3) { g.mode = 'to'; g.pos.copy(p); g.speed = WALK * 1.5; break; }
         g.mode = 'stop'; g.face = true; g.pos.copy(p);

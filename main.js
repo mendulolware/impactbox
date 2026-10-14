@@ -624,7 +624,8 @@ function frame(now) {
     // a wasm panic leaves the physics world unusable, so stop instead of spamming the console
     crashed = true;
     console.error('[impactbox] fatal error, simulation stopped:', e);
-    toast('SIMULATION CRASHED - reload the page');
+    toast('SIMULATION CRASHED - restarting');
+    setTimeout(() => location.reload(), 2500);     // the physics cannot be trusted after a panic: start clean (the map is remembered)
     toastT = 1e9;
   }
 }

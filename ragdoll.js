@@ -421,7 +421,7 @@ export class Ragdoll {
 
   /** Where this NPC is, standing or sprawled. */
   center(out) {
-    if (this.mode === 'ragdoll' && !this.parts.pelvis.gone) {
+    if (this.mode === 'ragdoll' && !this.removed && !this.parts.pelvis.gone) {     // (a deleted body has no physics left to ask)
       const t = this.parts.pelvis.body.translation();
       return out.set(t.x, t.y, t.z);
     }

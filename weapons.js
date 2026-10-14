@@ -572,6 +572,7 @@ export class Weapons {
           dmg *= 0.5;
           continue;
         }
+        if (!ctx.world.getCollider(hit.collider.handle)) break;     // what it hit is gone (a barrel that went up): nothing to come out of
         const out = ctx.exitPoint(hit.collider, end, d, pen);
         if (!out) break;
         ctx.gore.bulletHole(out, d);
