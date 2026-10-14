@@ -711,6 +711,7 @@ export class Ragdoll {
     const hit = Math.random() < clamp(0.8 - d * 0.03, 0.12, 0.8);
     if (!hit) to.add(_v.set(rnd(-1, 1), rnd(-0.3, 0.8), rnd(-1, 1)).multiplyScalar(0.25 + d * 0.06)).addScaledVector(_t.copy(to).sub(from).normalize(), 4);
     this.ctx.weapons.tracer(from, to);
+    this.ctx.weapons.fireFlash(from, _t.copy(to).sub(from).normalize(), 0.15);
     this.ctx.sfx.pistol();
     if (hit) pl.hurt(rnd(14, 24), this.root);
     else { pl.suppress = Math.min(1, pl.suppress + 0.45); this.ctx.sfx.impact(); }   // the crack of one going past

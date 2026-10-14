@@ -59,7 +59,7 @@ export const WEAPONS = [
 //   melee  - held in the fist, business end up and forward; tilt = how far it leans forward
 //   knife  - held point-forward in its own hand, with a sleeve running back off screen
 const RIG_SCALE = 0.8;
-const RECOIL = 1.6;        // one dial for how hard every gun kicks
+const RECOIL = 3.4;        // one dial for how hard every gun kicks
 const CAN = 0.17;          // suppressor length, in weapon-model metres
 const HELMET_DROP = 0.1;   // how far the eyes are below the helmet camera (matches player.js)
 const VIEW = [
@@ -207,11 +207,7 @@ export class Weapons {
     this.muzzle = new THREE.PointLight(0xffc070, 0, 8, 2);
     ctx.scene.add(this.muzzle);
     this.muzzleT = 0;
-    this.flash = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(1, 1),
-      new THREE.MeshBasicMaterial({ color: 0xffd9a0, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false })
-    );
-    this.flash.visible = false;
+    this.flash = muzzleFlash();
     ctx.scene.add(this.flash);
 
     // tracer pool
@@ -383,6 +379,21 @@ export class Weapons {
     this.clearT = 0.7;
     this.reloadT = 0;
     sfx.reload();
+  }
+
+  /** Fire out of a muzzle at p, pointing along dir: a flame star about len metres long, and a moment of light. */
+  fireFlash(p, dir, len, follow = false) {
+    const f = this.flash;
+    this.flashFollow = follow;                    // your own: it stays on the muzzle while the gun kicks up
+    f.position.copy(p).addScaledVector(dir, 0.02);
+    f.quaternion.setFromUnitVectors(FWD, dir);
+    f.rotateZ(Math.random() * Math.PI);
+    f.scale.setScalar(len * rnd(0.8, 1.2));
+    f.children[2].material.rotation = Math.random() * Math.PI;
+    f.visible = true;
+    this.muzzle.position.copy(p).addScaledVector(dir, 0.55);     // (ahead of the gun, so it lights the room more than your own hands)
+    this.muzzle.intensity = 12 + len * 45;
+    this.muzzleT = 0.045;
   }
 
   /** J: screw a suppressor on or off (single-projectile guns, not the revolver). */
@@ -584,19 +595,13 @@ export class Weapons {
       ctx.gore.drops.emit(p.x, p.y, p.z, right.x * s + up.x * 1.5, right.y * s + up.y * 1.5 + 1, right.z * s + up.z * 1.5,
         0.009, 1.1, 11, 0.75, 0.55, 0.2, 2);
     }
-    this.kick = w.kick;
-    this.kickSide = (Math.random() - 0.5) * 2 * w.kick;
+    this.kick = w.kick * 1.3;
+    this.kickSide = (Math.random() - 0.5) * 2.6 * w.kick;
     if (can) ctx.alert('shot', ctx.player.pos, 9);      // quieter, not silent
     else if (!w.quiet) {
       deafen(0.04 + w.kick * 0.5, true);
       ctx.alert('shot', ctx.player.pos, 40);
-      this.muzzle.position.copy(muzzle);
-      this.muzzle.intensity = 30;
-      this.flash.position.copy(muzzle).addScaledVector(fwd, 0.06);
-      this.flash.scale.setScalar(0.05 + w.kick * 0.5 + Math.random() * 0.03);
-      this.flash.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
-      this.flash.visible = true;
-      this.muzzleT = 0.05;
+      this.fireFlash(muzzle, fwd, (0.14 + w.kick * 1.3) * (w.pellets > 1 ? 1.25 : 1), true);
     }
     // recoil: up, and a little to one side or the other; less with the stock in your shoulder
     const rec = w.rec || [w.kick * 0.25, 0];
@@ -931,6 +936,11 @@ export class Weapons {
     this.updateLaser();
 
     if (this.muzzleT > 0) {
+      if (this.flashFollow) {
+        const m = this.models[this.index];
+        this.muzzlePoint(this.flash.position);
+        this.flash.quaternion.copy(m.getWorldQuaternion(_q));
+      }
       this.muzzleT -= dt;
       if (this.muzzleT <= 0) { this.muzzle.intensity = 0; this.flash.visible = false; }
     }
@@ -944,6 +954,49 @@ export class Weapons {
 }
 
 function rnd(a, b) { return a + Math.random() * (b - a); }
+
+/**
+ * A muzzle flash: two crossed flames along the barrel and a star facing the camera, all additive and brighter than
+ * white so the bloom catches them. Drawn once on canvases; one length unit = one flash length (fireFlash scales it).
+ */
+function muzzleFlash() {
+  const canvas = (w, h, draw) => { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); return new THREE.CanvasTexture(c); };
+  const side = canvas(128, 32, (g, w, h) => {
+    g.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 6; i++) {                  // overlapping tongues of different lengths: a ragged flame
+      const len = w * rnd(0.45, 1), th = h * rnd(0.18, 0.42);
+      const gr = g.createLinearGradient(0, 0, len, 0);
+      gr.addColorStop(0, 'rgba(255,250,225,0.8)'); gr.addColorStop(0.35, 'rgba(255,190,90,0.55)'); gr.addColorStop(1, 'rgba(255,90,20,0)');
+      g.fillStyle = gr;
+      g.beginPath(); g.ellipse(len / 2, h / 2 + rnd(-2, 2), len / 2, th / 2, 0, 0, Math.PI * 2); g.fill();
+    }
+  });
+  const star = canvas(64, 64, (g, w) => {
+    g.globalCompositeOperation = 'lighter';
+    g.translate(w / 2, w / 2);
+    for (let i = 0; i < 7; i++) {                  // spikes
+      g.rotate(Math.PI * 2 / 7 + rnd(-0.2, 0.2));
+      const r = w / 2 * rnd(0.6, 1);
+      const gr = g.createLinearGradient(0, 0, r, 0);
+      gr.addColorStop(0, 'rgba(255,230,170,0.9)'); gr.addColorStop(1, 'rgba(255,120,30,0)');
+      g.fillStyle = gr;
+      g.beginPath(); g.moveTo(0, -3); g.lineTo(r, 0); g.lineTo(0, 3); g.fill();
+    }
+    const core = g.createRadialGradient(0, 0, 0, 0, 0, w * 0.22);
+    core.addColorStop(0, 'rgba(255,255,240,1)'); core.addColorStop(1, 'rgba(255,170,60,0)');
+    g.fillStyle = core; g.fillRect(-w / 2, -w / 2, w, w);
+  });
+  const hot = new THREE.Color(4, 2.6, 1.2);
+  const mat = new THREE.MeshBasicMaterial({ map: side, color: hot, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const plane = new THREE.PlaneGeometry(1, 0.3).translate(0.5, 0, 0).rotateY(Math.PI / 2);   // base at the muzzle, out along -z
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(plane, mat), new THREE.Mesh(plane.clone().rotateZ(Math.PI / 2), mat));
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: star, color: hot, blending: THREE.AdditiveBlending, depthWrite: false }));
+  s.scale.setScalar(0.55);
+  g.add(s);
+  g.visible = false;
+  return g;
+}
 
 /** Magazine guns with a closed bolt keep a round in the chamber through a reload (30+1). */
 function chamber(w) { return w.type === 'gun' && !!w.shell && !w.shells && !w.spin && w.mag > 2; }

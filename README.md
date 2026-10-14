@@ -153,6 +153,8 @@ Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted aft
 
 - **Gun handling:** magazine guns keep a round in the chamber through a reload (30+1), and a reload from empty takes 30% longer because the bolt has to go forward; shots spread more on the move and a lot more in the air; sprinting carries the weapon low and it cannot fire until it is back up; aimed weapons drift with your breathing (the sniper most), Shift while aiming holds your breath for about four seconds, and running out leaves you shakier until it comes back; spent cases fly out to the right. Hits no longer play the flesh squish.
 
+- **Recoil and muzzle fire:** `RECOIL` is 3.4 (it was 1.6), so bursts climb hard and have to be dragged down, and the gun itself kicks 30% further. Every unsuppressed shot (yours and the suspects') throws a muzzle flash: two crossed flame tongues along the barrel and a star facing the camera, brighter than white so the bloom catches them, plus a moment of orange light (`muzzleFlash()`, `fireFlash()` in `weapons.js`). Yours stays on the muzzle while the gun kicks up.
+
 ## First person
 
 - **Hands:** gloved hands with sleeves are attached per weapon: `HandR` grips, `HandL` cups a fore-end, `HandSupport` closes over the
