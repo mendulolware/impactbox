@@ -57,6 +57,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | `survival.js` | Zombie Survival: waves, lives, the best wave |
 | `tools.js` | the Rope Tool and the Weld Tool |
 | `traps.js` | saw blade, spike trap, launch pad, crusher |
+| `water.js` | water: floating, drag, splashes, rounds slowing down under it, swimming, the view under it |
 | `gore.js` | blood droplets and mist, fire and smoke; decals that dry (splats, spatter, runs, pools, smears, handprints); physical chunks (meat, bone, skull, ribs, gut, eyes) that stick to walls and ceilings |
 | `wounds.js` | holes and gashes cut into body parts, blood soaking and running from them, burns, what is visible inside, and the torn stumps |
 | `player.js` | first-person character controller |
@@ -78,13 +79,24 @@ Pick one on the start screen or under **Maps** in the spawn menu (Tab). The last
 | Night Street | a street at dusk: shopfronts, parked cars, a dead-end alley, street lamps |
 | Kill House | a walled compound with twelve plywood rooms and a catwalk over them |
 | The House | a two-storey house after dark: a hall with the stairs, living room, kitchen and den downstairs, a landing, three bedrooms and a bathroom upstairs, ten doors (three locked), windows you can see and shoot through, two lamps on and the rest dark. It is always night here (`night: true` turns the night sky and the flashlight on, and halves how far people see); made for the flashlight, the mirror and the bodycam |
+| The Pool | an outdoor pool, 25 by 12 m and 2.6 m deep, with a diving board, changing rooms, bleachers and sun loungers. Bodies and props float, blood spreads in the water as clouds, and you can swim (see Water) |
 
 A map is one entry in `MAPS` (`maps.js`): a time of day, a spawn point, the rectangle NPCs keep to, `build(b)` and `populate(ctx)`.
-`build` gets a `MapBuilder` (`world.js`) with `box`, `cyl`, `wall` (with doorways), `door` (hung in one, `y0` for an upper floor), `stairs`, `stripe`, `light`, `ground` and `mat`.
+`build` gets a `MapBuilder` (`world.js`) with `box`, `cyl`, `wall` (with doorways), `door` (hung in one, `y0` for an upper floor), `stairs`, `stripe`, `light`, `water`, `ground` and `mat`.
 Every box gets a collider on one fixed body, and the visible boxes are joined into one mesh per material, so a map of several hundred
 pieces is a handful of draw calls. `loadMap()` removes the old map (meshes, materials, colliders) and builds the next.
 Times of day are `SKIES` in `world.js`: sun direction and colour, sky colours, cloud cover, fog.
 To add a map, add an entry to `MAPS`; both menus list it automatically.
+
+## Water
+
+`b.water(x0, x1, z0, z1, y)` in a map's `build` fills that rectangle with water up to height `y` (the basin itself is ordinary boxes). `water.js` then, every frame before the physics step:
+
+- **floats things**: each dynamic body in it is pushed up by how far under it is, and slowed (water drag, on spin too). How strongly is per kind: a body floats just under the surface, balls and crates ride high, barrels half in, grenades and magazines sink, meat chunks sink slowly (`FLOAT` at the bottom of `water.js`)
+- **splashes**: anything going in faster than 2.5 m/s throws white water (more for heavier and faster) with one splash sound however many parts went in; every round that crosses the surface splashes too
+- **slows rounds**: a round keeps `exp(-metres under water / 1.2)` of its force, so a body 1.5 m down takes under a third of the damage
+- **clouds blood**: a drop of blood that reaches the water becomes a slow red cloud that spreads and fades over 5-9 s instead of a splat
+- **swimming** (`player.js`): half speed, you float up to just under your chin, swimming forward while looking down takes you down, Space strokes up, and at the surface Space hauls you out over the edge. With the camera under, the picture goes blue and the fog closes in
 
 ## Doors
 

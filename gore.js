@@ -555,6 +555,9 @@ export class Gore {
     // rain: thin grey streaks, no collisions (they fall through the ground and die), only emitted under open sky
     this.rain = new ParticleSet(scene, 2600, new THREE.SphereGeometry(0.5, 5, 4),
       new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false }), { stretch: true });
+    // blood in water: a slow red cloud that spreads and fades instead of a drop (water.js says where water is)
+    this.clouds = new ParticleSet(scene, this.lite ? 120 : 260, ball(), softMaterial(0.55),
+      { scaleFn: (f) => 0.25 + 2.6 * (1 - f), fadeFn: (f) => Math.min(1, f * 2) });
     this.smoke = new ParticleSet(scene, 300, ball(), softMaterial(0.75),
       { scaleFn: (f) => Math.min(1, f * 3) * (1.6 - 0.6 * f), fadeFn: (f) => Math.min(1, f * 2.2) });
 
@@ -971,7 +974,7 @@ export class Gore {
 
   // ------------------------------------------------------------ housekeeping
   clear() {
-    this.drops.n = 0; this.fire.n = 0; this.smoke.n = 0; this.mists.n = 0; this.rain.n = 0;
+    this.drops.n = 0; this.fire.n = 0; this.smoke.n = 0; this.mists.n = 0; this.rain.n = 0; this.clouds.n = 0;
     for (const k in this.sets) for (const s of this.sets[k]) s.clear();
     this.holes.clear();
     this.scorch.clear();
@@ -982,9 +985,17 @@ export class Gore {
     while (this.chunkList.length) this._removeChunk(0);
   }
 
-  /** Blood drops and meat bits stick to the world where they land. */
+  /** Blood drops and meat bits stick to the world where they land (or, in water, cloud). */
   _collideDrop(i, dt) {
     const d = this.drops, i3 = i * 3;
+    const w = this.ctx.water;
+    if (w?.pools.length && w.under(d.pos[i3], d.pos[i3 + 1], d.pos[i3 + 2])) {
+      if (d.kind[i] !== DEBRIS && Math.random() < 0.5) {
+        this.clouds.emit(d.pos[i3], d.pos[i3 + 1], d.pos[i3 + 2], rnd(-0.08, 0.08), rnd(0.02, 0.1), rnd(-0.08, 0.08),
+          rnd(0.12, 0.22), rnd(5, 9), -0.03, rnd(0.2, 0.3), 0.008, 0.008, 0, 0.6);
+      }
+      return true;
+    }
     const vx = d.vel[i3], vy = d.vel[i3 + 1], vz = d.vel[i3 + 2];
     const sp = Math.hypot(vx, vy, vz);
     if (sp < 0.05) return false;
@@ -1015,6 +1026,7 @@ export class Gore {
   update(dt) {
     this.drops.update(dt, this._collideDrop);
     this.mists.update(dt);
+    this.clouds.update(dt);
     this.fire.update(dt);
     this.smoke.update(dt);
 

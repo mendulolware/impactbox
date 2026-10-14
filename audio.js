@@ -67,6 +67,7 @@ const SPACES = {
   street:    { wet: 0.42, bed: 'city' },
   killhouse: { wet: 0.22, bed: 'wind', indoor: 0.7 },
   house:     { wet: 0.45, bed: 'hum', indoor: 1 },
+  pool:      { wet: 0.3,  bed: 'wind' },
 };
 
 let volume = 1;
@@ -360,6 +361,7 @@ export const sfx = {
 
   // ---- interface
   boing()     { tone({ f0: 150, f1: 560, dur: 0.24, gain: 0.25, type: 'triangle' }); tone({ f0: 75, f1: 280, dur: 0.2, gain: 0.2 }); },
+  splash(v = 1) { noise({ dur: 0.4, f0: 2200, f1: 260, gain: 0.45 * v, send: 0.15 }); tone({ f0: 320, f1: 80, dur: 0.12, gain: 0.22 * v }); },
   pop()       { tone({ f0: 380, f1: 820, dur: 0.07, gain: 0.1, type: 'triangle' }); },
   tick()      { play('click', { gain: 0.5 }) || tone({ f0: 1200, f1: 900, dur: 0.04, gain: 0.12, type: 'square' }); },
 };

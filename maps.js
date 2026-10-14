@@ -570,6 +570,77 @@ export const MAPS = {
       ctx.spawnProp('ball', { x: 5, y: 1.0, z: 15 });
     },
   },
+  // ----------------------------------------------------------------------------------------- pool
+  pool: {
+    id: 'pool', name: 'The Pool', icon: '🏊', blurb: 'an outdoor pool: bodies float, blood spreads in the water',
+    sky: 'day', spawn: { x: 0, y: 1.0, z: 12 }, yaw: 0, bounds: { x0: -27, x1: 27, z0: -17, z1: 15 },
+
+    build(b) {
+      const deck = b.mat('concrete', 0xe2ddd2, { roughness: 0.8 });
+      const tile = b.mat('concrete', 0x86cfe2, { roughness: 0.35 });
+      const rim = b.mat('concrete', 0xf2efe8, { roughness: 0.6 });
+      const brick = b.mat('brick', 0xc29a7e);
+      const plaster = b.mat('concrete', 0xe8e2d6, { roughness: 0.85 });
+      const steel = b.mat('metal', 0xa8afb6, { metalness: 0.7, roughness: 0.35 });
+      const white = b.mat('plain', 0xf4f4f0, { roughness: 0.6 });
+      const blue = b.mat('plain', 0x2e7fb8, { roughness: 0.7 });
+      const red = b.mat('plain', 0xc8322a, { roughness: 0.7 });
+      const wood = b.mat('planks', 0xb38a5a);
+      const lawn = b.mat('plain', 0x4f7a34, { roughness: 1 });
+      // the pool: 25 x 12 m, 2.6 m deep, the water a hand below the rim; steps up out at the east end
+      const X = 12.5, Z = 6, D = 2.6, W = -0.25;
+      // the deck round it (there is no ground under a pool), and grass beyond the wall
+      b.box(0, -0.2, -15.5, 60, 0.4, 19, deck); b.box(0, -0.2, 15.5, 60, 0.4, 19, deck);
+      b.box(-21.25, -0.2, 0, 17.5, 0.4, 12, deck); b.box(21.25, -0.2, 0, 17.5, 0.4, 12, deck);
+      b.box(0, -0.3, -45, 120, 0.4, 40, lawn); b.box(0, -0.3, 45, 120, 0.4, 40, lawn);
+      b.box(-60, -0.3, 0, 40, 0.4, 50, lawn); b.box(60, -0.3, 0, 40, 0.4, 50, lawn);
+      // the basin: floor, walls, a white lip round the top, a lane line painted on the bottom
+      b.box(0, -D - 0.2, 0, 2 * X, 0.4, 2 * Z, tile);
+      b.box(-X - 0.15, -D / 2, 0, 0.3, D, 2 * Z + 0.6, tile); b.box(X + 0.15, -D / 2, 0, 0.3, D, 2 * Z + 0.6, tile);
+      b.box(0, -D / 2, -Z - 0.15, 2 * X, D, 0.3, tile); b.box(0, -D / 2, Z + 0.15, 2 * X, D, 0.3, tile);
+      for (const z of [-Z - 0.3, Z + 0.3]) b.box(0, 0.03, z, 2 * X + 1.2, 0.06, 0.6, rim);
+      for (const x of [-X - 0.3, X + 0.3]) b.box(x, 0.03, 0, 0.6, 0.06, 2 * Z, rim);
+      for (const z of [-3, 0, 3]) b.box(0, -D + 0.005, z, 2 * X - 3, 0.01, 0.25, blue, { solid: false });
+      b.stairs(X - 8 * 0.35, 0, 1, 0, 2.6, 8, D / 8, 0.35, tile, -D);
+      b.water(-X, X, -Z, Z, W, -D);
+      // a diving board over the deep (west) end
+      b.box(-X - 0.9, 0.35, 0, 0.7, 0.7, 0.7, steel);
+      b.box(-X + 0.6, 0.78, 0, 3.0, 0.08, 0.55, white);
+      // a wall all round, open to the street on the south side
+      b.wall(-30, -26, 30, -26, 2.6, 0.3, brick); b.wall(-30, -26, -30, 26, 2.6, 0.3, brick); b.wall(30, -26, 30, 26, 2.6, 0.3, brick);
+      b.wall(-30, 26, 30, 26, 2.6, 0.3, brick, [[0.5, 6]]);
+      // changing rooms along the north wall: two doors, benches inside, a flat roof
+      b.wall(-12, -18, 12, -18, 3, 0.25, plaster, [[0.25, 1.3], [0.75, 1.3]]);
+      b.wall(-12, -26, -12, -18, 3, 0.25, plaster); b.wall(12, -26, 12, -18, 3, 0.25, plaster);
+      b.wall(0, -26, 0, -18, 3, 0.2, plaster);
+      b.box(0, 3.1, -22, 24.6, 0.2, 8.4, plaster);
+      b.door(-6, -18, 0, { wallH: 3, wallT: 0.25 }); b.door(6, -18, 0, { wallH: 3, wallT: 0.25 });
+      for (const x of [-9, -3, 3, 9]) b.box(x, 0.23, -25, 2.4, 0.45, 0.6, wood);
+      b.light(-6, 2.8, -22, 0xfff2dd, 25, 9); b.light(6, 2.8, -22, 0xfff2dd, 25, 9);
+      // bleachers on the south side
+      for (let i = 0; i < 4; i++) b.box(0, 0.225 + i * 0.45, 17.6 + i * 1.1, 20, 0.45 + i * 0.9, 1.1, i % 2 ? white : blue);
+      // a lifeguard's chair, sun loungers and umbrellas
+      for (const x of [-8.5, -7.5]) for (const z of [7.2, 8.2]) b.box(x, 0.8, z, 0.08, 1.6, 0.08, white);
+      b.box(-8, 1.65, 7.7, 1.1, 0.1, 1.1, white); b.box(-8, 2.1, 8.2, 1.1, 0.8, 0.08, red);
+      for (let i = 0; i < 6; i++) {
+        const x = -15 + i * 6;
+        b.box(x, 0.18, -9.4, 0.65, 0.36, 1.9, i % 2 ? white : blue);
+        b.cyl(x + 2.6, 1.1, -9.4, 0.03, 2.2, steel);
+        b.box(x + 2.6, 2.2, -9.4, 2.2, 0.06, 2.2, i % 2 ? red : white, { solid: false });
+      }
+    },
+
+    populate(ctx) {
+      const { at, npc, stack } = crew(ctx);
+      for (const [x, z] of [[-16, -10], [-8, 9], [5, 9.5], [16, -12], [20, 4], [-20, 3], [9, -11]]) npc(x, z);
+      npc(-22, -12, 'thug'); npc(22, 12, 'thug');
+      for (const [x, z] of [[-5, -2], [2, 3.5], [8, -3]]) ctx.spawnProp('ball', { x, y: 0.3, z });
+      ctx.spawnProp('crate', { x: -9, y: 0.3, z: 1 }, 0.4);
+      stack('crate', 24, -20, 2); at('crate', 25.2, -20, 0.3); at('explosive', 26, -15); at('barrel', 26.6, -16.2);
+      at('table', -20, 10, 0.2); at('chair', -21, 10.4, 1.4); at('chair', -19, 9.6, -1.6);
+      at('cone', -3, 24); at('cone', 3, 24);
+    },
+  },
 };
 
 export const MAP_LIST = Object.values(MAPS);

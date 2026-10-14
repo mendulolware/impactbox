@@ -144,13 +144,22 @@ export class Player {
     const l = Math.hypot(wx, wz);
     this.sprinting = sprint && l > 0;
     if (l > 0) { wx /= l; wz /= l; }
-    const speed = (sprint ? 9 : 5.2) * (1 - 0.45 * ads);
-    const accel = this.grounded ? 14 : 3.5;
+    // in water (water.js): swim. Slower, you float up to the surface, looking down while you swim takes you down,
+    // and Space strokes up (at the surface, hard enough to haul yourself out over the edge)
+    const wd = this.ctx.water?.depth(this.pos.x, this.pos.y - 0.4, this.pos.z);
+    const swim = wd !== null && wd !== undefined && wd > 0;
+    this.swimming = swim;
+    const speed = (sprint ? 9 : 5.2) * (1 - 0.45 * ads) * (swim ? 0.5 : 1);
+    const accel = this.grounded ? 14 : swim ? 4 : 3.5;
     const a = Math.min(1, accel * dt);
     this.vel.x += (wx * speed - this.vel.x) * a;
     this.vel.z += (wz * speed - this.vel.z) * a;
-    this.vel.y -= 24 * dt;
-    if (this.grounded && enabled && k.has('Space')) { this.vel.y = 8.2; this.grounded = false; }
+    if (swim) {
+      this.vel.y += (Math.min(wd, 0.6) * 9 - 3) * dt + Math.sin(this.pitch) * f * 9 * dt;
+      this.vel.y *= Math.max(0, 1 - 2.5 * dt);
+      if (enabled && k.has('Space')) this.vel.y = Math.max(this.vel.y, wd < 0.55 ? 7.5 : 2.5);
+    } else this.vel.y -= 24 * dt;
+    if (this.grounded && !swim && enabled && k.has('Space')) { this.vel.y = 8.2; this.grounded = false; }
 
     const desired = { x: this.vel.x * dt, y: this.vel.y * dt, z: this.vel.z * dt };
     this.cc.computeColliderMovement(this.collider, desired, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS);   // (the other player in co-op is a sensor: walk through, do not stick)

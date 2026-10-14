@@ -17,6 +17,7 @@ import { initTouch, isTouch } from './touch.js';
 import { Tools } from './tools.js';
 import { makeTrap, TRAP_TYPES } from './traps.js';
 import { Coop } from './coop.js';
+import { Water } from './water.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_RAGDOLLS = isTouch ? 18 : 36;          // (phones: half the people)
@@ -84,6 +85,7 @@ const ctx = {
 window.__game = ctx; // handy for debugging in the console
 
 ctx.gore = new Gore(ctx);
+ctx.water = new Water(ctx);
 // which map to start on: ?map=street in the address, else the one played last, else the yard
 let startMap = new URLSearchParams(location.search).get('map');
 try { startMap = startMap || localStorage.getItem('impactbox.map'); } catch (e) { /* no storage */ }
@@ -984,6 +986,7 @@ function tick(now) {
   for (const r of ctx.ragdolls) r.update(sdt);
   for (const p of ctx.props) p.update(sdt);
   for (const t of ctx.traps) if (!t.removed) t.update(sdt);     // (moves their kinematic parts for the step below; a deleted one has no bodies left)
+  ctx.water.update(sdt);                                          // (floats things for the step below)
   ctx.net.pre(sdt);
 
   if (sdt > 0) {

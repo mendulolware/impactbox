@@ -604,6 +604,7 @@ export class Weapons {
         if (!hit) { end = from.clone().addScaledVector(d, w.range || 120); break; }
         end = from.clone().addScaledVector(d, hit.timeOfImpact);
         const glass = ctx.owners.get(hit.collider.handle)?.kind === 'glass';
+        dmg *= ctx.water.through(from, end);           // (a splash where it goes in, and water soaks up a round fast)
         ctx.applyHit(hit, end, d, dmg, w.impulse * dmg / w.dmg, w.bolt ? { hole: w.hole, stab: true } : { hole: w.hole, pen, blunt: w.blunt, daze: w.daze, tase: w.tase });
         if (w.bolt) { this.stickBolt(hit, end, d); break; }
         first ??= end;

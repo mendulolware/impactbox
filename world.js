@@ -401,6 +401,9 @@ export class MapBuilder {
     return p;
   }
 
+  /** Water from x0..x1, z0..z1 with its surface at y (water.js does the floating, the swimming and the rest). */
+  water(x0, x1, z0, z1, y, bottom) { this.ctx.water.add(this.group, x0, x1, z0, z1, y, bottom); }
+
   /** Rain on, rain off: the ground goes dark and shiny, or back to how it was. */
   wet(on) {
     if (!this.groundMat) return;
@@ -424,6 +427,7 @@ export class MapBuilder {
   }
 
   dispose() {
+    this.ctx.water?.clear();
     for (const p of this.panes) p.dispose();
     for (const l of this.lamps) l.dispose();
     this.panes.length = this.lamps.length = 0;
