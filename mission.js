@@ -8,8 +8,9 @@ import { getMaterial } from './models.js';
 // the handcuffs: aimed at someone who has given up (or is down) within reach, it arrests them;
 // otherwise it shouts for compliance. Civilians obey. Suspects might, more so if hurt, shouted at
 // again, or looking down your barrel, and a few of those are only pretending.
-// Rules of engagement are what the grade is made of: shooting someone who is a threat costs a
-// little, shooting someone who has surrendered, or a civilian, costs a lot.
+// Rules of engagement are what the grade is made of: shooting someone who is a threat costs some,
+// shooting someone who has surrendered (or is stunned), or a civilian, costs a lot. The taser, the
+// beanbag gun, pepper spray and flashbangs stun instead of kill: a stunned suspect can be cuffed.
 
 const LINES = ['Police! Hands up!', 'Drop the weapon!', 'Get on the ground!', 'Police! Do not move!'];
 const REACH = 2.4, EARSHOT = 14;
@@ -92,6 +93,7 @@ export class Mission {
     r.arrested = true;
     if (r.gun) r.gun.visible = false;
     this.ctx.sfx.reload();                     // the ratchet of the cuffs
+    if (r.role === 'suspect' && r.lessLethal) this.log.push([0, 'Suspect subdued less-lethally']);
     this.ctx.toast(r.role === 'suspect' ? 'SUSPECT ARRESTED' : 'CIVILIAN SECURED');
     this.refresh();
   }
@@ -99,10 +101,10 @@ export class Mission {
   /** Someone died. Was it within the rules? */
   onKill(r) {
     if (!this.on || !r.role) return;
-    const gaveUp = r.arrested || r.brain.gaveUp || r.brain.comply;
+    const gaveUp = r.arrested || r.brain.gaveUp || r.brain.comply || r.brain.flashed > 0;    // (shooting someone you have already stunned counts too)
     if (r.role === 'civilian') this.log.push([-30, 'Civilian killed']);
     else if (gaveUp || !r.armed) this.log.push([-25, 'Unauthorized use of deadly force']);
-    else this.log.push([-5, 'Suspect neutralised']);
+    else this.log.push([-10, 'Suspect neutralised']);
     this.ctx.toast(this.log[this.log.length - 1][1].toUpperCase());
     this.refresh();
   }

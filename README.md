@@ -107,6 +107,12 @@ and the mission ends when every one of them is in custody or dead.
 - **The grade** starts at 100: a suspect shot while a threat costs 5, a suspect shot after surrendering (or unarmed) costs 25
   as unauthorized use of deadly force, a dead civilian costs 30. S is 95 and up. Getting killed fails the mission. **Enter** restarts.
 
+**Less-lethal.** The taser, the beanbag gun, pepper spray and flashbangs *daze* people instead of killing them (`daze`
+in `WEAPONS`; it sets the same `brain.flashed` timer a flashbang does): a dazed person doubles over, does not fight or
+shoot, gives up far more easily when shouted at, and can be cuffed on the spot. In Ready or Not mode a suspect
+neutralised now costs 10 (it was 5), so the top grade means nobody died; shooting a dazed suspect counts as
+unauthorized force, and arresting one taken down less-lethally is listed in the debrief.
+
 ## How NPCs work
 
 An NPC is in one of three modes (`ragdoll.js`):
@@ -195,14 +201,14 @@ Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of
 
 | Key | Group | Weapons |
 | --- | --- | --- |
-| 1 | Sidearms | Pistol, Revolver |
+| 1 | Sidearms | Pistol, Revolver, Taser (7 m, one cartridge: 5 s on the floor locked up, 6 s dazed after) |
 | 2 | SMGs | SMG, Uzi |
-| 3 | Shotguns | Shotgun, Double Barrel |
+| 3 | Shotguns | Shotgun, Double Barrel, Beanbag (a bag, not a shot: a bruise, knocked flat, 3 s dazed; stops at the first thing it hits) |
 | 4 | Rifles | Rifle, AR-15, Sniper, Crossbow |
 | 5 | Heavy | Rocket, Minigun, Flamethrower |
 | 6 | Blades | Knife, Machete, Katana, Axe, Chainsaw |
 | 7 | Blunt | Bat, Crowbar, Sledgehammer |
-| 8 | Gear | Grenade, Flashbang (1.5 s fuse: whites out your screen if you look at it and rings your ears; anyone within 13 m who can see it doubles over for 2 to 6 s, stops fighting, gives up far more easily when shouted at, and can be cuffed), Grab Gun, Drone (flies where you look from its own camera, Shift = fast, click or a crash sets it off; it is a slow steered rocket, `flyDrone()` in `main.js`) |
+| 8 | Gear | Pepper Spray (a 3 m cone: anyone in it is 3.5 s dazed, a can lasts 8 s), Grenade, Flashbang (1.5 s fuse: whites out your screen if you look at it and rings your ears; anyone within 13 m who can see it doubles over for 2 to 6 s, stops fighting, gives up far more easily when shouted at, and can be cuffed), Grab Gun, Drone (flies where you look from its own camera, Shift = fast, click or a crash sets it off; it is a slow steered rocket, `flyDrone()` in `main.js`) |
 
 - **Recoil.** Every gun has `rec: [up, sideways]` in radians per shot. `Player.recoil()` turns most of that into a kick the
   view springs back from, and leaves the rest where it landed, so a burst climbs and has to be pulled back down. Sustained

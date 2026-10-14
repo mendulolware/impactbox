@@ -499,6 +499,16 @@ export class Ragdoll {
     const { gore, sfx } = this.ctx;
     this.impactMute = Math.max(this.impactMute, 0.35);   // being shot is not a fall
     if (this.collapseT > 0) this.goLimp(2);
+    if (opts.daze && !this.dead) {               // a bag, a taser, the spray: no use to anyone for a while, and cuffable
+      this.brain.flashed = Math.max(this.brain.flashed || 0, opts.daze);
+      this.lessLethal = true;
+      if (opts.tase) {                           // every muscle locked, then on the floor
+        this.goLimp(opts.tase);
+        this.twitch = Math.max(this.twitch, opts.tase);
+        this.tone = 0.9;
+        this.ctx.sfx.crack();
+      }
+    }
     if (dmg > 0 && this.armour > 0 && (name === 'torso' || name === 'head') && opts.pen !== undefined && opts.pen < 0.25) {
       // pistol-weight rounds stop in the vest or the helmet: a thump and a bruise, no hole. Plates only take so much
       this.armour -= dmg;
@@ -519,7 +529,7 @@ export class Ragdoll {
     const heavy = (opts.blade && !opts.light) || opts.explosion || (!melee && (name === 'head' || LEGS.has(name)))
       || this.hitAccum > (zombie ? 480 : 250) || (!zombie && this.health - dmg < 40);
     // not every hard hit is a fall: some reel backward with the legs going, and then either catch it or do not
-    const reel = standing && !this.dead && !zombie && !opts.explosion && !opts.blade && name !== 'head' && this.stumbleT <= 0
+    const reel = standing && !this.dead && !zombie && !opts.explosion && !opts.blade && !opts.daze && name !== 'head' && this.stumbleT <= 0
       && this.health - dmg > 0 && Math.random() < (heavy ? 0.65 : !melee && dmg >= 15 ? 0.4 : 0);
     if (reel) {
       this.stumbleT = STUMBLE;
@@ -1594,9 +1604,10 @@ export class Ragdoll {
       }
       // blood slowly pools under a body once it has come to rest
       if (!this.pooled && this.bled && this.deadT > 1.2) {
-        const tor = this.parts.torso.gone ? this.parts.pelvis : this.parts.torso;
-        const v = tor.body.linvel();
-        if (Math.hypot(v.x, v.y, v.z) < 0.25) {
+        const tor = [this.parts.torso, this.parts.pelvis].find((p) => !p.gone);
+        if (!tor) this.pooled = true;                  // blown to bits: nothing left to pool under
+        const v = tor ? tor.body.linvel() : null;
+        if (v && Math.hypot(v.x, v.y, v.z) < 0.25) {
           this.pooled = true;
           const t = tor.body.translation();
           const hit = gore.castFixed(t.x, t.y + 0.1, t.z, 0, -1, 0, 0.8);

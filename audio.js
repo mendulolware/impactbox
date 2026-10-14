@@ -295,6 +295,10 @@ export const sfx = {
   // ---- what hits do
   crack()     { noise({ dur: 0.07, f0: 3200, f1: 900, q: 2.5, gain: 0.6, type: 'bandpass' }); tone({ f0: 260, f1: 80, dur: 0.05, gain: 0.3, type: 'square' }); },
   thud(v = 1) { play('step', { gain: 0.6 * v, rate: 0.55 }); tone({ f0: 100, f1: 40, dur: 0.1, gain: 0.3 * v }); },
+  /** The taser's crackle, and a beanbag's dull thump out of the barrel, and the spray's hiss. */
+  taser()     { for (let i = 0; i < 6; i++) tone({ f0: 60, f1: 50, dur: 0.05, gain: 0.3, type: 'square', delay: i * 0.08 }); noise({ dur: 0.5, f0: 6000, f1: 4000, type: 'highpass', gain: 0.18 }); },
+  beanbag()   { play('shotgun', { gain: 0.45, rate: 0.7 }) || shot({ crack: 0.3, crackHz: 2500, body: 0.6, bodyHz: [1400, 200], bodyDur: 0.12, thump: 0.6, thumpHz: [150, 50], thumpDur: 0.1, tail: 0.2 }); },
+  spray()     { noise({ dur: 0.1, f0: 7000, f1: 6000, type: 'highpass', gain: 0.16 }); },
   /** A door on its hinges. */
   door()      { play('latch', { gain: 0.5, rate: 0.8 }); tone({ f0: 160, f1: 95, dur: 0.5, gain: 0.08, type: 'sawtooth' }); },
   /** A round into concrete or steel. */

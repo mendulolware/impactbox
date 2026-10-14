@@ -5,7 +5,9 @@ import { getModel } from './models.js';
 // Number keys pick a group; pressing the same key again steps through the group.
 export const SLOTS = ['Sidearms', 'SMGs', 'Shotguns', 'Rifles', 'Heavy', 'Blades', 'Blunt', 'Gear'];
 
-// type: gun (hitscan) | rocket | drone (a flying bomb you steer from its own camera) | flame | melee (a swing) | saw | knife (slice and stab) | grenade | grab
+// Less-lethal: tase = seconds a hit keeps someone on the floor, daze = seconds they are no use after (no fighting,
+// cuffable), blunt = a bag, not a bullet. range = metres a round carries at all.
+// type: gun (hitscan) | rocket | drone (a flying bomb you steer from its own camera) | spray (a cone of pepper) | flame | melee (a swing) | saw | knife (slice and stab) | grenade | grab
 // Guns: pierce = how many bodies one round passes through, zoom = how far the view narrows when aimed,
 //   rec = [up, sideways] recoil per shot in radians (the view kicks, and part of it stays: bursts climb),
 //   drift = how much the sideways part leans one way, shell = spent cases hit the ground,
@@ -20,10 +22,12 @@ export const SLOTS = ['Sidearms', 'SMGs', 'Shotguns', 'Rifles', 'Heavy', 'Blades
 export const WEAPONS = [
   { name: 'Pistol',   slot: 0, type: 'gun', auto: false, rate: 0.20,  dmg: 34,  impulse: 140, pellets: 1,  spread: 0.003, sound: 'pistol',   kick: 0.07,  hole: 0.034, rec: [0.020, 0.006], shell: true, mag: 17, reload: 1.5, jam: 0.004 },
   { name: 'Revolver', slot: 0, type: 'gun', auto: false, rate: 0.50,  dmg: 70,  impulse: 260, pellets: 1,  spread: 0.002, sound: 'revolver', kick: 0.17,  hole: 0.046, rec: [0.055, 0.012], mag: 6, reload: 2.6, pen: 0.2 },
+  { name: 'Taser',    slot: 0, type: 'gun', auto: false, rate: 0.6,   dmg: 2,   impulse: 0,   pellets: 1,  spread: 0.004, sound: 'taser',    kick: 0.03,  rec: [0.012, 0.003], mag: 1, reload: 3.2, pen: 0, range: 7, daze: 6, tase: 5 },
   { name: 'SMG',      slot: 1, type: 'gun', auto: true,  rate: 0.055, dmg: 11,  impulse: 60,  pellets: 1,  spread: 0.020, sound: 'smg',      kick: 0.022, hole: 0.022, rec: [0.0075, 0.004], shell: true, mag: 30, reload: 1.9, jam: 0.007 },
   { name: 'Uzi',      slot: 1, type: 'gun', auto: true,  rate: 0.048, dmg: 9,   impulse: 50,  pellets: 1,  spread: 0.034, sound: 'uzi',      kick: 0.026, hole: 0.022, rec: [0.0095, 0.0065], shell: true, mag: 32, reload: 1.8, jam: 0.011 },
   { name: 'Shotgun',  slot: 2, type: 'gun', auto: false, rate: 0.85,  dmg: 15,  impulse: 110, pellets: 10, spread: 0.055, sound: 'shotgun',  kick: 0.16,  hole: 0.027, rec: [0.065, 0.015], shell: true, mag: 6, reload: 0.5, shells: true, jam: 0.006 },
   { name: 'Double Barrel', slot: 2, type: 'gun', auto: false, rate: 0.22, dmg: 16, impulse: 120, pellets: 12, spread: 0.075, sound: 'dbarrel', kick: 0.2, hole: 0.028, mag: 2, reload: 1.5, selfLoad: true, rec: [0.085, 0.02] },
+  { name: 'Beanbag',  slot: 2, type: 'gun', auto: false, rate: 0.9,   dmg: 6,   impulse: 280, pellets: 1,  spread: 0.012, sound: 'beanbag',  kick: 0.14,  rec: [0.055, 0.012], shell: true, mag: 5, reload: 0.6, shells: true, pen: 0, range: 18, blunt: true, daze: 3 },
   { name: 'Rifle',    slot: 3, type: 'gun', auto: true,  rate: 0.075, dmg: 17,  impulse: 95,  pellets: 1,  spread: 0.010, sound: 'rifle',    kick: 0.035, hole: 0.03, rec: [0.015, 0.007], drift: 0.25, shell: true, mag: 30, reload: 2.2, jam: 0.004, pen: 0.35 },
   { name: 'AR-15',    slot: 3, type: 'gun', auto: true,  rate: 0.072, dmg: 15,  impulse: 80,  pellets: 1,  spread: 0.006, sound: 'ar15',     kick: 0.03,  hole: 0.027, rec: [0.011, 0.0045], shell: true, mag: 30, reload: 2.0, jam: 0.008, pen: 0.3 },
   { name: 'Sniper',   slot: 3, type: 'gun', auto: false, rate: 1.30,  dmg: 150, impulse: 420, pellets: 1,  spread: 0,     sound: 'sniper',   kick: 0.22,  hole: 0.05, pierce: 3, zoom: 0.82, rec: [0.085, 0.01], shell: true, mag: 5, reload: 2.8, pen: 0.7 },
@@ -43,6 +47,7 @@ export const WEAPONS = [
   { name: 'Flashbang', slot: 7, type: 'grenade', prop: 'flashbang', auto: false, rate: 0.9 },
   { name: 'Grab Gun', slot: 7, type: 'grab' },
   { name: 'Drone',    slot: 7, type: 'drone', auto: false, rate: 1.0 },
+  { name: 'Pepper Spray', slot: 7, type: 'spray', range: 3.2, mag: 100, reload: 2.0 },
 ];
 
 // How each weapon sits in first person, in the same order as WEAPONS. All positions are in the
@@ -67,6 +72,8 @@ const VIEW = [
     handR: [0, -0.046, 0.0625, -0.226], handS: [0, -0.046, 0.0625, -0.226] },
   { model: 'Revolver', hip: [0.19, -0.19, -0.50], sight: 0.058, adsZ: -0.42, muzzle: [0, 0.038, -0.181],
     handR: [0, -0.048, 0.062, -0.35], handS: [0, -0.048, 0.062, -0.35] },
+  { model: 'Pistol',  hip: [0.19, -0.19, -0.50], sight: 0.0319, adsZ: -0.42, muzzle: [0, 0.0201, -0.081], tint: 0xe0c020,   // the taser: a pistol in police yellow
+    handR: [0, -0.046, 0.0625, -0.226], handS: [0, -0.046, 0.0625, -0.226] },
   { model: 'SMG',     hip: [0.19, -0.2, -0.42], sight: 0.0594, adsZ: -0.40, muzzle: [0, 0.0301, -0.438],
     handR: [0, -0.072, 0.068, -0.25], handL: [0, -0.0213, -0.125, 0] },
   { model: 'Uzi',     hip: [0.19, -0.2, -0.46], sight: 0.059, adsZ: -0.40, muzzle: [0, 0.012, -0.23],
@@ -75,6 +82,8 @@ const VIEW = [
     handR: [0, -0.038, 0.135, -0.3], handL: [0, -0.0369, -0.27, 0] },
   { model: 'DoubleBarrel', hip: [0.19, -0.2, -0.42], sight: 0.0378, adsZ: -0.44, muzzle: [0, 0.018, -0.58],
     handR: [0, -0.045, 0.115, -0.7], handL: [0, -0.036, -0.18, 0] },
+  { model: 'Shotgun', hip: [0.19, -0.2, -0.42], sight: 0.0521, adsZ: -0.44, muzzle: [0, 0.03, -0.759], tint: 0xe06a10,   // the beanbag gun: the pump gun in orange
+    handR: [0, -0.038, 0.135, -0.3], handL: [0, -0.0369, -0.27, 0] },
   { model: 'Rifle',   hip: [0.19, -0.2, -0.42], sight: 0.0562, adsZ: -0.44, muzzle: [0, 0.0011, -0.526],
     handR: [0, -0.072, 0.095, -0.3], handL: [0, -0.034, -0.235, 0] },
   { model: 'AR15',    hip: [0.19, -0.21, -0.40], sight: 0.1002, adsZ: -0.40, muzzle: [0, 0.0331, -0.569],
@@ -103,6 +112,7 @@ const VIEW = [
   { model: 'GrabGun', hip: [0.21, -0.22, -0.45], muzzle: [0, 0.005, -0.37],
     handR: [0, -0.088, 0.1, -0.25], handL: [0, -0.045, -0.075, 0] },
   { model: 'Grenade', hip: [0.28, -0.3, -0.5], held: true },      // shortcut: the drone is a grenade in the hand, give it its own model when someone builds one
+  { model: 'PepperSpray', hip: [0.26, -0.26, -0.46], can: true, muzzle: [0, 0.07, -0.03] },
 ];
 
 const SLEEVE_LEN = 0.3;                                    // length of the SleeveArm model
@@ -128,8 +138,16 @@ function hand(name, [x, y, z, pitch]) {
 /** One group per weapon: the weapon model plus the hands holding it. */
 function buildViewmodel(v) {
   const g = new THREE.Group();
-  const model = getModel(v.model, null, false)
-    || new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.3), new THREE.MeshStandardMaterial({ color: 0x4a4a52 }));
+  let model = getModel(v.model, null, false);
+  if (!model && v.can) {                       // a spray can: a red tin with a black cap
+    model = new THREE.Group();
+    const tin = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.13, 16), new THREE.MeshStandardMaterial({ color: 0xb01818, roughness: 0.4, metalness: 0.3 }));
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.03, 16), new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.5 }));
+    cap.position.y = 0.08;
+    model.add(tin, cap);
+  }
+  model ||= new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.3), new THREE.MeshStandardMaterial({ color: 0x4a4a52 }));
+  if (v.tint) model.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.set(v.tint); } });
   if (v.knife) {
     // blade forward, tipped up and in a little; the arm runs back and down out of the picture
     g.add(model);
@@ -152,6 +170,10 @@ function buildViewmodel(v) {
     const h = hand('HandR', [0, 0, 0, 0]);
     if (h) g.add(h);
     g.rotation.x = -(v.tilt ?? 0.9);
+  } else if (v.can) {
+    g.add(model);
+    const h = hand('HandR', [0, -0.07, 0.03, 0]);
+    if (h) g.add(h);
   } else if (v.held) {
     model.position.set(-0.004, 0.03, 0);
     g.add(model);
@@ -554,10 +576,10 @@ export class Weapons {
       const pen = w.pen ?? (w.pellets > 1 ? 0.03 : 0.1);
       let from = origin, end = null, first = null, dmg = w.dmg, bodies = w.pierce || 1;
       for (let leg = 0; leg < 5; leg++) {
-        const hit = ctx.raycast(from, d, 300);
-        if (!hit) { end = from.clone().addScaledVector(d, 120); break; }
+        const hit = ctx.raycast(from, d, w.range || 300);
+        if (!hit) { end = from.clone().addScaledVector(d, w.range || 120); break; }
         end = from.clone().addScaledVector(d, hit.timeOfImpact);
-        ctx.applyHit(hit, end, d, dmg, w.impulse * dmg / w.dmg, w.bolt ? { hole: w.hole, stab: true } : { hole: w.hole, pen });
+        ctx.applyHit(hit, end, d, dmg, w.impulse * dmg / w.dmg, w.bolt ? { hole: w.hole, stab: true } : { hole: w.hole, pen, blunt: w.blunt, daze: w.daze, tase: w.tase });
         if (w.bolt) { this.stickBolt(hit, end, d); break; }
         first ??= end;
         if (ctx.owners.get(hit.collider.handle)?.kind === 'part') {
@@ -714,6 +736,35 @@ export class Weapons {
   }
 
   /** Flamethrower: a jet of fire. What it washes over chars, and people it stays on catch light. */
+  /** Pepper spray: a short cone of it, and anyone in it is no use for a few seconds. */
+  updateSpray(dt, input, w) {
+    if (!input.left || !this.ready(w, input.leftDown)) return;
+    const ctx = this.ctx, smoke = ctx.gore.smoke;
+    this.aim();
+    const origin = _o.clone(), fwd = _d.clone(), right = _r.clone(), up = _u.clone();
+    const m = this.muzzlePoint(new THREE.Vector3());
+    for (let i = 0; i < 2; i++) {
+      const s = rnd(5, 8);
+      smoke.emit(m.x, m.y, m.z, fwd.x * s + right.x * rnd(-0.6, 0.6) + up.x * rnd(-0.4, 0.4), fwd.y * s + rnd(-0.4, 0.4), fwd.z * s + right.z * rnd(-0.6, 0.6) + up.z * rnd(-0.4, 0.4),
+        rnd(0.04, 0.09), rnd(0.5, 0.9), -0.3, 0.95, 0.7, 0.35, 0, 2.5);
+    }
+    this.tickT -= dt;
+    if (this.tickT > 0) return;
+    this.tickT = 0.08;
+    this.ammo[this.index]--;
+    sfx.spray();
+    for (const r of ctx.ragdolls) {
+      if (r.removed || r.dead) continue;
+      const c = r.center(_m).sub(origin);
+      const dist = c.length();
+      if (dist > w.range || c.dot(fwd) / dist < 0.9 || !r.brain.los(origin)) continue;   // in the cone, and nothing between
+      r.brain.flashed = Math.max(r.brain.flashed || 0, 3.5);
+      r.lessLethal = true;
+      r.flinchT = r.flinchT || 0.2;
+    }
+    ctx.alert('violence', ctx.player.pos, 6);
+  }
+
   updateFlame(dt, input, w) {
     if (!input.left || !this.ready(w, input.leftDown)) return;
     const ctx = this.ctx, fire = ctx.gore.fire;
@@ -901,6 +952,8 @@ export class Weapons {
       this.updateSaw(dt, input, w);
     } else if (w.type === 'flame') {
       this.updateFlame(dt, input, w);
+    } else if (w.type === 'spray') {
+      this.updateSpray(dt, input, w);
     } else if (w.spin && this.spin < 1) {
       // the barrels have to come up to speed before anything leaves them
       const was = this.spin;
