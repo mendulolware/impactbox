@@ -226,7 +226,7 @@ export class Ragdoll {
     this.wantSpeed = 0;
     this.phase = Math.random() * 6;
     this.gesture = 'none';      // 'handsUp' | 'cower' | 'fight'
-    this.gw = { handsUp: 0, cower: 0, fight: 0, aim: 0, kneel: 0 };   // eased gesture weights
+    this.gw = { handsUp: 0, cower: 0, fight: 0, aim: 0, kneel: 0, hold: 0 };   // eased gesture weights
     this.look = null;           // world point the head turns toward
     this.lookYaw = 0;
     this.lookPitch = 0;
@@ -683,6 +683,16 @@ export class Ragdoll {
       }
     }
     this.damage(dmg * mult);
+    // a hostage-taker hurt but still on his feet has a gun at someone's head
+    const h = this.hostage;
+    if (h && dmg > 0 && !this.dead && this.mode === 'anim' && !opts.daze && !h.dead && h.mode === 'anim' && Math.random() < 0.5) {
+      this.ctx.later(0.25, () => {
+        if (this.dead || this.removed || this.mode !== 'anim' || h.dead || h.removed || h.heldBy !== this) return;
+        const hp = h.parts.head.body.translation();
+        h.hit('head', 200, new THREE.Vector3(hp.x, hp.y, hp.z - 0.1), new THREE.Vector3(0, -0.2, 1).normalize(), 90, { hole: 0.03, from: this.root });
+        this.ctx.sfx.pistol();
+      });
+    }
   }
 
   /** Fire on a body part: it chars and hurts, and enough of it sets the whole NPC alight. */
@@ -1019,6 +1029,10 @@ export class Ragdoll {
       spX -= 0.18 * cl;
       nkX -= 0.1 * cl;
     }
+    // holding a hostage: the gun arm out as when aiming, the other arm wrapped round in front of them
+    const hd = G.hold;
+    shRx = mix(shRx, 1.5, hd); elR = mix(elR, 0.08, hd); shRz = mix(shRz, 0.12, hd);
+    shLx = mix(shLx, 1.45, hd); elL = mix(elL, 1.35, hd); shLz = mix(shLz, -0.5, hd); shLy = mix(shLy, 0.6, hd);
     // getting up: folded forward, hands leaving the ground
     spX = mix(spX, -0.6, sq);
     shLx = mix(shLx, 0.7, sq); shRx = mix(shRx, 0.7, sq);
@@ -1058,7 +1072,7 @@ export class Ragdoll {
       if (!clip || k < 0.01) continue;
       for (const name in this.joints) {
         if (name === 'neck' && this.look) continue;                         // the head is busy looking at something
-        if (am > 0.01 && (name.startsWith('shoulder') || name.startsWith('elbow'))) continue;   // the arms are busy with a gun
+        if ((am > 0.01 || hd > 0.01) && (name.startsWith('shoulder') || name.startsWith('elbow'))) continue;   // the arms are busy with a gun
         this.joints[name].local.slerp(clipAt(clip, name, u, _c0), k);
       }
     }
@@ -1504,7 +1518,7 @@ export class Ragdoll {
     this.targetHeading = this.heading;
     this.speed = 0;
     this.wantSpeed = 0;
-    this.gw.handsUp = this.gw.cower = this.gw.fight = this.gw.aim = 0;
+    this.gw.handsUp = this.gw.cower = this.gw.fight = this.gw.aim = this.gw.hold = 0;
     for (const n in this.parts) {
       const p = this.parts[n];
       if (p.gone) continue;

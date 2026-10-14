@@ -202,7 +202,7 @@ export class Brain {
     if (this.kind === 'zombie' || n.arrested || this.gaveUp) return;
     if (!n.armed) { this.comply = true; return; }
     this.pleas = (this.pleas || 0) + 1;      // every shout wears them down a little
-    const chance = 0.25 + 0.12 * this.pleas + (n.health < 60 ? 0.3 : 0) + (this.playerAimingAtMe() ? 0.15 : 0) + (this.flashed > 0 ? 0.5 : 0);
+    const chance = (0.25 + 0.12 * this.pleas + (n.health < 60 ? 0.3 : 0) + (this.playerAimingAtMe() ? 0.15 : 0) + (this.flashed > 0 ? 0.5 : 0)) * (n.hostage ? 0.5 : 1);   // (a hostage-taker holds out longer)
     if (Math.random() < chance) {
       this.gaveUp = true;
       this.fake = Math.random() < 0.15;      // some only pretend, and go for the gun when you look away
@@ -214,6 +214,11 @@ export class Brain {
   suspect(dt, scan) {
     const n = this.npc, g = this.goal, pl = this.ctx.player;
     g.mode = 'stop';
+    if (n.hostage) {
+      const h = n.hostage;
+      if (h.dead || h.removed || h.mode !== 'anim' || this.gaveUp) { n.hostage = null; if (h.heldBy === n) h.heldBy = null; }
+      else return this.holdHostage(dt, scan, h);
+    }
     if (this.gaveUp) {
       n.gesture = 'handsUp'; g.face = true; g.pos.copy(pl.pos); n.look = pl.eye;
       if (this.fake && (this.fakeT -= dt) <= 0 && !this.playerAimingAtMe()) { this.gaveUp = this.fake = false; this.attackT = 0.4; }
@@ -250,8 +255,34 @@ export class Brain {
     if ((this.attackT -= dt) <= 0) { this.attackT = rnd(0.45, 0.95); n.shoot(pl); }
   }
 
+  /** Holding someone in front of you: they go where you go, and the pistol rests over their shoulder. */
+  holdHostage(dt, scan, h) {
+    const n = this.npc, g = this.goal, pl = this.ctx.player;
+    if (scan) this.sees = !pl.dead && this.canSee(pl.pos, 30);
+    if (this.sees) { g.face = true; g.pos.copy(pl.pos); n.look = pl.eye; }
+    n.gesture = 'hold';
+    // on the left arm, so the gun hand is free and the head shows over their right shoulder
+    const fx = -Math.sin(n.heading), fz = -Math.cos(n.heading);
+    h.root.set(n.root.x + fx * 0.5 + fz * 0.22, n.root.y, n.root.z + fz * 0.5 - fx * 0.22);
+    h.heading = h.targetHeading = n.heading;
+    if (!this.sees) return;
+    const d = this.distTo(pl.pos);
+    if ((this.warnT = (this.warnT ?? 0) - dt) <= 0 && d < 14) { this.warnT = 7; this.ctx.toast('BACK OFF OR I SHOOT!'); }
+    if (d < 9 && (this.attackT -= dt) <= 0) { this.attackT = rnd(1.4, 2.4); n.shoot(pl); }    // the odd shot to keep you back
+  }
+
   civilian(dt, scan) {
     const n = this.npc, g = this.goal, pl = this.ctx.player;
+    if (n.heldBy) {
+      // in someone's arm with a gun at their head: they stand there until the taker is down, cuffed, stunned or gives up
+      const t = n.heldBy;
+      if (t.dead || t.removed || t.mode !== 'anim' || t.arrested || t.brain.gaveUp || t.brain.flashed > 0 || t.hostage !== n) {
+        n.heldBy = null;
+        if (t.hostage === n) t.hostage = null;
+        this.comply = true;
+        this.ctx.mission.freed(n, t);
+      } else { g.mode = 'stop'; n.gesture = 'handsUp'; n.look = pl.eye; return; }
+    }
     if (this.comply) {                       // told to stay put with their hands up, and doing it
       g.mode = 'stop'; g.face = true; g.pos.copy(pl.pos);
       n.gesture = 'handsUp'; n.look = pl.eye;

@@ -114,6 +114,14 @@ shoot, gives up far more easily when shouted at, and can be cuffed on the spot. 
 neutralised now costs 10 (it was 5), so the top grade means nobody died; shooting a dazed suspect counts as
 unauthorized force, and arresting one taken down less-lethally is listed in the debrief.
 
+**Hostage-takers.** When a mission starts, one armed suspect with a civilian within 5 m grabs them as a shield
+(`hostage` / `heldBy`): the civilian is held in front on his left arm with their hands up, the pistol rests over their
+right shoulder, he warns you off and fires the odd shot if you come within 9 m. He gives up when shouted at only half as
+readily as the others. Anything that stops him frees the hostage: a kill, a taser, a bag, the spray, a flashbang, or
+cuffs after he surrenders (`freed()` in `mission.js` logs a rescue or a release). Wounding him without stopping him is a
+coin toss on the hostage's life: half the time he fires into them (-40, "Hostage killed"). The head showing over the
+hostage's shoulder is the shot to make.
+
 ## How NPCs work
 
 An NPC is in one of three modes (`ragdoll.js`):

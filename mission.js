@@ -1,5 +1,6 @@
 import { WEAPONS } from './weapons.js';
 import { getMaterial } from './models.js';
+import * as THREE from 'three';
 
 // "Ready or Not" mode: you are a SWAT officer sent in to bring order to chaos.
 //
@@ -15,6 +16,7 @@ import { getMaterial } from './models.js';
 const LINES = ['Police! Hands up!', 'Drop the weapon!', 'Get on the ground!', 'Police! Do not move!'];
 const REACH = 2.4, EARSHOT = 14;
 const SWAT_SLEEVE = 0x10141c;
+const _v = new THREE.Vector3(), _c = new THREE.Vector3();
 
 export class Mission {
   constructor(ctx) {
@@ -38,6 +40,13 @@ export class Mission {
     while (suspects.length < Math.max(3, Math.floor(people.length * 0.45)) && rest.length > 2) suspects.push(rest.pop());
     for (const r of suspects) { r.role = 'suspect'; r.arm(); }
     for (const r of rest) r.role = 'civilian';
+    // one of them grabs the nearest civilian as a shield, if there is one close enough
+    for (const t of suspects.slice().sort(() => Math.random() - 0.5)) {
+      const c = rest.find((r) => r.center(_v).distanceTo(t.center(_c)) < 5 && t.brain.los(r.center(_v)));
+      if (!c) continue;
+      t.hostage = c; c.heldBy = t;
+      break;
+    }
     this.people = people;
     this.log = [];
     this.over = false;
@@ -98,11 +107,20 @@ export class Mission {
     this.refresh();
   }
 
+  /** A hostage is out of the taker's arm: because the taker went down, was stunned or cuffed, or gave up. */
+  freed(h, t) {
+    this.ctx.toast('HOSTAGE FREED');
+    if (!this.on || this.over) return;
+    this.log.push([0, t.dead ? 'Hostage rescued' : 'Hostage released']);
+    this.refresh();
+  }
+
   /** Someone died. Was it within the rules? */
   onKill(r) {
     if (!this.on || !r.role) return;
     const gaveUp = r.arrested || r.brain.gaveUp || r.brain.comply || r.brain.flashed > 0;    // (shooting someone you have already stunned counts too)
-    if (r.role === 'civilian') this.log.push([-30, 'Civilian killed']);
+    if (r.heldBy) this.log.push([-40, 'Hostage killed']);
+    else if (r.role === 'civilian') this.log.push([-30, 'Civilian killed']);
     else if (gaveUp || !r.armed) this.log.push([-25, 'Unauthorized use of deadly force']);
     else this.log.push([-10, 'Suspect neutralised']);
     this.ctx.toast(this.log[this.log.length - 1][1].toUpperCase());
@@ -122,7 +140,8 @@ export class Mission {
     const done = (r) => r.dead || r.removed || r.arrested;
     const S = this.people.filter((r) => r.role === 'suspect'), C = this.people.filter((r) => r.role === 'civilian');
     const count = (list) => `${list.filter((r) => r.arrested && !r.dead).length} in custody, ${list.filter((r) => r.dead || r.removed).length} dead, ${list.filter((r) => !done(r)).length} left`;
-    this.el.textContent = `READY OR NOT\nSuspects   ${count(S)}\nCivilians  ${count(C)}\n[F] shout / arrest`;
+    const held = this.people.some((r) => r.heldBy && !r.dead);
+    this.el.textContent = `READY OR NOT\nSuspects   ${count(S)}\nCivilians  ${count(C)}${held ? '\nHOSTAGE TAKEN - talk him down, or make the shot' : ''}\n[F] shout / arrest`;
     if (this.people.every(done)) this.finish('MISSION COMPLETE');
   }
 
