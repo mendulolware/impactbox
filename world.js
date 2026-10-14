@@ -3,6 +3,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { mergeGeometries } from './vendor/utils/BufferGeometryUtils.js';
 import { makeSurfaces, boxWithWorldUVs } from './textures.js';
 import { MAPS } from './maps.js';
+import { Door } from './doors.js';
 
 // The world is two things:
 //   the air   - sky dome, sun, fog and the environment map. Made once; each map picks a time of day.
@@ -155,6 +156,8 @@ export class MapBuilder {
     this.batches = new Map();     // material -> geometries waiting to be joined
     this.mats = new Map();
     this.trash = [];              // what to dispose of when the map goes
+    this.doors = [];
+    ctx.doors = this.doors;
     let s = 12345;
     /** The same "random" numbers every time, so a map is the same map on every visit. */
     this.rnd = (a = 0, b = 1) => { s = (s * 16807) % 2147483647; return a + (s / 2147483647) * (b - a); };
@@ -282,6 +285,22 @@ export class MapBuilder {
     seg(from, len);
   }
 
+  /**
+   * A door in a doorway centred on (x, z) in a wall running along yaw (0 = along x), with its frame.
+   * o: locked, wallH and wallT (the wall it sits in, for the frame), gap (the doorway's width).
+   */
+  door(x, z, yaw, o = {}) {
+    const wood = this.mat('planks', 0xc9a066);
+    const frame = this.mat('planks', 0x6b4a2a);
+    const gap = o.gap || 1.3, wallT = o.wallT || 0.12, wallH = o.wallH || 2.6;
+    const d = new Door(this.ctx, x, z, yaw, { w: gap - 0.1, locked: !!o.locked, material: wood, handleMat: this.mat('plain', 0x8a8f94, { metalness: 0.8, roughness: 0.35 }) });
+    this.doors.push(d);
+    const ax = Math.cos(yaw), az = -Math.sin(yaw);                       // along the wall
+    this.box(x, (wallH + d.h) / 2, z, gap, wallH - d.h, wallT, frame, { ry: yaw });        // lintel
+    for (const s of [-1, 1]) this.box(x + ax * s * (gap / 2 - 0.025), d.h / 2, z + az * s * (gap / 2 - 0.025), 0.05, d.h, wallT + 0.02, frame, { ry: yaw });   // jambs
+    return d;
+  }
+
   /** A lamp: light that reaches `reach` metres. (No shadows: they are dear, and the sun has the only one.) */
   light(x, y, z, color = 0xffd9a0, power = 40, reach = 20) {
     const l = new THREE.PointLight(color, power, reach, 2);
@@ -304,6 +323,8 @@ export class MapBuilder {
   }
 
   dispose() {
+    for (const d of this.doors) d.dispose();
+    this.doors.length = 0;
     this.ctx.scene.remove(this.group);
     for (const t of this.trash) t.dispose();
     this.ctx.world.removeRigidBody(this.body);

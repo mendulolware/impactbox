@@ -493,9 +493,22 @@ export class Brain {
       if (this.probeT <= 0) {
         this.probeT = 0.1;
         const reach = 0.9 + speed * 0.4;
-        const c = this.feel(heading, reach);
-        const l = this.feel(heading + 0.65, reach * 0.9);
-        const rt = this.feel(heading - 0.65, reach * 0.9);
+        let c = this.feel(heading, reach);
+        let l = this.feel(heading + 0.65, reach * 0.9);
+        let rt = this.feel(heading - 0.65, reach * 0.9);
+        if (c && c.kind === 'door') {
+          // a door in the way opens as they reach it; a locked one is kicked by anyone who would, and a wall to the rest
+          const d = c.door;
+          if (d.passable() || d.open(r)) c = l = rt = false;
+          else if (this.kind !== 'civilian' || n.armed) {
+            // a kicker: straight up to it, then stand and boot it until it gives
+            c = l = rt = false;
+            if (Math.abs((r.x - d.hinge.x) * d.n.x + (r.z - d.hinge.z) * d.n.z) < 0.8) {
+              this.wait = 0.3;
+              if (n.t >= (this.kickAt ?? 0)) { this.kickAt = n.t + (this.kind === 'zombie' ? 2.2 : 1.2); d.kick(r); }
+            }
+          }
+        }
         if (!c && !l && !rt) {
           this.avoid *= 0.6;
           this.blockedT = Math.max(0, this.blockedT - 0.05);
@@ -512,6 +525,7 @@ export class Brain {
       this.avoid = 0;
     }
 
+    if ((this.wait = Math.max(0, (this.wait || 0) - dt)) > 0) speed = 0;     // standing at a door
     n.targetHeading = heading + (speed > 0.05 ? this.avoid : 0);
     n.wantSpeed = speed;
   }
@@ -525,7 +539,7 @@ export class Brain {
     const tg = this.kind === 'zombie' ? this.target : null;
     const playerCol = this.ctx.player.collider.handle;
     const ray = new RAPIER.Ray({ x: r.x, y: r.y + 0.8, z: r.z }, { x: -Math.sin(heading), y: 0, z: -Math.cos(heading) });
-    return !!this.ctx.world.castRay(ray, len, true, undefined, undefined, undefined, undefined, (col) => {
+    const hit = this.ctx.world.castRay(ray, len, true, undefined, undefined, undefined, undefined, (col) => {
       const h = col.handle;
       if (own.has(h)) return false;
       if (chasing) { // whatever I am running at is not an obstacle
@@ -535,6 +549,7 @@ export class Brain {
       }
       return owners.get(h)?.kind !== 'chunk';
     });
+    return hit ? owners.get(hit.collider.handle) || true : false;      // (so a door can be told from a wall)
   }
 
   update(dt) {

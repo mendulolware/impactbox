@@ -119,6 +119,9 @@ ctx.applyHit = (hit, point, dir, dmg, impulse, opts = {}) => {
     ctx.gore.blood(point, dir, 5, 3, 0.8);
   } else if (owner?.kind === 'prop') {
     owner.prop.hit(dmg, point, dir, impulse, opts);
+  } else if (owner?.kind === 'door') {
+    ctx.gore.bulletHole(point, new THREE.Vector3(hit.normal.x, hit.normal.y, hit.normal.z));
+    owner.door.shot(point, dmg);
   } else {
     const n = new THREE.Vector3(hit.normal.x, hit.normal.y, hit.normal.z);
     ctx.gore.sparks(point, n, 5);
@@ -175,6 +178,7 @@ ctx.explode = (p, radius = 7, power = 1) => {
   deafen(1.1 - ctx.player.eye.distanceTo(p) / (radius * 3));
   ctx.alert('explosion', p, 45);
   const center = new THREE.Vector3(p.x, p.y, p.z);
+  for (const d of ctx.doors) if (d.hinge.distanceTo(center) < radius * 0.6) d.kick(center, true);   // blown open
 
   for (const r of ctx.ragdolls) {
     if (r.removed) continue;
@@ -272,6 +276,23 @@ function clearAll() {
   ctx.ragdolls.length = 0;
   ctx.props.length = 0;
   ctx.gore.clear();
+}
+
+/** The door in front of you, within reach: { door, point } or null. */
+function doorAhead(reach = 2.2) {
+  camera.getWorldPosition(_v);
+  camera.getWorldDirection(_d);
+  const hit = ctx.raycast(_v, _d, reach);
+  const owner = hit && ctx.owners.get(hit.collider.handle);
+  if (owner?.kind === 'door') return { door: owner.door, point: _v.clone().addScaledVector(_d, hit.timeOfImpact) };
+  // an open door has swung out of the way: the doorway you are facing still counts
+  for (const d of ctx.doors) {
+    if (d.target === 0) continue;
+    const c = d.hinge.clone().addScaledVector(d.x, d.w / 2);
+    c.y = _v.y;
+    if (c.distanceTo(_v) < reach && c.sub(_v).normalize().dot(_d) > 0.5) return { door: d, point: c };
+  }
+  return null;
 }
 
 function deleteTarget() {
@@ -568,7 +589,9 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyL') { torch.visible = !torch.visible; sfx.tick(); }
   if (e.code === 'Enter' && ctx.mission.over) ctx.mission.start();
   if (e.code === 'KeyR') ctx.weapons.reload();
-  if (e.code === 'KeyF') { ctx.weapons.unjam(); ctx.mission.act(); }
+  if (e.code === 'KeyF') { const d = doorAhead(); if (d) d.door.toggle(ctx.player.pos); else { ctx.weapons.unjam(); ctx.mission.act(); } }
+  if (e.code === 'KeyH') { const d = doorAhead(1.9); if (d) d.door.kick(ctx.player.pos); }
+  if (e.code === 'KeyM') { ctx.mirrorOn = !ctx.mirrorOn; sfx.tick(); }
   if (e.code === 'KeyB') ctx.weapons.toggleMode();
   if (e.code === 'KeyJ') ctx.weapons.toggleCan();
   if (e.code === 'KeyK') { ctx.weapons.laser = !ctx.weapons.laser; sfx.tick(); }
@@ -655,7 +678,7 @@ ctx.debugView = (from, at, fov = 40) => {
 function flyDrone(now) {
   const d = ctx.drone;
   if (!d) return;
-  if (d.removed || ctx.player.dead) { if (!d.removed) d.life = 0; ctx.drone = null; ctx.weapons.pivot.visible = true; return; }
+  if (d.removed || ctx.player.dead) { if (!d.removed) d.life = 0; ctx.drone = null; return; }
   const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(ctx.player.aimQuat);
   const sp = input.keys.has('ShiftLeft') || input.keys.has('ShiftRight') ? 26 : 13;
   d.body.setLinvel({ x: dir.x * sp, y: dir.y * sp, z: dir.z * sp }, true);
@@ -663,7 +686,6 @@ function flyDrone(now) {
   camera.position.set(t.x, t.y, t.z);
   camera.quaternion.copy(ctx.player.aimQuat);
   camera.rotateZ(Math.sin(now * 0.031) * 0.004);            // rotor buzz
-  ctx.weapons.pivot.visible = false;
 }
 
 function tick(now) {
@@ -676,8 +698,21 @@ function tick(now) {
 
   const active = gameActive() && !ctx.player.dead;
   ctx.player.update(sdt, input, active, dt);
+  // the mirror: your eye goes to the floor on the far side of the door in front of you
+  const mirror = ctx.mirrorOn && !ctx.drone ? doorAhead(2.2) : null;
+  if (ctx.mirrorOn && !mirror) ctx.mirrorOn = false;          // walked away from it
+  document.body.classList.toggle('mirror', !!mirror);
+  if (mirror) {
+    const d = mirror.door, side = d.side(ctx.player.pos);
+    camera.position.copy(d.hinge).addScaledVector(d.x, d.w / 2).addScaledVector(d.n, -side * 0.3);
+    camera.position.y = 0.08;
+    camera.rotation.x = THREE.MathUtils.clamp(camera.rotation.x + 0.35, 0.1, 0.6);
+    input.left = input.leftDown = false;
+  }
+  ctx.weapons.pivot.visible = !mirror && !ctx.drone;
   if (active) ctx.weapons.update(dt, input);
   flyDrone(now);
+  for (const d of ctx.doors) d.update(sdt);
   // footsteps: one for every half turn of the walk cycle
   const stepN = Math.floor(ctx.player.bob / Math.PI);
   if (stepN !== lastStep) {
@@ -750,7 +785,7 @@ function tick(now) {
   if (pl.dead !== wasDead) { wasDead = pl.dead; if (pl.dead) { toast('YOU DIED'); toastT = 3; ctx.weapons.releaseGrab(); } }
 
   // crosshair is hidden while looking down the sights, and always in helmet cam
-  crosshairEl.classList.toggle('hide', ctx.helmet || ctx.weapons.ads > 0.4);
+  crosshairEl.classList.toggle('hide', ctx.helmet || ctx.weapons.ads > 0.4 || !!mirror);
 
   if (ctx.helmet) {
     camClock -= dt;

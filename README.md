@@ -22,7 +22,8 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | G | graphics: high / fast (turns the effects off on slow machines) |
 | 1-8 or wheel | pick a weapon group; press the same number again for the next weapon in it (table under Weapons) |
 | R / F / B | reload / clear a jam / switch auto and semi |
-| F | Ready or Not mode: shout for compliance, or arrest whoever has given up in front of you |
+| F | open or close the door in front of you; otherwise Ready or Not mode: shout for compliance, or arrest whoever has given up in front of you |
+| H / M | kick the door in front of you / look under it with the mirror (M again, or walk away, to stop) |
 | J / K | suppressor on the current gun (quieter: heard 9 m away instead of 40, no flash) / laser (a red dot where the barrel points, and the beam at night) |
 | P | record a video of what you see and hear; P again saves it as a .webm (in bodycam it is cut to 4:3, with the timestamp burned in) |
 | Q / E | lean left / right (hold) |
@@ -43,6 +44,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | `mission.js` | Ready or Not mode: suspects and civilians, shouting, arrests, rules of engagement, the grade |
 | `ragdoll.js` | 11-body ragdoll under one skinned figure: procedural animation, active ragdoll, injuries that show (limp arms, limping, crawling, bleeding out), fall damage, severing, gibbing |
 | `brain.js` | NPC AI: senses, civilian / thug / zombie behaviour, steering |
+| `doors.js` | doors: hinged, kickable, lockable, shot through; `MapBuilder.door()` hangs one in a doorway |
 | `weapons.js` | weapon definitions, firing, melee, grenades, grab gun, viewmodels |
 | `props.js` | crates, barrels, cars, furniture, grenades, rockets and the rest of the spawn menu |
 | `models.js` | loads `assets/models.glb`; lays surface detail and edge wear over the models; hands out body pieces |
@@ -74,6 +76,21 @@ Every box gets a collider on one fixed body, and the visible boxes are joined in
 pieces is a handful of draw calls. `loadMap()` removes the old map (meshes, materials, colliders) and builds the next.
 Times of day are `SKIES` in `world.js`: sun direction and colour, sky colours, cloud cover, fog.
 To add a map, add an entry to `MAPS`; both menus list it automatically.
+
+## Doors
+
+The kill house has a door in every doorway (17; the wide opening in the middle wall stays open) and the warehouse has
+an office in its front left corner with two. A door (`doors.js`) is a slab on a hinge: **F** swings it open away from
+you, slowly, and closes it again; **H** kicks it open fast, and anyone standing behind it goes down. Five kill-house
+doors and the office's side door are locked (`locked` in the map): a locked door takes three kicks, a blast within
+range, or a round of 20+ damage within 22 cm of the handle. Rounds go through a door like any thin wall (it is 4.5 cm
+thick; every gun's `pen` beats that, at 60% damage). **M** is the mirror: your eye goes to the floor on the far side
+of the door in front of you, so you can see what is waiting in the room.
+
+NPCs feel doors with the same rays they feel walls with (`feel()` in `brain.js` now says what it hit): anyone walking
+up to an unlocked door opens it; thugs, armed suspects and zombies stand at a locked one and kick it until it gives;
+civilians treat a locked door as a wall. A closed door blocks sight (lines of sight only look at fixed bodies, which
+is why the door's body is fixed and moved by hand, not kinematic).
 
 ## Ready or Not mode
 

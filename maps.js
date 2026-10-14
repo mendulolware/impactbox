@@ -182,6 +182,15 @@ export const MAPS = {
       b.box(3.4, 3.96, -17.5, 6.1, 2.6, 2.44, b.mat('metal', 0x2a6a4a, { metalness: 0.2 }), { ry: 0.06 });
       b.box(-4.6, 1.34, -16.4, 6.1, 2.6, 2.44, b.mat('metal', 0x2b4f86, { metalness: 0.2 }), { ry: -0.35 });
 
+      // the office in the front left corner: plasterboard walls, a door to the floor and one to the forecourt
+      const board = b.mat('concrete', 0xd9d4c8, { roughness: 0.8 });
+      b.wall(-31, 10, -22, 10, 3, 0.15, board, [[0.5, 1.3]]);
+      b.wall(-22, 10, -22, 21, 3, 0.15, board, [[0.5, 1.3]]);
+      b.box(-26.5, 3.05, 15.5, 9.2, 0.1, 11.2, board);                    // its ceiling
+      b.door(-26.5, 10, 0, { wallH: 3, wallT: 0.15, gap: 1.3 });
+      b.door(-22, 15.5, Math.PI / 2, { wallH: 3, wallT: 0.15, gap: 1.3, locked: true });
+      b.light(-26.5, 2.8, 15.5, 0xfff1dc, 18, 9);
+
       // a loading dock along the right wall, with a ramp down
       b.box(27.6, 0.6, 9, 6.4, 1.04, 12, con);
       b.box(27.6, 0.56, 0.9, 6.4, 0.2, 4.5, con, { rx: -0.235 });
@@ -204,6 +213,7 @@ export const MAPS = {
       at('table', 26, -16, 0.1, 3.62); at('chair', 25, -15.5, 1.5, 3.62); at('chair', 27, -16.6, -1.6, 3.62);
       at('crate', 28.5, 6, 0.3, 1.12); at('crate', 27.8, 7, 0.5, 1.12); at('barrel', 29, 11, 0, 1.12);
       at('car', -12, 30, 0.1); at('dumpster', 22, 34.6, 0); at('cone', 5.4, 22.5); at('cone', -5.4, 22.5);
+      at('table', -27, 16, 0.1); at('chair', -28, 16.6, 1.6); at('chair', -26, 15.2, -1.5); npc(-25, 13, 'thug'); npc(-28.5, 18.5);
       ctx.spawnProp('ball', { x: 3, y: 1.0, z: 16 });
     },
   },
@@ -431,6 +441,13 @@ export const MAPS = {
       const along = [[0.5, 0.3, null, 0.7], [null, 0.6, 0.4, 0.5]];                 // at z = -3, 3
       for (let j = 0; j < 2; j++) for (let i = 0; i < 4; i++) b.wall(xs[i], zs[j + 1], xs[i + 1], zs[j + 1], WH, T, ply, gap(along[j][i]));
       for (const x of xs) for (const z of zs) b.box(x, WH / 2, z, 0.16, WH, 0.16, wood);     // posts at the corners
+      // doors in the doorways (the big opening in the middle wall stays open); some are locked
+      const H2 = Math.PI / 2, o = { wallH: WH, wallT: T, gap: D }, lk = { ...o, locked: true };
+      for (const [x, z, yaw, opt] of [
+        [-9, 9, 0, o], [3, 9, 0, o], [-4.2, -9, 0, lk], [-12, 0, H2, o], [12, -5.4, H2, lk],            // the ways in
+        [-6, -6, H2, o], [-6, 4.8, H2, o], [0, 1.2, H2, lk], [0, 6, H2, o], [6, -7.2, H2, o], [6, 0, H2, lk],
+        [-9, -3, 0, o], [-4.2, -3, 0, o], [10.2, -3, 0, o], [-2.4, 3, 0, o], [2.4, 3, 0, lk], [9, 3, 0, o],
+      ]) b.door(x, z, yaw, opt);
 
       // the instructors' catwalk: along the back, and out over the middle of the house
       b.box(0, 3.0, -10.9, 27, 0.14, 2.6, wood);

@@ -295,6 +295,8 @@ export const sfx = {
   // ---- what hits do
   crack()     { noise({ dur: 0.07, f0: 3200, f1: 900, q: 2.5, gain: 0.6, type: 'bandpass' }); tone({ f0: 260, f1: 80, dur: 0.05, gain: 0.3, type: 'square' }); },
   thud(v = 1) { play('step', { gain: 0.6 * v, rate: 0.55 }); tone({ f0: 100, f1: 40, dur: 0.1, gain: 0.3 * v }); },
+  /** A door on its hinges. */
+  door()      { play('latch', { gain: 0.5, rate: 0.8 }); tone({ f0: 160, f1: 95, dur: 0.5, gain: 0.08, type: 'sawtooth' }); },
   /** A round into concrete or steel. */
   impact()    { noise({ dur: 0.05, f0: 5200, f1: 1200, type: 'highpass', gain: 0.22, send: 0.1 }); tone({ f0: 180, f1: 70, dur: 0.06, gain: 0.14 }); },
   explosion() {

@@ -131,3 +131,8 @@ body.touch #weapon-bar { bottom: 6px; transform: translateX(-50%) scale(.7); tra
 #stick i { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px; border-radius: 50%; background: rgba(255,255,255,.35); }
 body.touch #ammo { bottom: auto; top: 64px; right: 16px; }
 body.touch #weapon-bar { left: 38%; }
+
+/* ---- the mirror under a door ---- */
+#mirror { display: none; position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 26%, rgba(0,0,0,.55) 36%, rgba(0,0,0,.97) 46%); }
+#mirror span { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); font: 600 14px Consolas, monospace; letter-spacing: 3px; opacity: .7; }
+body.mirror #mirror { display: block; }
