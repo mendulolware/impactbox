@@ -76,19 +76,23 @@ export class Mission {
   }
 
   /** F: cuff whoever is in front of you if they have given up or are down; otherwise shout. */
-  act() {
+  /** F: arrest who you are looking at if they have given up, otherwise shout. (target/from: the other player's, in co-op) */
+  act(target = undefined, from = this.ctx.player) {
     if (!this.on || this.over) return;
     const ctx = this.ctx;
-    const cam = ctx.camera.getWorldPosition(ctx.camera.position.clone());
-    const dir = ctx.camera.getWorldDirection(cam.clone());
-    const hit = ctx.raycast(cam, dir, REACH);
-    const owner = hit && ctx.owners.get(hit.collider.handle);
-    const r = owner?.kind === 'part' ? owner.ragdoll : null;
+    let r = target;
+    if (r === undefined) {
+      const cam = ctx.camera.getWorldPosition(ctx.camera.position.clone());
+      const dir = ctx.camera.getWorldDirection(cam.clone());
+      const hit = ctx.raycast(cam, dir, REACH);
+      const owner = hit && ctx.owners.get(hit.collider.handle);
+      r = owner?.kind === 'part' ? owner.ragdoll : null;
+    }
     if (r && !r.dead && !r.arrested && r.role && (r.brain.gaveUp || r.brain.comply || r.brain.flashed > 0 || r.mode === 'ragdoll')) this.arrest(r);   // (a flashbanged suspect can be cuffed before they recover)
-    else this.shout();
+    else this.shout(from);
   }
 
-  shout() {
+  shout(from = this.ctx.player) {
     if (this.shoutT > 0) return;
     this.shoutT = 1.2;
     const ctx = this.ctx, line = LINES[(Math.random() * LINES.length) | 0];
@@ -102,7 +106,7 @@ export class Mission {
     for (const r of ctx.ragdolls) {
       if (r.dead || r.removed || !r.role) continue;
       const c = r.center(ctx.camera.position.clone());
-      if (c.distanceTo(ctx.player.pos) < EARSHOT && r.brain.los(ctx.player.eye)) r.brain.shouted();
+      if (c.distanceTo(from.pos) < EARSHOT && r.brain.los(from.eye)) r.brain.shouted();
     }
   }
 

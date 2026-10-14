@@ -76,17 +76,31 @@ export class Brain {
     return Math.hypot(p.x - r.x, p.z - r.z);
   }
 
+  /** Whichever player (you, or a friend in co-op: ctx.remotes) is nearest and still alive. */
+  nearest() {
+    let best = this.ctx.player;
+    if (!this.ctx.remotes?.length) return best;
+    let bd = best.dead ? 1e9 : this.distTo(best.pos);
+    for (const p of this.ctx.remotes) {
+      if (p.dead) continue;
+      const d = this.distTo(p.pos);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
+  }
+
   /** Is the player holding a gun on me? Aiming down the sights counts from further away. */
   playerAimingAtMe() {
-    const { player, weapons } = this.ctx;
-    if (player.dead || weapons.current.type !== 'gun') return false;
+    const player = this.pl || this.ctx.player, mine = player === this.ctx.player;
+    const gun = mine ? this.ctx.weapons.current.type === 'gun' : player.gun, ads = mine ? this.ctx.weapons.ads : player.ads;
+    if (player.dead || !gun) return false;
     const r = this.npc.root;
     _d.set(r.x - player.pos.x, r.y + 1.2 - (player.pos.y + 0.7), r.z - player.pos.z);
     const dist = _d.length();
-    if (dist > (weapons.ads > 0.5 ? 16 : 9)) return false;
+    if (dist > (ads > 0.5 ? 16 : 9)) return false;
     _d.multiplyScalar(1 / dist);
     _v.set(0, 0, -1).applyQuaternion(player.aimQuat);
-    if (_v.dot(_d) < Math.cos(weapons.ads > 0.5 ? 0.1 : 0.07 + 0.5 / dist)) return false;
+    if (_v.dot(_d) < Math.cos(ads > 0.5 ? 0.1 : 0.07 + 0.5 / dist)) return false;
     return this.los({ x: player.pos.x, y: player.pos.y + 0.7, z: player.pos.z });
   }
 
@@ -212,7 +226,7 @@ export class Brain {
 
   /** An armed suspect: shoots at the player on sight, unless talked (or frightened) into giving up. */
   suspect(dt, scan) {
-    const n = this.npc, g = this.goal, pl = this.ctx.player;
+    const n = this.npc, g = this.goal, pl = this.pl;
     g.mode = 'stop';
     if (n.hostage) {
       const h = n.hostage;
@@ -257,7 +271,7 @@ export class Brain {
 
   /** Who a suspect shoots at: you, unless one of your squad is nearer and in view. */
   hostile() {
-    const pl = this.ctx.player;
+    const pl = this.pl;
     let best = pl, bd = pl.dead ? 1e9 : this.distTo(pl.pos);
     for (const r of this.ctx.ragdolls) {
       if (r.kind !== 'swat' || r.dead || r.removed) continue;
@@ -342,7 +356,7 @@ export class Brain {
 
   /** Holding someone in front of you: they go where you go, and the pistol rests over their shoulder. */
   holdHostage(dt, scan, h) {
-    const n = this.npc, g = this.goal, pl = this.ctx.player;
+    const n = this.npc, g = this.goal, pl = this.pl;
     if (scan) this.sees = !pl.dead && this.canSee(pl.pos, 30);
     if (this.sees) { g.face = true; g.pos.copy(pl.pos); n.look = pl.eye; }
     n.gesture = 'hold';
@@ -357,7 +371,7 @@ export class Brain {
   }
 
   civilian(dt, scan) {
-    const n = this.npc, g = this.goal, pl = this.ctx.player;
+    const n = this.npc, g = this.goal, pl = this.pl;
     if (n.heldBy) {
       // in someone's arm with a gun at their head: they stand there until the taker is down, cuffed, stunned or gives up
       const t = n.heldBy;
@@ -507,7 +521,7 @@ export class Brain {
       if (down && !o.helper) {
         o.helper = n; this.subject = o; this.holding = false;
         this.state = 'help'; this.t = rnd(9, 14); this.blockedT = 0;
-        if (this.threat.lengthSq() === 0) this.threat.copy(this.ctx.player.pos);
+        if (this.threat.lengthSq() === 0) this.threat.copy(this.pl.pos);
         return;
       }
       if (o.dead && Math.random() < 0.6) { this.subject = o; this.state = 'check'; this.t = rnd(2.5, 4.5); this.blockedT = 0; return; }
@@ -515,7 +529,7 @@ export class Brain {
   }
 
   thug(dt, scan) {
-    const n = this.npc, g = this.goal, pl = this.ctx.player;
+    const n = this.npc, g = this.goal, pl = this.pl;
     if ((n.health <= 35 || n.crawling) && this.state === 'attack') { this.state = 'flee'; this.fear = 1; this.threat.copy(pl.pos); }
     if (this.state !== 'attack') { this.civilian(dt, scan); return; }
 
@@ -542,7 +556,7 @@ export class Brain {
   }
 
   zombie(dt, scan) {
-    const n = this.npc, g = this.goal, pl = this.ctx.player;
+    const n = this.npc, g = this.goal, pl = this.pl;
     if (scan) {
       // nearest living thing: the player or any uninfected NPC
       let best = null, bd = 28;
@@ -557,9 +571,9 @@ export class Brain {
     const tg = this.target;
     if (!tg || tg.dead || tg.removed || tg.kind === 'zombie') { this.target = null; this.wander(dt); return; }
 
-    const p = tg === pl ? pl.pos : tg.center(_v);
+    const p = tg.isPlayer ? tg.pos : tg.center(_v);       // (a player: you, or the other one in co-op)
     const dist = this.distTo(p);
-    n.look = tg === pl ? pl.eye : this.lookV.copy(p).setY(p.y + 0.3);
+    n.look = tg.isPlayer ? tg.eye : this.lookV.copy(p).setY(p.y + 0.3);
     if (dist > 1.05) {
       g.mode = 'to'; g.pos.copy(p); g.speed = dist < 5 ? 1.9 : 0.9; // shambles, then lunges
     } else {
@@ -569,8 +583,8 @@ export class Brain {
     }
     if (this.strikeT > 0) {
       this.strikeT -= dt;
-      if (this.strikeT <= 0 && this.distTo(tg === pl ? pl.pos : tg.center(_v)) < 1.5) {
-        if (tg === pl) pl.hurt(14, n.root);
+      if (this.strikeT <= 0 && this.distTo(tg.isPlayer ? tg.pos : tg.center(_v)) < 1.5) {
+        if (tg.isPlayer) tg.hurt(14, n.root);
         else tg.bitten(n);
       }
     }
@@ -671,6 +685,7 @@ export class Brain {
 
   update(dt) {
     const n = this.npc;
+    this.pl = this.nearest();
     n.gesture = 'none';
     n.look = null;
     this.scanT -= dt;

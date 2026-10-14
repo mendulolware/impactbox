@@ -46,6 +46,7 @@ export class Player {
     this.recV = 0;            // ...and how fast that is changing
     this.recW = 0;
     this.shake = 0;
+    this.isPlayer = true;      // (zombies tell players from NPCs by this; the other player in co-op has it too)
     this.sens = 1;
     this.fov = FOV;
     this.grounded = false;

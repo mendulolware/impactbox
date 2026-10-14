@@ -264,3 +264,13 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px;
 input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 3px solid var(--accent); }
 #settings-btn { display: block; margin: 14px auto 0; padding: 6px 14px; border: 0; background: none; color: var(--dim); font: 600 14px var(--cond); letter-spacing: 2px; text-transform: uppercase; cursor: pointer; }
 #settings-btn:hover { color: #fff; }
+
+/* ================================================================ co-op (coop.js, net.js) */
+#mp { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; }
+#mp button { display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(16, 17, 22, .78); color: var(--text); font: 600 14px var(--cond); letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer; transition: border-color .12s, background .12s; }
+#mp button:hover { border-color: #3ddc84; }
+#mp-code { width: 104px; padding: 9px 12px; border-radius: 999px; border: 1px solid var(--line-2); background: rgba(16, 17, 22, .78); color: var(--text); font: 700 16px var(--mono); letter-spacing: 5px; text-align: center; text-transform: uppercase; outline: none; }
+#mp-code:focus { border-color: #3ddc84; }
+#mp-status { min-height: 18px; margin: 10px 0 0; font: 500 13px var(--body); color: #8ff0b6; }
+#mp-badge { position: absolute; left: 50%; top: 44px; transform: translateX(-50%); font: 700 12px var(--cond); letter-spacing: 3px; color: #3ddc84; text-shadow: 0 1px 2px #000; white-space: nowrap; }
+#mp-badge:empty, body.helmet #mp-badge { display: none; }

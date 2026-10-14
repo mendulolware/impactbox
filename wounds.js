@@ -19,6 +19,8 @@ import { mergeGeometries } from './vendor/utils/BufferGeometryUtils.js';
 // This file also builds the torn ends left where a limb comes off (makeStump).
 
 export const MAX_WOUNDS = 12;
+/** Co-op (coop.js): the host hears about every wound and burn so the other player's copy of the body gets the same. */
+export const woundHooks = { open: null, burn: null };
 const CORE_SCALE = 0.82;
 const SKIN_DEPTH = 0.011;    // skinned bodies: how far under the surface the meat starts
 
@@ -283,6 +285,7 @@ function buildInside(part) {
  * @param reach   how far along that it bores, in metres
  */
 export function openWound(part, p, radius, maxR = 0.1, p2 = null, axis = null, reach = 0.05) {
+  woundHooks.open?.(part, p, radius, maxR, p2, axis, reach);
   if (!part.wounds) prepare(part);
   if (!part.wounds.inside) buildInside(part);
   const { uniforms, list } = part.wounds;
@@ -320,6 +323,7 @@ export function openWound(part, p, radius, maxR = 0.1, p2 = null, axis = null, r
 
 /** Char a part's surface. amount 0..1; it only ever gets worse. */
 export function burn(part, amount) {
+  woundHooks.burn?.(part, amount);
   if (!part.wounds) prepare(part);
   const u = part.wounds.uniforms.burn;
   u.value = Math.min(1, Math.max(u.value, amount));

@@ -617,7 +617,7 @@ export class Weapons {
           dmg *= 0.5;
           continue;
         }
-        if (!ctx.world.getCollider(hit.collider.handle)) break;     // what it hit is gone (a barrel that went up): nothing to come out of
+        if (ctx.world.getCollider(hit.collider.handle) !== hit.collider) break;     // what it hit is gone (a barrel that went up): nothing to come out of
         const out = ctx.exitPoint(hit.collider, end, d, pen);
         if (!out) break;
         ctx.gore.bulletHole(out, d);
@@ -872,7 +872,7 @@ export class Weapons {
     const g = this.grab;
     if (!g) return;
     // body might have been destroyed (gib, delete, clear)
-    if (!ctx.world.getRigidBody(g.body.handle)) { this.releaseGrab(); return; }
+    if (ctx.world.getRigidBody(g.body.handle) !== g.body) { this.releaseGrab(); return; }     // (the same body: its slot may hold a new one)
     if (g.rag) g.rag.goLimp(1.2); // stays limp for as long as it is held
     const t = g.body.translation(), r = g.body.rotation();
 

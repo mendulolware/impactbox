@@ -15,6 +15,7 @@ import { Mission } from './mission.js';
 import { initTouch, isTouch } from './touch.js';
 import { Tools } from './tools.js';
 import { makeTrap, TRAP_TYPES } from './traps.js';
+import { Coop } from './coop.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_RAGDOLLS = isTouch ? 18 : 36;          // (phones: half the people)
@@ -238,13 +239,8 @@ ctx.flashbang = (p) => {
   const g = ctx.gore;
   g.flash.position.set(p.x, p.y + 0.3, p.z); g.flash.intensity = 700; g.flashT = 0.35;
   for (let i = 0; i < 10; i++) g.smoke.emit(p.x, p.y + 0.1, p.z, (Math.random() - 0.5) * 2, Math.random() * 1.2, (Math.random() - 0.5) * 2, 0.25 + Math.random() * 0.2, 2 + Math.random() * 2, -0.1, 0.8, 0.8, 0.8, 0, 1.5);
-  const pl = ctx.player, eye = pl.eye, dist = eye.distanceTo(p);
-  const to = new THREE.Vector3(p.x - eye.x, p.y - eye.y, p.z - eye.z).normalize();
-  const seen = dist < 1.5 || !g.castFixed(eye.x, eye.y, eye.z, to.x, to.y, to.z, dist - 0.2);
-  const facing = to.dot(new THREE.Vector3(0, 0, -1).applyQuaternion(pl.aimQuat));
-  const k = Math.max(0, 1 - dist / 18) * (seen ? 0.35 + 0.65 * Math.max(0, facing) : 0.15);
-  pl.flash = Math.max(pl.flash || 0, k * 5);           // seconds; the first 1.5 of them fully white
-  deafen(Math.min(1, k * 1.4 + (dist < 7 ? 0.3 : 0)));
+  ctx.flashPlayer(p);
+  for (const rp of ctx.remotes || []) rp.flash(p);
   for (const r of ctx.ragdolls) {
     if (r.removed || r.dead) continue;
     const d = r.center(_v).distanceTo(p);
@@ -253,10 +249,20 @@ ctx.flashbang = (p) => {
   ctx.alert('shot', p, 30);
 };
 
+/** A flashbang at p, as you see and hear it. */
+ctx.flashPlayer = (p) => {
+  const pl = ctx.player, eye = pl.eye, dist = eye.distanceTo(p);
+  const to = new THREE.Vector3(p.x - eye.x, p.y - eye.y, p.z - eye.z).normalize();
+  const seen = dist < 1.5 || !ctx.gore.castFixed(eye.x, eye.y, eye.z, to.x, to.y, to.z, dist - 0.2);
+  const facing = to.dot(new THREE.Vector3(0, 0, -1).applyQuaternion(pl.aimQuat));
+  const k = Math.max(0, 1 - dist / 18) * (seen ? 0.35 + 0.65 * Math.max(0, facing) : 0.15);
+  pl.flash = Math.max(pl.flash || 0, k * 5);           // seconds; the first 1.5 of them fully white
+  deafen(Math.min(1, k * 1.4 + (dist < 7 ? 0.3 : 0)));
+};
+
 ctx.explode = (p, radius = 7, power = 1) => {
   ctx.gore.explosion(p, radius);
   sfx.explosion();
-  deafen(1.1 - ctx.player.eye.distanceTo(p) / (radius * 3));
   ctx.alert('explosion', p, 45);
   const center = new THREE.Vector3(p.x, p.y, p.z);
   for (const d of ctx.doors) if (d.hinge.distanceTo(center) < radius * 0.6) d.kick(center, true);   // blown open
@@ -302,7 +308,14 @@ ctx.explode = (p, radius = 7, power = 1) => {
     }
   }
 
+  ctx.blastPlayer(center, radius, power);
+  for (const rp of ctx.remotes || []) rp.blast(center, radius, power);
+};
+
+/** What a blast does to you: rings your ears, and throws and hurts you if you were close. */
+ctx.blastPlayer = (center, radius, power) => {
   const pl = ctx.player;
+  deafen(1.1 - pl.eye.distanceTo(center) / (radius * 3));
   const pd = pl.pos.distanceTo(center);
   if (pd < radius) {
     const f = 1 - pd / radius;
@@ -321,8 +334,8 @@ const KILL_TEXT = {
 };
 ctx.onKill = (rag, cause) => {
   ctx.kills++;
-  feed(KILL_TEXT[cause] || 'KILLED');
-  if (performance.now() - (rag.shotAt || -1e9) < 2500) marker('kill');     // (red only for your own kills)
+  ctx.feed(KILL_TEXT[cause] || 'KILLED');
+  if (performance.now() - (rag.shotAt || -1e9) < 2500) ctx.marker('kill');     // (red only for your own kills)
   ctx.mission.onKill(rag);
 };
 
@@ -353,9 +366,12 @@ function marker(kind) {
   void m.offsetWidth;
   m.className = kind;
 }
+ctx.feed = feed;
+ctx.marker = marker;
 
 // ------------------------------------------------------------------ spawning helpers
 function spawnPoint() {
+  if (ctx.spawnAt) return ctx.spawnAt.clone();        // (co-op: the other player's menu click, from where they look)
   camera.getWorldPosition(_v);
   camera.getWorldDirection(_d);
   const hit = ctx.raycast(_v, _d, 40);
@@ -369,7 +385,8 @@ function spawnPoint() {
   return p;
 }
 
-const FACE_PLAYER = () => ctx.player.yaw + Math.PI;
+const FACE_PLAYER = () => (ctx.spawnYaw ?? ctx.player.yaw) + Math.PI;
+ctx.spawnPoint = spawnPoint;
 
 function clearAll() {
   ctx.weapons.releaseGrab();
@@ -424,9 +441,9 @@ function deleteTarget() {
 }
 
 const SPAWN_ITEMS = [
-  { cat: 'Modes', label: 'Ready or Not', icon: '🚨', small: 'SWAT: arrest, do not execute', run: () => { ctx.mission.start(); setMenu(false); } },
+  { cat: 'Modes', label: 'Ready or Not', icon: '🚨', small: 'SWAT: arrest, do not execute', local: true, run: () => { ctx.mission.start(); setMenu(false); } },
   { cat: 'Modes', label: 'Sandbox', icon: '🧪', small: 'no rules', run: () => { ctx.mission.stop(); toast('SANDBOX'); setMenu(false); } },
-  ...MAP_LIST.map((m) => ({ cat: 'Maps', label: m.name, icon: m.icon, small: m.blurb, run: () => { ctx.mission.stop(); setMap(m.id); setMenu(false); } })),
+  ...MAP_LIST.map((m) => ({ cat: 'Maps', label: m.name, icon: m.icon, small: m.blurb, run: () => { ctx.mission.stop(); ctx.setMap(m.id); setMenu(false); } })),
   { cat: 'NPCs', label: 'Civilian', icon: '🧍', small: 'flees, surrenders', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER()) },
   { cat: 'NPCs', label: 'Thug', icon: '🥊', small: 'fights back', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER(), { kind: 'thug' }) },
   { cat: 'NPCs', label: 'Zombie', icon: '🧟', small: 'hunts and infects', run: () => ctx.spawnRagdoll(spawnPoint(), FACE_PLAYER(), { kind: 'zombie' }) },
@@ -482,16 +499,16 @@ const SPAWN_ITEMS = [
   },
   ...Object.keys(TRAP_TYPES).map((t) => ({
     cat: 'Traps', label: TRAP_TYPES[t].label, icon: TRAP_TYPES[t].icon, small: TRAP_TYPES[t].small,
-    run: () => { const p = spawnPoint(); p.y -= 0.05; ctx.spawnTrap(t, p, ctx.player.yaw); },     // (facing the way you look)
+    run: () => { const p = spawnPoint(); p.y -= 0.05; ctx.spawnTrap(t, p, ctx.spawnYaw ?? ctx.player.yaw); },     // (facing the way you look)
   })),
   { cat: 'World', label: 'Explosion', icon: '☄️', small: 'at crosshair', run: () => ctx.explode(spawnPoint(), 8, 1.3) },
   { cat: 'World', label: 'Kill All', icon: '☠️', small: 'every NPC', run: () => { for (const r of ctx.ragdolls) r.damage(1000); } },
-  { cat: 'World', label: 'Clean Blood', icon: '🧽', small: 'decals + particles', run: () => ctx.gore.clear() },
-  { cat: 'World', label: 'Clear All', icon: '🗑️', small: 'wipe the sandbox', run: clearAll },
-  { cat: 'World', label: 'Slow-mo', icon: '⏳', small: 'toggle (T)', run: () => toggleSlowmo() },
-  { cat: 'World', label: 'Helmet Cam', icon: '📹', small: 'toggle (V)', run: () => toggleHelmet() },
+  { cat: 'World', label: 'Clean Blood', icon: '🧽', small: 'decals + particles', local: true, run: () => ctx.gore.clear() },
+  { cat: 'World', label: 'Clear All', icon: '🗑️', small: 'wipe the sandbox', run: () => ctx.clearAll() },
+  { cat: 'World', label: 'Slow-mo', icon: '⏳', small: 'toggle (T)', local: true, run: () => toggleSlowmo() },
+  { cat: 'World', label: 'Helmet Cam', icon: '📹', small: 'toggle (V)', local: true, run: () => toggleHelmet() },
   { cat: 'World', label: 'Graphics', icon: '✨', small: 'high / fast (G)', run: () => toggleGraphics() },
-  { cat: 'World', label: 'Settings', icon: '⚙️', small: 'look, FOV, volume, graphics', run: () => setSettings(true) },
+  { cat: 'World', label: 'Settings', icon: '⚙️', small: 'look, FOV, volume, graphics', local: true, run: () => setSettings(true) },
 ];
 
 function buildMenu() {
@@ -509,7 +526,12 @@ function buildMenu() {
     const el = document.createElement('div');
     el.className = 'item';
     el.innerHTML = `<span class="ico">${it.icon}</span>${it.label}<small>${it.small || '&nbsp;'}</small>`;
-    el.addEventListener('click', () => { it.run(); sfx.pop(); });
+    // (in co-op the other player's clicks run in the host's game, except the ones about their own screen)
+    el.addEventListener('click', () => {
+      if (ctx.spawnMenu && !it.local) { ctx.spawnMenu(SPAWN_ITEMS.indexOf(it)); if (it.cat === 'Maps' || it.cat === 'Modes') setMenu(false); }
+      else it.run();
+      sfx.pop();
+    });
     grid.appendChild(el);
   }
   // the controls from the start screen, so they are a Tab away in game
@@ -646,6 +668,7 @@ function toggleSlowmo() {
 }
 
 function setMenu(open) {
+  if (ctx.remoteRun) return;            // (the other player's menu click, run here: not this player's menu)
   ctx.menuOpen = open;
   if (!open) setSettings(false);
   $('menu').classList.toggle('hidden', !open);
@@ -748,7 +771,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyJ') ctx.weapons.toggleCan();
   if (e.code === 'KeyK') { ctx.weapons.laser = !ctx.weapons.laser; sfx.tick(); }
   if (e.code === 'KeyX') deleteTarget();
-  if (e.code === 'KeyC') { clearAll(); toast('CLEARED'); }
+  if (e.code === 'KeyC') { ctx.clearAll(); toast('CLEARED'); }
 });
 document.addEventListener('keyup', (e) => input.keys.delete(e.code));
 initTouch(ctx, input);
@@ -756,11 +779,11 @@ window.addEventListener('blur', () => { input.keys.clear(); input.left = input.r
 
 // ------------------------------------------------------------------ maps
 /** Wipe the sandbox and move to another map. */
-function setMap(id) {
+function setMap(id, populate = true) {
   clearAll();
   loadMap(ctx, id);
   ctx.player.teleport(ctx.map.spawn, ctx.map.yaw);
-  ctx.map.populate();
+  if (populate) ctx.map.populate();            // (a co-op guest's world is the host's: it brings its own people)
   setSpace(ctx.map.id);
   try { localStorage.setItem('impactbox.map', ctx.map.id); } catch (e) { /* private window: just don't remember */ }
   for (const el of document.querySelectorAll('#maps button')) el.classList.toggle('on', el.dataset.map === ctx.map.id);
@@ -768,6 +791,9 @@ function setMap(id) {
   toast(ctx.map.name.toUpperCase());
 }
 ctx.setMap = setMap;
+ctx.clearAll = clearAll;
+ctx.toggleNight = toggleNight;
+ctx.toggleRain = toggleRain;
 
 // the map can be chosen before starting, as well as from the spawn menu
 for (const m of MAP_LIST) {
@@ -776,7 +802,7 @@ for (const m of MAP_LIST) {
   el.innerHTML = `<span class="ico">${m.icon}</span><b>${m.name}</b><small>${m.blurb}</small>`;
   el.title = m.blurb;
   el.classList.toggle('on', m.id === ctx.map.id);
-  el.addEventListener('click', () => { if (m.id !== ctx.map.id) { ctx.mission.stop(); setMap(m.id); } });
+  el.addEventListener('click', () => { if (m.id !== ctx.map.id) { ctx.mission.stop(); ctx.setMap(m.id); } });
   $('maps').appendChild(el);
 }
 ctx.map.populate();
@@ -784,6 +810,7 @@ ctx.mission = new Mission(ctx);
 $('swat').addEventListener('click', () => { ctx.mission.start(); $('swat').classList.add('on'); });
 $('night').addEventListener('click', toggleNight);
 $('rain').addEventListener('click', toggleRain);
+ctx.net = new Coop(ctx);                                          // co-op (coop.js): idle until someone hosts or joins
 if (ctx.map.def.night) toggleNight();                             // (a night map asked for by ?map= or remembered from last time)
 
 // ------------------------------------------------------------------ main loop
@@ -911,6 +938,7 @@ function tick(now) {
   for (const r of ctx.ragdolls) r.update(sdt);
   for (const p of ctx.props) p.update(sdt);
   for (const t of ctx.traps) if (!t.removed) t.update(sdt);     // (moves their kinematic parts for the step below; a deleted one has no bodies left)
+  ctx.net.pre(sdt);
 
   if (sdt > 0) {
     for (const r of ctx.ragdolls) r.preStep();
@@ -922,6 +950,7 @@ function tick(now) {
   for (const r of ctx.ragdolls) r.sync();
   for (const p of ctx.props) p.sync();
   ctx.tools.update();
+  ctx.net.post(dt);
   if (ctx.traps.some((t) => t.removed)) ctx.traps = ctx.traps.filter((t) => !t.removed);
   if (ctx.ragdolls.some((r) => r.removed)) ctx.ragdolls = ctx.ragdolls.filter((r) => !r.removed);
   if (ctx.props.some((p) => p.removed)) ctx.props = ctx.props.filter((p) => !p.removed);

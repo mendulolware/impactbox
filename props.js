@@ -138,7 +138,7 @@ export class Prop {
     this.life -= dt;
     const mine = this.collider.handle, pc = player.collider.handle;
     const hit = world.castRay(new RAPIER.Ray(t, d), sp * dt + 0.3, true, undefined, undefined, undefined, undefined,
-      (c) => c.handle !== mine && c.handle !== pc);
+      (c) => c.handle !== mine && c.handle !== pc && !this.ignore?.has(c.handle));     // (ignore: the other player's own body, for a rocket they fired)
     if (hit || this.life <= 0) {
       const k = hit ? hit.timeOfImpact : 0;
       this.exploded = true;
@@ -183,7 +183,7 @@ export class Prop {
   }
 
   update(dt) {
-    if (this.removed) return;
+    if (this.removed || this.puppet) return;      // (a co-op copy: the host's one has the fuse)
     if (this.life !== undefined && this.flyRocket(dt)) return; // exploded: the body is gone
     if (this.fuse > 0) {
       this.fuse -= dt;

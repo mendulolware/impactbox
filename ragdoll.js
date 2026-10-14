@@ -809,7 +809,7 @@ export class Ragdoll {
     this.split();
     this.goLimp(3);
     // removing a joint twice (e.g. its body was gibbed) would panic the wasm world, so check first
-    if (this.ctx.world.getImpulseJoint(jd.joint.handle)) this.ctx.world.removeImpulseJoint(jd.joint, true);
+    if (this.ctx.world.getImpulseJoint(jd.joint.handle) === jd.joint) this.ctx.world.removeImpulseJoint(jd.joint, true);   // (the same joint: Rapier reuses the slot of one it dropped)
     this.severed.add(name);
     this.detach(jd.def);
 
@@ -1548,7 +1548,7 @@ export class Ragdoll {
   // ------------------------------------------------------------ per-frame
   /** Called before the physics step. */
   update(dt) {
-    if (this.removed || dt <= 0) return;
+    if (this.removed || dt <= 0 || this.puppet) return;      // (a co-op copy: the host moves it)
     this.t += dt;
     this.lastDt = dt;
     const gore = this.ctx.gore;

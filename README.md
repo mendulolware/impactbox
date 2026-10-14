@@ -52,6 +52,10 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | `props.js` | crates, barrels, cars, furniture, grenades, rockets and the rest of the spawn menu |
 | `models.js` | loads `assets/models.glb`; lays surface detail and edge wear over the models; hands out body pieces |
 | `detail.js` | fine tiling surfaces for the models (steel, plastic, wood grain, cloth, leather, skin), generated in code |
+| `coop.js` | two-player co-op: the host's world is the real one; the guest keeps puppets of it and sends requests (see Co-op) |
+| `net.js` | finding the other player by a four-letter code and the two channels between you (PeerJS, `vendor/peerjs.min.js`, MIT) |
+| `tools.js` | the Rope Tool and the Weld Tool |
+| `traps.js` | saw blade, spike trap, launch pad, crusher |
 | `gore.js` | blood droplets and mist, fire and smoke; decals that dry (splats, spatter, runs, pools, smears, handprints); physical chunks (meat, bone, skull, ribs, gut, eyes) that stick to walls and ceilings |
 | `wounds.js` | holes and gashes cut into body parts, blood soaking and running from them, burns, what is visible inside, and the torn stumps |
 | `player.js` | first-person character controller |
@@ -277,6 +281,16 @@ a generated echo, and `setSpace()` sets how much of it each map has (a lot in th
 quiet background bed: wind, room hum or city. People have voices (`voice()`: a buzzing source through vowel filters): grunts and
 screams when hit, a cry when they die, screams when they run or burn, growls from zombies, all quieter with distance. Also:
 spent cases landing, rounds hitting concrete (some whine off), footsteps, and the double barrel being broken open.
+
+## Co-op (two players)
+
+On the start screen, one player presses **Host a game** and gets a four-letter code; the other types it in and presses **Join**, and both press Play. It works over the internet with no server of ours: PeerJS's free public broker introduces the two browsers, then they talk directly (WebRTC), or through PeerJS's public relay on networks that block that. `vendor/peerjs.min.js` (MIT) loads only when someone hosts or joins.
+
+- **The host's game is the real one.** It runs every NPC, prop, trap and all the physics. The guest's game builds the same map and keeps a **puppet** of everything in it: kinematic bodies that go where the host's stream says (20 times a second, on an unreliable channel, eased between packets) and decide nothing.
+- **What the guest does goes to the host as a request**: hits (the guest aims and shoots at its puppets; the host applies the hit to the real body), grenades, rockets and dropped magazines (the host makes the real ones), doors, spawn-menu clicks (run in the host's game from where the guest is looking), ropes and welds, shouting and arresting in Ready or Not, map changes.
+- **What happened comes back as events** on a reliable channel: every blood and gore call the host makes (replayed, so the guest's blood lands where the host's does), every sound, wounds and burns (`woundHooks` in `wounds.js`), bodies split, cut and blown apart, glass, lamps, the kill feed, messages, and being hurt, blasted or flashed. A roster (who and what exists, map, night, rain, ropes, the mission panel) goes out every two seconds and on every change, which is also how someone joining late catches up.
+- **NPCs go for whichever player is nearest** (`Brain.nearest`, `ctx.remotes`); traps hurt and launch either player. Each player sees the other as a soldier with a rifle (an avatar: a ragdoll walked by the other's position and aim). Shooting each other does half damage.
+- Not in co-op: the drone and the Grab Gun are the host's only; an NPC the guest saw get hurt before joining shows no wounds; sounds play at full volume however far away the other player is.
 
 ## Ropes, welds and traps
 

@@ -16,7 +16,7 @@ export class Tools {
   constructor(ctx) {
     this.ctx = ctx;
     this.links = [];
-    this.first = null;          // the end picked first: { body, local, at }
+    this.firsts = [];           // the end each player picked first: { body, local, at } (0 = you, 1 = the other player in co-op)
     this.ropeMat = new THREE.MeshStandardMaterial({ color: 0x8c6c42, roughness: 0.95 });
     this.weldMat = new THREE.MeshStandardMaterial({ color: 0xffa040, emissive: 0xc04000, emissiveIntensity: 0.8, roughness: 0.4, metalness: 0.6 });
     this.ropeGeo = new THREE.CylinderGeometry(0.011, 0.011, 1, 6).translate(0, 0.5, 0).rotateX(Math.PI / 2);   // from the origin along +Z, 1 m
@@ -26,7 +26,9 @@ export class Tools {
     ctx.scene.add(this.marker);
   }
 
-  alive(body) { return !!this.ctx.world.getRigidBody(body.handle); }
+  // (Rapier's lookups go by slot, and a deleted body's slot is reused: it is only still there if the slot still holds this one)
+  alive(body) { return this.ctx.world.getRigidBody(body.handle) === body; }
+  jointAlive(j) { return this.ctx.world.getImpulseJoint(j.handle) === j; }
 
   toLocal(body, p, out) {
     const t = body.translation(), r = body.rotation();
@@ -49,18 +51,17 @@ export class Tools {
     return { body, local: this.toLocal(body, at, new THREE.Vector3()), at };
   }
 
-  /** A click with a tool in hand. */
-  use(kind, origin, dir) {
+  /** A click with a tool in hand (who: 0 = you, 1 = the other player in co-op). */
+  use(kind, origin, dir, who = 0) {
     const end = this.pick(origin, dir);
     if (!end) return;
-    const a = this.first;
+    const a = this.firsts[who];
     if (!a || !this.alive(a.body)) {
-      this.first = end;
-      this.ctx.sfx.tick();
-      this.ctx.toast(`${kind === 'rope' ? 'ROPE' : 'WELD'}: now the other end`);
+      this.firsts[who] = end;
+      if (!who) { this.ctx.sfx.tick(); this.ctx.toast(`${kind === 'rope' ? 'ROPE' : 'WELD'}: now the other end`); }
       return;
     }
-    this.first = null;
+    this.firsts[who] = null;
     if (a.body.handle === end.body.handle || (a.body.isFixed() && end.body.isFixed())) { this.ctx.toast('NOTHING TO TIE'); return; }
     this.link(kind, a, end);
     this.ctx.sfx[kind === 'rope' ? 'slash' : 'crack']();
@@ -87,13 +88,13 @@ export class Tools {
 
   drop(i) {
     const l = this.links[i];
-    if (this.ctx.world.getImpulseJoint(l.joint.handle)) this.ctx.world.removeImpulseJoint(l.joint, true);
+    if (this.jointAlive(l.joint)) this.ctx.world.removeImpulseJoint(l.joint, true);
     this.ctx.scene.remove(l.mesh);
     this.links.splice(i, 1);
   }
 
   /** Right-click: every link on what you point at, or the newest. */
-  unlink(origin, dir) {
+  unlink(origin, dir, who = 0) {
     const hit = this.ctx.raycast(origin, dir, 30);
     const body = hit?.collider.parent();
     const before = this.links.length;
@@ -105,20 +106,20 @@ export class Tools {
       if (body && (on(l.a) || on(l.b))) this.drop(i);
     }
     if (this.links.length === before && before) this.drop(before - 1);
-    this.first = null;
+    this.firsts[who] = null;
     if (this.links.length !== before) { this.ctx.sfx.pop(); this.ctx.toast('UNTIED'); }
   }
 
   clear() {
     while (this.links.length) this.drop(0);
-    this.first = null;
+    this.firsts = [];
   }
 
   /** After the physics step: drop links that lost an end, and draw the rest where their ends are now. */
   update() {
     for (let i = this.links.length - 1; i >= 0; i--) {
       const l = this.links[i];
-      if (!this.alive(l.a.body) || !this.alive(l.b.body) || !this.ctx.world.getImpulseJoint(l.joint.handle)) { this.drop(i); continue; }
+      if (!this.alive(l.a.body) || !this.alive(l.b.body) || !this.jointAlive(l.joint)) { this.drop(i); continue; }
       this.toWorld(l.a.body, l.a.local, _a);
       this.toWorld(l.b.body, l.b.local, _b);
       if (l.kind === 'rope') {
@@ -127,7 +128,7 @@ export class Tools {
         l.mesh.scale.set(1, 1, Math.max(0.01, _a.distanceTo(_b)));
       } else l.mesh.position.copy(_b);
     }
-    const f = this.first;
+    const f = this.firsts[0];
     this.marker.visible = !!f && this.alive(f.body);
     if (this.marker.visible) this.toWorld(f.body, f.local, this.marker.position);
   }

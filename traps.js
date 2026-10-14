@@ -9,10 +9,12 @@ import RAPIER from '@dimforge/rapier3d-compat';
 // Each owns a fixed body for its frame and, where something moves, a kinematic body that update() drives
 // before the physics step. What they do to people is worked out from where body parts are, not from contact
 // events, so they only ever call into the world between steps (never from inside one).
+// In co-op the other player's copy is a puppet: it moves (pose) to the state the host sends (v), and decides nothing.
 
 const UP = new THREE.Vector3(0, 1, 0);
 const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion();
 const yawQ = (yaw) => new THREE.Quaternion().setFromAxisAngle(UP, yaw);
+const players = (ctx) => [ctx.player, ...(ctx.remotes || [])];       // you, and the other player in co-op (coop.js)
 const rnd = (a, b) => a + Math.random() * (b - a);
 
 const steel = new THREE.MeshStandardMaterial({ color: 0x9aa1a8, roughness: 0.3, metalness: 0.9 });
@@ -86,7 +88,16 @@ class Trap {
     return true;
   }
 
-  update(dt) { this.t += dt; }
+  /** logic: what the trap does (the host's copy only); pose: where its moving parts are (every copy). */
+  update(dt) {
+    this.t += dt;
+    if (!this.puppet) this.logic(dt);
+    this.pose(dt);
+  }
+  logic() {}
+  pose() {}
+  get v() { return 0; }       // the one number a puppet copy needs (spikes' height, the crusher's block, the pad's bounce)
+  set v(x) {}
 
   remove() {
     if (this.removed) return;
@@ -136,11 +147,13 @@ class Saw extends Trap {
     this.group.add(this.pivot);
   }
 
-  update(dt) {
-    super.update(dt);
+  pose(dt) {
     this.angle -= dt * 30;
     this.pivot.rotation.x = this.angle;
     this.blade.setNextKinematicRotation(_q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), this.angle).premultiply(this.rot));
+  }
+
+  logic() {
     // anything at the edge: a gash, and the edge's own direction of travel throws it
     for (const [r, name, p, t] of this.parts()) {
       _v.set(t.x - this.hub.x, t.y - this.hub.y, t.z - this.hub.z);
@@ -155,10 +168,11 @@ class Saw extends Trap {
       r.hit(name, 28, at, _w.clone(), 70, { blade: true, chop: true });
       this.ctx.sfx.saw();
     }
-    const pl = this.ctx.player;
-    _v.set(pl.pos.x - this.hub.x, pl.pos.y - 0.3 - this.hub.y, pl.pos.z - this.hub.z);
-    const pax = _v.dot(this.axis);
-    if (!pl.dead && Math.abs(pax) < 0.4 && _v.addScaledVector(this.axis, -pax).length() < this.R + 0.3 && this.ready('player', 0.3)) pl.hurt(22, this.hub);
+    for (const pl of players(this.ctx)) {
+      _v.set(pl.pos.x - this.hub.x, pl.pos.y - 0.3 - this.hub.y, pl.pos.z - this.hub.z);
+      const pax = _v.dot(this.axis);
+      if (!pl.dead && Math.abs(pax) < 0.4 && _v.addScaledVector(this.axis, -pax).length() < this.R + 0.3 && this.ready(pl, 0.3)) pl.hurt(22, this.hub);
+    }
   }
 }
 
@@ -187,11 +201,13 @@ class Spikes extends Trap {
     return Math.abs(_v.x) < this.half && Math.abs(_v.z) < this.half && _v.y > -0.05 && _v.y < 0.6;
   }
 
-  update(dt) {
-    super.update(dt);
-    const pl = this.ctx.player, feet = { x: pl.pos.x, y: pl.pos.y - 0.85, z: pl.pos.z };
+  get v() { return this.h; }
+  set v(h) { this.h = h; }
+
+  logic(dt) {
+    const feet = (pl) => ({ x: pl.pos.x, y: pl.pos.y - 0.85, z: pl.pos.z });
     if (this.state === 'armed') {
-      if ((!pl.dead && this.onPlate(feet)) || this.parts().some(([, , , t]) => this.onPlate(t))) { this.state = 'primed'; this.timer = 0.3; this.ctx.sfx.tick(); }
+      if (players(this.ctx).some((pl) => !pl.dead && this.onPlate(feet(pl))) || this.parts().some(([, , , t]) => this.onPlate(t))) { this.state = 'primed'; this.timer = 0.3; this.ctx.sfx.tick(); }
     } else if ((this.timer -= dt) <= 0) {
       if (this.state === 'primed') {
         // up they come: everything on the plate is run through and thrown a little
@@ -202,14 +218,15 @@ class Spikes extends Trap {
           if (r.mode !== 'ragdoll') r.goLimp(3);
           r.hit(name, 50, new THREE.Vector3(t.x, t.y - 0.05, t.z), UP.clone(), 110, { stab: true });
         }
-        if (!pl.dead && this.onPlate(feet)) { pl.hurt(45, null); pl.vel.y = Math.max(pl.vel.y, 4); }
+        for (const pl of players(this.ctx)) if (!pl.dead && this.onPlate(feet(pl))) { pl.hurt(45, null); if (pl.launch) pl.launch({ x: 0, y: 4, z: 0 }); else pl.vel.y = Math.max(pl.vel.y, 4); }
       } else if (this.state === 'up') { this.state = 'reset'; this.timer = 1.2; }
       else this.state = 'armed';
     }
     const want = this.state === 'up' ? 1 : 0;
     this.h += (want - this.h) * Math.min(1, dt * (want ? 30 : 4));
-    this.spikes.position.y = -0.5 + 0.56 * this.h;
   }
+
+  pose() { this.spikes.position.y = -0.5 + 0.56 * this.h; }
 }
 
 // ------------------------------------------------------------------ launch pad
@@ -236,8 +253,10 @@ class Launcher extends Trap {
 
   throw() { return { x: this.dir.x * 7, y: 13, z: this.dir.z * 7 }; }
 
-  update(dt) {
-    super.update(dt);
+  get v() { return this.bounce; }
+  set v(b) { this.bounce = b; }
+
+  logic(dt) {
     let fired = false;
     const seen = new Set();
     for (const [r, , , t] of this.parts()) {
@@ -252,17 +271,18 @@ class Launcher extends Trap {
       p.body.setLinvel(this.throw(), true);
       fired = true;
     }
-    const pl = this.ctx.player;
-    if (!pl.dead && this.on({ x: pl.pos.x, y: pl.pos.y - 0.85, z: pl.pos.z }) && this.ready('player', 1)) {
+    for (const pl of players(this.ctx)) {
+      if (pl.dead || !this.on({ x: pl.pos.x, y: pl.pos.y - 0.85, z: pl.pos.z }) || !this.ready(pl, 1)) continue;
       const v = this.throw();
-      pl.vel.set(v.x, v.y, v.z);
-      pl.grounded = false;
+      if (pl.launch) pl.launch(v);           // (the other player in co-op: their own game moves them)
+      else { pl.vel.set(v.x, v.y, v.z); pl.grounded = false; }
       fired = true;
     }
     if (fired) { this.bounce = 1; this.ctx.sfx.boing(); }
     this.bounce = Math.max(0, this.bounce - dt * 4);
-    this.pad.position.y = 0.1 + 0.12 * Math.sin(this.bounce * Math.PI);
   }
+
+  pose() { this.pad.position.y = 0.1 + 0.12 * Math.sin(this.bounce * Math.PI); }
 }
 
 // ------------------------------------------------------------------ crusher
@@ -293,15 +313,20 @@ class Crusher extends Trap {
     return BOTTOM + (TOP - BOTTOM) * (c - 2.5) / (CYCLE - 2.5);
   }
 
-  update(dt) {
-    super.update(dt);
+  get v() { return this.y; }
+  set v(y) { this.y = y; }
+
+  logic() {
     this.y = this.height(this.t % CYCLE);
-    this.blockMesh.position.y = this.y;
-    _v.set(0, this.y, 0).applyQuaternion(this.rot).add(this.pos);
-    this.block.setNextKinematicTranslation(_v);
     const down = this.y <= BOTTOM + 0.01;
     if (down && !this.down) this.slam();
     this.down = down;
+  }
+
+  pose() {
+    this.blockMesh.position.y = this.y;
+    _v.set(0, this.y, 0).applyQuaternion(this.rot).add(this.pos);
+    this.block.setNextKinematicTranslation(_v);
   }
 
   /** It hit the floor: whatever was under it is gone, and the ground shakes. */
@@ -314,7 +339,7 @@ class Crusher extends Trap {
     const hit = this.parts().filter(([, , p, t]) => under(t, p.body.isKinematic()));
     for (const [r, name, p] of hit) if (!p.gone && !r.removed) r.gib(name);
     for (const p of this.ctx.props) if (!p.removed && under(p.body.translation())) p.hit(400, p.body.translation(), new THREE.Vector3(0, -1, 0), 0, {});
-    if (!pl.dead && under({ x: pl.pos.x, y: pl.pos.y - 0.6, z: pl.pos.z })) pl.hurt(500, null);
+    for (const p of players(this.ctx)) if (!p.dead && under({ x: p.pos.x, y: p.pos.y - 0.6, z: p.pos.z })) p.hurt(500, null);
     if (!pl.dead && pl.pos.distanceTo(this.pos) < 6) pl.shake = Math.min(1, pl.shake + 0.5);
   }
 }
