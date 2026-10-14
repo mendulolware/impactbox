@@ -98,6 +98,14 @@ export class Prop {
         const paint = tintedMaterial('CarPaint', CAR_PAINT[Math.floor(Math.random() * CAR_PAINT.length)]);
         this.mesh.traverse((o) => { if (o.isMesh && o.material.name === 'CarPaint') o.material = paint; });
       }
+    } else if (type === 'mag') {
+      // a magazine: a dark box with the brass of the top round showing
+      this.mat = new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.45, metalness: 0.5 });
+      this.mesh = new THREE.Mesh(g, this.mat);
+      const brass = new THREE.Mesh(geo('magtop', () => new THREE.BoxGeometry(0.02, 0.012, 0.05)), new THREE.MeshStandardMaterial({ color: 0xc9a24a, roughness: 0.3, metalness: 0.8 }));
+      brass.position.y = d.half[1] + 0.005;
+      this.mesh.add(brass);
+      this.mesh.castShadow = true;
     } else {
       // no Blender model for this type: draw the collider shape
       this.mat = new THREE.MeshStandardMaterial({ color: d.color, roughness: 0.7 });

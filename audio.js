@@ -302,8 +302,12 @@ export const sfx = {
   spray()     { noise({ dur: 0.1, f0: 7000, f1: 6000, type: 'highpass', gain: 0.16 }); },
   /** A door on its hinges. */
   door()      { play('latch', { gain: 0.5, rate: 0.8 }); tone({ f0: 160, f1: 95, dur: 0.5, gain: 0.08, type: 'sawtooth' }); },
-  /** A round into concrete or steel. */
-  impact()    { noise({ dur: 0.05, f0: 5200, f1: 1200, type: 'highpass', gain: 0.22, send: 0.1 }); tone({ f0: 180, f1: 70, dur: 0.06, gain: 0.14 }); },
+  /** A round into what it hit: a crack off concrete, a ring off steel, a thud into wood. */
+  impact(on = 'concrete') {
+    if (on === 'planks') { noise({ dur: 0.07, f0: 1600, f1: 300, gain: 0.3, send: 0.08 }); tone({ f0: 140, f1: 60, dur: 0.07, gain: 0.18 }); return; }
+    if (on === 'metal') { noise({ dur: 0.04, f0: 6000, f1: 2000, type: 'highpass', gain: 0.18, send: 0.15 }); tone({ f0: 1900 + Math.random() * 600, f1: 1500, dur: 0.22, gain: 0.08, type: 'triangle', send: 0.2 }); return; }
+    noise({ dur: 0.05, f0: 5200, f1: 1200, type: 'highpass', gain: 0.22, send: 0.1 }); tone({ f0: 180, f1: 70, dur: 0.06, gain: 0.14 });
+  },
   explosion() {
     play('dbarrel', { gain: 1.3, rate: 0.42, send: 0.6 });               // a 12 gauge slowed right down is a very good bang
     play('sniper', { gain: 1.0, rate: 0.3, send: 0.4 });
@@ -317,8 +321,13 @@ export const sfx = {
   deathcry(level = 1, pitch = 1) { play('death', { gain: 0.9 * level, rate: throat(pitch), send: 0.15 }); },
   growl(level = 1, pitch = 1)    { play('death', { gain: 0.9 * level, rate: 0.5 + (pitch - 0.7) * 0.25, send: 0.15 }); },   // a man, slowed to something that is not
   playerHurt() { play('grunt', { gain: 0.7, rate: 0.9 }); },
-  /** One footfall. */
-  step(run = false) { play('step', { gain: run ? 0.5 : 0.32, rate: run ? 1.1 : 1, jitter: 0.08 }); },
+  /** One footfall, on whatever is underfoot: boards are hollow and low, sheet metal rings, stone and asphalt are the recording as it is. */
+  step(run = false, on = null) {
+    const gain = run ? 0.5 : 0.32;
+    if (on === 'planks') { play('step', { gain: gain * 1.2, rate: 0.72, jitter: 0.08 }); tone({ f0: 110, f1: 70, dur: 0.09, gain: 0.12 * (run ? 1.6 : 1) }); }
+    else if (on === 'metal') { play('step', { gain, rate: 1.25, jitter: 0.08 }); tone({ f0: 620, f1: 540, dur: 0.14, gain: 0.05 * (run ? 1.8 : 1), type: 'triangle' }); }
+    else play('step', { gain, rate: run ? 1.1 : 1, jitter: 0.08 });
+  },
 
   // ---- interface
   pop()       { tone({ f0: 380, f1: 820, dur: 0.07, gain: 0.1, type: 'triangle' }); },

@@ -174,6 +174,7 @@ export class MapBuilder {
       const tex = this.S[kind];
       m = new THREE.MeshStandardMaterial(tex ? { ...tex, color, ...extra } : { color, roughness: 0.6, ...extra });
       m.userData.tile = this.S.tile[kind] || 4;
+      m.userData.kind = kind;
       this.mats.set(key, m);
       this.trash.push(m);
     }
@@ -198,8 +199,9 @@ export class MapBuilder {
     const q = this._place(g, x, y, z, o);
     this._add(g, material);
     if (o.solid !== false) {
-      this.ctx.world.createCollider(RAPIER.ColliderDesc.cuboid(w / 2, h / 2, d / 2)
+      const c = this.ctx.world.createCollider(RAPIER.ColliderDesc.cuboid(w / 2, h / 2, d / 2)
         .setTranslation(x, y, z).setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }).setFriction(0.9), this.body);
+      this.ctx.surfaces.set(c.handle, material.userData.kind || 'concrete');       // (what a round or a boot sounds like on it)
     }
   }
 
@@ -209,8 +211,9 @@ export class MapBuilder {
     const q = this._place(g, x, y, z, o);
     this._add(g, material);
     if (o.solid !== false) {
-      this.ctx.world.createCollider(RAPIER.ColliderDesc.cylinder(h / 2, r)
+      const c = this.ctx.world.createCollider(RAPIER.ColliderDesc.cylinder(h / 2, r)
         .setTranslation(x, y, z).setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }).setFriction(0.9), this.body);
+      this.ctx.surfaces.set(c.handle, material.userData.kind || 'metal');
     }
   }
 
@@ -236,7 +239,8 @@ export class MapBuilder {
     mesh.receiveShadow = true;
     this.group.add(mesh);
     this.trash.push(geo, mat);
-    this.ctx.world.createCollider(RAPIER.ColliderDesc.cuboid(size / 2, 0.5, size / 2).setTranslation(0, -0.5, 0).setFriction(0.9), this.body);
+    const c = this.ctx.world.createCollider(RAPIER.ColliderDesc.cuboid(size / 2, 0.5, size / 2).setTranslation(0, -0.5, 0).setFriction(0.9), this.body);
+    this.ctx.surfaces.set(c.handle, 'asphalt');
   }
 
   /** A worn painted line on a flat surface. yaw 0 runs along z. */
@@ -323,6 +327,7 @@ export class MapBuilder {
   }
 
   dispose() {
+    this.ctx.surfaces.clear();
     for (const d of this.doors) d.dispose();
     this.doors.length = 0;
     this.ctx.scene.remove(this.group);

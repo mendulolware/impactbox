@@ -198,6 +198,13 @@ Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted aft
 
 - **Recoil and muzzle fire:** `RECOIL` is 3.4 (it was 1.6), so bursts climb hard and have to be dragged down, and the gun itself kicks 30% further. Every unsuppressed shot (yours and the suspects') throws a muzzle flash: two crossed flame tongues along the barrel and a star facing the camera, brighter than white so the bloom catches them, plus a moment of orange light (`muzzleFlash()`, `fireFlash()` in `weapons.js`). Yours stays on the muzzle while the gun kicks up.
 
+- **Feel pass:** reloading a magazine gun, the off hand drops out of the picture, comes back up with a fresh magazine
+  (a box: the downloaded guns have no loose parts) and seats it before taking hold again (`userData.off` / `mag` on each
+  viewmodel, driven by the reload's progress in `placeRig`); the magazine on the floor is dark with brass showing at the
+  top. Every map collider remembers what it is made of (`ctx.surfaces`, set by `MapBuilder`): your footsteps go hollow
+  and low on boards and ring on sheet metal, and a round into wood thuds and throws splinters, into steel rings, into
+  concrete cracks and sparks (`step()` and `impact()` in `audio.js`).
+
 ## First person
 
 - **Hands:** gloved hands with sleeves are attached per weapon: `HandR` grips, `HandL` cups a fore-end, `HandSupport` closes over the

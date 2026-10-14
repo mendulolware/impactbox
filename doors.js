@@ -30,6 +30,7 @@ export class Door {
     this.body = ctx.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(this.hinge.x, y0, this.hinge.z).setRotation(yawQ(yaw)));
     this.collider = ctx.world.createCollider(RAPIER.ColliderDesc.cuboid(w / 2, h / 2, t / 2).setTranslation(w / 2, h / 2, 0).setFriction(0.7), this.body);
     ctx.owners.set(this.collider.handle, { kind: 'door', door: this });
+    ctx.surfaces.set(this.collider.handle, 'planks');
 
     this.group = new THREE.Group();
     this.group.position.copy(this.hinge);

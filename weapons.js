@@ -187,6 +187,17 @@ function buildViewmodel(v) {
     if (r) g.add(r);
     if (l) g.add(l);
     if (s) g.add(s);
+    // the hand that changes magazines, and the magazine it brings up (a box: the guns are downloaded models with no loose parts)
+    const off = l || s;
+    if (off) {
+      g.userData.off = off;
+      g.userData.rest = off.position.clone();
+      const mag = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.12, 0.06), new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.45, metalness: 0.5 }));
+      mag.position.set(0, -0.06, 0.02);
+      mag.visible = false;
+      off.add(mag);
+      g.userData.mag = mag;
+    }
   }
   return g;
 }
@@ -911,6 +922,17 @@ export class Weapons {
       this.rig.position.x -= 0.03 * b;
       this.rig.rotation.x += 0.45 * b;
       this.rig.rotation.z += 0.5 * b;
+    }
+    // the off hand: down out of the picture for a magazine, back up with it, and onto the gun again
+    const u = this.models[this.index].userData;
+    if (u.off) {
+      const w = this.current;
+      const t = this.reloadT > 0 && w.reload && !w.shells ? 1 - this.reloadT / (this.topped ? w.reload : w.reload * 1.3) : -1;
+      const k = t < 0 ? 0 : t < 0.4 ? t / 0.4 : t < 0.75 ? 1 : 1 - (t - 0.75) / 0.25;   // how far from the gun the hand is
+      const e = k * k * (3 - 2 * k);
+      u.off.position.set(u.rest.x - 0.12 * e, u.rest.y - 0.3 * e, u.rest.z + 0.18 * e);
+      u.off.rotation.x = (this.view.handL || this.view.handS || [0, 0, 0, 0])[3] + 0.9 * e;
+      u.mag.visible = t >= 0.35 && t < 0.8;        // comes up in the hand, goes in at the top of the stroke
     }
     if (this.thrust > 0) {                       // a stab: straight out toward the middle of the view and back
       const t = Math.sin((1 - this.thrust / 0.24) * Math.PI);

@@ -67,6 +67,7 @@ const input = { keys: new Set(), left: false, right: false, leftDown: false, rig
 const ctx = {
   scene, camera, renderer, world, input, sfx,
   owners: new Map(),   // collider handle -> { kind:'part'|'prop', ... }
+  surfaces: new Map(), // map collider handle -> 'concrete' | 'planks' | 'metal' | 'brick' | 'asphalt' (world.js)
   ragdolls: [],
   props: [],
   timers: [],
@@ -122,11 +123,14 @@ ctx.applyHit = (hit, point, dir, dmg, impulse, opts = {}) => {
   } else if (owner?.kind === 'door') {
     ctx.gore.bulletHole(point, new THREE.Vector3(hit.normal.x, hit.normal.y, hit.normal.z));
     owner.door.shot(point, dmg);
+    sfx.impact('planks');
   } else {
     const n = new THREE.Vector3(hit.normal.x, hit.normal.y, hit.normal.z);
-    ctx.gore.sparks(point, n, 5);
+    const kind = ctx.surfaces.get(hit.collider.handle) || 'concrete';
+    if (kind === 'planks') ctx.gore.debris(point, 0xb08a5a, 4);          // splinters
+    else ctx.gore.sparks(point, n, kind === 'metal' ? 8 : 5);
     ctx.gore.bulletHole(point, n);
-    sfx.impact();
+    sfx.impact(kind);
   }
 };
 
@@ -741,9 +745,10 @@ function tick(now) {
   if (stepN !== lastStep) {
     lastStep = stepN;
     if (active && ctx.player.grounded) {
-      sfx.step(input.keys.has('ShiftLeft') || input.keys.has('ShiftRight'));
+      const pl = ctx.player, under = ctx.raycast({ x: pl.pos.x, y: pl.pos.y - 0.5, z: pl.pos.z }, { x: 0, y: -1, z: 0 }, 1.2);
+      sfx.step(input.keys.has('ShiftLeft') || input.keys.has('ShiftRight'), under ? ctx.surfaces.get(under.collider.handle) : null);
       // your own boots track blood too
-      const pl = ctx.player, feet = { x: pl.pos.x, y: pl.pos.y - 0.85, z: pl.pos.z };
+      const feet = { x: pl.pos.x, y: pl.pos.y - 0.85, z: pl.pos.z };
       if (ctx.gore.wetAt(feet)) pl.bloody = 9;
       else if (pl.bloody > 0) {
         const fx = -Math.sin(pl.yaw), fz = -Math.cos(pl.yaw), side = stepN % 2 ? 0.1 : -0.1;
