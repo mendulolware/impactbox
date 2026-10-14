@@ -99,7 +99,7 @@ export class Brain {
       // gunfire and blasts are heard through walls; a death has to be witnessed
       if ((type === 'death' || type === 'violence') && dist > 6 && !this.canSee(pos, radius)) return;
     }
-    if (this.kind === 'zombie') return; // zombies do not care
+    if (this.kind === 'zombie' || this.kind === 'swat') return; // zombies do not care, and the squad is here for this
     this.threat.set(pos.x, pos.y, pos.z);
     if (this.kind === 'thug' && n.health > 35) {
       // deaths nearby make a thug wary, but only being shot at (or hit) starts a fight
@@ -199,7 +199,7 @@ export class Brain {
   /** The player has ordered everyone to give up (mission.js). People do; armed suspects might. */
   shouted() {
     const n = this.npc;
-    if (this.kind === 'zombie' || n.arrested || this.gaveUp) return;
+    if (this.kind === 'zombie' || this.kind === 'swat' || n.arrested || this.gaveUp) return;
     if (!n.armed) { this.comply = true; return; }
     this.pleas = (this.pleas || 0) + 1;      // every shout wears them down a little
     const chance = (0.25 + 0.12 * this.pleas + (n.health < 60 ? 0.3 : 0) + (this.playerAimingAtMe() ? 0.15 : 0) + (this.flashed > 0 ? 0.5 : 0)) * (n.hostage ? 0.5 : 1);   // (a hostage-taker holds out longer)
@@ -246,13 +246,98 @@ export class Brain {
       this.blockedT = 0;
       g.face = true; g.pos.copy(pl.pos);
       n.gesture = this.out ? 'aim' : 'kneel';
-      if (this.out && this.sees && (this.attackT -= dt) <= 0) { this.attackT = rnd(0.45, 0.95); n.shoot(pl); }
+      if (this.out && this.sees && (this.attackT -= dt) <= 0) { this.attackT = rnd(0.45, 0.95); n.shoot(this.hostile()); }
       if ((this.cycleT -= dt) <= 0) { this.out = !this.out; this.cycleT = this.out ? rnd(1.5, 3) : rnd(1.5, 3.5); this.attackT = rnd(0.3, 0.6); }
       return;
     }
     if (!this.sees) return;
     g.face = true; g.pos.copy(pl.pos); n.look = pl.eye; n.gesture = 'aim';
-    if ((this.attackT -= dt) <= 0) { this.attackT = rnd(0.45, 0.95); n.shoot(pl); }
+    if ((this.attackT -= dt) <= 0) { this.attackT = rnd(0.45, 0.95); n.shoot(this.hostile()); }
+  }
+
+  /** Who a suspect shoots at: you, unless one of your squad is nearer and in view. */
+  hostile() {
+    const pl = this.ctx.player;
+    let best = pl, bd = pl.dead ? 1e9 : this.distTo(pl.pos);
+    for (const r of this.ctx.ragdolls) {
+      if (r.kind !== 'swat' || r.dead || r.removed) continue;
+      const d = this.distTo(r.root);
+      if (d < bd && this.los(r.center(_v))) { bd = d; best = r; }
+    }
+    return best;
+  }
+
+  /** The nearest thing the squad should shoot: an armed suspect still fighting, a thug on the attack, or a zombie. (threat is taken: the civilians' "where the danger is" vector.) */
+  findThreat() {
+    let best = null, bd = 28;
+    for (const r of this.ctx.ragdolls) {
+      if (r === this.npc || r.dead || r.removed || r.kind === 'swat') continue;
+      const hostile = r.kind === 'zombie' || (r.kind === 'thug' && r.brain.state === 'attack')
+        || (r.armed && !r.arrested && !r.brain.gaveUp && !(r.brain.flashed > 0) && !r.hostage);   // (a hostage-taker is your shot, not theirs)
+      if (!hostile) continue;
+      const d = this.distTo(r.root);
+      if (d < bd && this.los(r.center(_v))) { bd = d; best = r; }
+    }
+    return best;
+  }
+
+  /**
+   * One of your squad: follows in formation (the second covers the rear), stacks beside a closed door you are
+   * facing and goes through when you open or kick it, goes where you point (U) and holds that angle, and shoots
+   * what threat() finds on the way.
+   */
+  swat(dt, scan) {
+    const n = this.npc, g = this.goal, pl = this.ctx.player, ctx = this.ctx;
+    const side = n.slot % 2 ? 1 : -1;
+    if (scan) this.target = this.findThreat();
+    const th = this.target && !this.target.dead && !this.target.removed ? this.target : null;
+    if (th) {
+      n.look = th.center(this.lookV);
+      n.gesture = 'aim';
+      if ((this.attackT -= dt) <= 0) { this.attackT = rnd(0.5, 0.9); n.shoot(th); }
+    }
+
+    let spot = null, face = null, speed = WALK * 1.4;
+    const door = ctx.squadDoor;
+    if (this.breach && n.t - this.breach.t > 3.5) this.breach = null;
+    if (this.breach) {
+      spot = this.breach.pos; face = this.breach.face; speed = RUN;
+    } else if (door && this.distTo(door.hinge) < 9) {
+      // stack up beside the door, on your side of it, facing it
+      const s = door.side(pl.pos);
+      spot = door.hinge.clone().addScaledVector(door.x, side > 0 ? door.w + 0.5 : -0.5).addScaledVector(door.n, s * 0.7);
+      face = door.hinge.clone().addScaledVector(door.x, door.w / 2);
+      this.stacked = door;
+    } else if (this.stacked) {
+      // the door you were stacked on has gone: through it, one to each side of the room
+      const d = this.stacked;
+      this.stacked = null;
+      if (d.target !== 0 || d.passable()) {
+        const s = d.side(pl.pos);
+        const mid = d.hinge.clone().addScaledVector(d.x, d.w / 2);
+        this.breach = { t: n.t, pos: mid.clone().addScaledVector(d.x, side * 0.8).addScaledVector(d.n, -s * 1.8), face: mid.clone().addScaledVector(d.n, -s * 6) };
+        spot = this.breach.pos; face = this.breach.face; speed = RUN;
+      }
+    }
+    const go = ctx.squadGo;
+    if (!spot && go) {
+      spot = go.pos.clone().addScaledVector(go.right, side * 0.8);
+      face = go.pos.clone().addScaledVector(go.dir, 8);
+      speed = RUN;
+    }
+    if (!spot) {
+      // formation: behind you, one each side; the second looks back the way you came
+      const fx = -Math.sin(pl.yaw), fz = -Math.cos(pl.yaw);
+      spot = new THREE.Vector3(pl.pos.x - fx * 1.8 - fz * side * 1.0, pl.pos.y, pl.pos.z - fz * 1.8 + fx * side * 1.0);
+      face = new THREE.Vector3(pl.pos.x + fx * (side > 0 ? -8 : 10), pl.pos.y, pl.pos.z + fz * (side > 0 ? -8 : 10));
+      speed = this.distTo(spot) > 6 ? RUN : WALK * 1.4;
+    }
+    if (this.distTo(spot) > (this.breach ? 0.5 : 0.7) && this.blockedT < 2) { g.mode = 'to'; g.pos.copy(spot); g.speed = speed; }
+    else {
+      g.mode = 'stop'; this.blockedT = 0;
+      g.face = true; g.pos.copy(th ? th.root : face);
+      if (!th) n.look = this.lookV.set(face.x, face.y + 1.5, face.z);
+    }
   }
 
   /** Holding someone in front of you: they go where you go, and the pistol rests over their shoulder. */
@@ -268,7 +353,7 @@ export class Brain {
     if (!this.sees) return;
     const d = this.distTo(pl.pos);
     if ((this.warnT = (this.warnT ?? 0) - dt) <= 0 && d < 14) { this.warnT = 7; this.ctx.toast('BACK OFF OR I SHOOT!'); }
-    if (d < 9 && (this.attackT -= dt) <= 0) { this.attackT = rnd(1.4, 2.4); n.shoot(pl); }    // the odd shot to keep you back
+    if (d < 9 && (this.attackT -= dt) <= 0) { this.attackT = rnd(1.4, 2.4); n.shoot(this.hostile()); }    // the odd shot to keep you back
   }
 
   civilian(dt, scan) {
@@ -530,7 +615,8 @@ export class Brain {
         if (c && c.kind === 'door') {
           // a door in the way opens as they reach it; a locked one is kicked by anyone who would, and a wall to the rest
           const d = c.door;
-          if (d.passable() || d.open(r)) c = l = rt = false;
+          if (this.kind === 'swat' && this.ctx.squadDoor === d && !d.passable()) { /* stacked on it: your call */ }
+          else if (d.passable() || d.open(r)) c = l = rt = false;
           else if (this.kind !== 'civilian' || n.armed) {
             // a kicker: straight up to it, then stand and boot it until it gives
             c = l = rt = false;
@@ -602,6 +688,7 @@ export class Brain {
       if (this.kind !== 'thug' && !n.armed && this.flashed <= 0) { this.state = 'cower'; this.t = rnd(2, 4); }
     } else if (this.kind === 'zombie') this.zombie(dt, scan);
     else if (n.arrested) { this.goal.mode = 'stop'; n.gesture = 'cower'; }      // cuffed: stays down
+    else if (this.kind === 'swat') this.swat(dt, scan);
     else if (n.armed) this.suspect(dt, scan);
     else if (this.kind === 'thug') this.thug(dt, scan);
     else this.civilian(dt, scan);

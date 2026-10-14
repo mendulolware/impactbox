@@ -24,6 +24,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | R / F / B | reload / clear a jam / switch auto and semi |
 | F | open or close the door in front of you; otherwise Ready or Not mode: shout for compliance, or arrest whoever has given up in front of you |
 | H / M | kick the door in front of you / look under it with the mirror (M again, or walk away, to stop) |
+| U | the squad: go where you are pointing and hold that angle; U again (or getting 18 m away from them) calls them back |
 | J / K | suppressor on the current gun (quieter: heard 9 m away instead of 40, no flash) / laser (a red dot where the barrel points, and the beam at night) |
 | P | record a video of what you see and hear; P again saves it as a .webm (in bodycam it is cut to 4:3, with the timestamp burned in) |
 | Q / E | lean left / right (hold) |
@@ -121,6 +122,14 @@ readily as the others. Anything that stops him frees the hostage: a kill, a tase
 cuffs after he surrenders (`freed()` in `mission.js` logs a rescue or a release). Wounding him without stopping him is a
 coin toss on the hostage's life: half the time he fires into them (-40, "Hostage killed"). The head showing over the
 hostage's shoulder is the shot to make.
+
+**Your squad.** A mission starts with two officers at your back (`kind: 'swat'`, the soldier model with his armour,
+rifles; `swat()` in `brain.js`). They follow in formation, one each side behind you, the second facing back the way
+you came. Stand at a closed door and they stack up beside it, one each side, facing it; open or kick it and they go
+through to the far corners of the room. **U** sends them to where you are pointing to hold that angle, U again brings
+them back. They shoot any armed suspect still fighting, any thug on the attack and any zombie they can see, but hold
+their fire on a hostage-taker: that shot is yours. Suspects shoot back at whichever of you is nearer. An officer killed
+costs 20. The spawn menu has them too (**SWAT Officer**), for the sandbox.
 
 ## How NPCs work
 

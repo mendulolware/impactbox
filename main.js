@@ -333,6 +333,9 @@ const SPAWN_ITEMS = [
     },
   },
   {
+    cat: 'NPCs', label: 'SWAT Officer', icon: '👮', small: 'follows you, stacks on doors', run: () => { const s = ctx.spawnRagdoll(spawnPoint(), 0, { kind: 'swat', model: 'Ch15' }); s.arm('Rifle'); s.slot = ctx.ragdolls.filter((r) => r.kind === 'swat').length - 1; },
+  },
+  {
     cat: 'NPCs', label: 'Drop 5', icon: '🪂', small: 'rain from above', run: () => {
       const c = spawnPoint();
       for (let i = 0; i < 5; i++) {
@@ -592,6 +595,20 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') { const d = doorAhead(); if (d) d.door.toggle(ctx.player.pos); else { ctx.weapons.unjam(); ctx.mission.act(); } }
   if (e.code === 'KeyH') { const d = doorAhead(1.9); if (d) d.door.kick(ctx.player.pos); }
   if (e.code === 'KeyM') { ctx.mirrorOn = !ctx.mirrorOn; sfx.tick(); }
+  if (e.code === 'KeyU') {
+    // the squad: go where you are pointing and hold there, or (again) back to you
+    if (ctx.squadGo) { ctx.squadGo = null; toast('SQUAD: ON ME'); }
+    else {
+      camera.getWorldPosition(_v); camera.getWorldDirection(_d);
+      const hit = ctx.raycast(_v, _d, 16);
+      const pos = _v.clone().addScaledVector(_d, hit ? Math.max(0.5, hit.timeOfImpact - 0.8) : 16);
+      pos.y = ctx.player.pos.y;
+      const dir = new THREE.Vector3(_d.x, 0, _d.z).normalize();
+      ctx.squadGo = { pos, dir, right: new THREE.Vector3(-dir.z, 0, dir.x) };
+      toast('SQUAD: MOVE UP');
+    }
+    sfx.tick();
+  }
   if (e.code === 'KeyB') ctx.weapons.toggleMode();
   if (e.code === 'KeyJ') ctx.weapons.toggleCan();
   if (e.code === 'KeyK') { ctx.weapons.laser = !ctx.weapons.laser; sfx.tick(); }
@@ -700,6 +717,10 @@ function tick(now) {
 
   const active = gameActive() && !ctx.player.dead;
   ctx.player.update(sdt, input, active, dt);
+  // the squad stacks on a closed door you are standing at
+  const sd = ctx.ragdolls.some((r) => r.kind === 'swat' && !r.dead) ? doorAhead(2.4) : null;
+  ctx.squadDoor = sd && sd.door.target === 0 ? sd.door : null;
+  if (ctx.squadGo && ctx.squadGo.pos.distanceTo(ctx.player.pos) > 18) ctx.squadGo = null;     // too far behind you: they come
   // the mirror: your eye goes to the floor on the far side of the door in front of you
   const mirror = ctx.mirrorOn && !ctx.drone ? doorAhead(2.2) : null;
   if (ctx.mirrorOn && !mirror) ctx.mirrorOn = false;          // walked away from it

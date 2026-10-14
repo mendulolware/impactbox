@@ -253,7 +253,7 @@ export class Ragdoll {
     };
     // who this is: one of the downloaded people if there are any, else the built figure in random colours
     const people = looks();
-    this.model = people.length ? people[(Math.random() * people.length) | 0] : 'Body';
+    this.model = opts.model && people.includes(opts.model) ? opts.model : people.length ? people[(Math.random() * people.length) | 0] : 'Body';
     this.real = this.model !== 'Body';
     this.armour = this.model === 'Ch15' ? 120 : 0;   // the soldier's vest and helmet: how much more they can take
     this.stumbleT = 0;
@@ -709,32 +709,36 @@ export class Ragdoll {
   }
 
   /** Hand this NPC a pistol: from now on it is an armed suspect (see suspect() in brain.js). */
-  arm() {
+  arm(model = 'Pistol') {
     this.armed = true;
     this.rounds = MAG;
-    this.gun = getModel('Pistol');
+    this.gun = getModel(model);
     if (!this.gun) return;
     this.gun.position.set(0, -0.2, -0.03);       // in the hand at the end of the forearm, barrel along it
     this.gun.rotation.x = -Math.PI / 2;
     this.parts.farmR.mesh.add(this.gun);
   }
 
-  /** Fire the pistol at the player. The further away, the more it misses. */
-  shoot(pl) {
+  /** Fire the gun at a target: the player, or another NPC. The further away, the more it misses. */
+  shoot(target) {
     const arm = this.parts.farmR;
     if (arm.gone || this.isFree('farmR') || this.limp.has('farmR')) { this.armed = false; return; }   // no gun hand: no longer a shooter
     if (this.reloadT > 0) return;                    // busy with a fresh magazine: your chance
     if (--this.rounds <= 0 && CLIPS.reload) this.reloadT = 1e-3;
+    const npc = !!target.parts;
+    if (npc && target.removed) return;
     const from = this.localToWorld(arm, { x: 0, y: -0.3, z: -0.03 });
-    const to = new THREE.Vector3(pl.pos.x, pl.pos.y + 0.3, pl.pos.z);
+    const to = npc ? target.center(new THREE.Vector3()).setY(target.center(_c).y + 0.1) : new THREE.Vector3(target.pos.x, target.pos.y + 0.3, target.pos.z);
     const d = from.distanceTo(to);
     const hit = Math.random() < clamp(0.8 - d * 0.03, 0.12, 0.8);
     if (!hit) to.add(_v.set(rnd(-1, 1), rnd(-0.3, 0.8), rnd(-1, 1)).multiplyScalar(0.25 + d * 0.06)).addScaledVector(_t.copy(to).sub(from).normalize(), 4);
     this.ctx.weapons.tracer(from, to);
     this.ctx.weapons.fireFlash(from, _t.copy(to).sub(from).normalize(), 0.15);
-    this.ctx.sfx.pistol();
-    if (hit) pl.hurt(rnd(14, 24), this.root);
-    else { pl.suppress = Math.min(1, pl.suppress + 0.45); this.ctx.sfx.impact(); }   // the crack of one going past
+    if (this.kind === 'swat') this.ctx.sfx.rifle(); else this.ctx.sfx.pistol();
+    if (!hit) { if (!npc) { target.suppress = Math.min(1, target.suppress + 0.45); this.ctx.sfx.impact(); } return; }   // the crack of one going past
+    if (!npc) { target.hurt(rnd(14, 24), this.root); return; }
+    const part = [target.parts.torso, target.parts.pelvis].find((p) => !p.gone);
+    if (part) target.hit(part.name, this.kind === 'swat' ? rnd(14, 22) : rnd(12, 20), to, _t.copy(to).sub(from).normalize(), 80, { hole: 0.03, from: this.root });
   }
 
   /** An open wound: it drips, and costs health until it clots (limbs) or kills (body wounds). */

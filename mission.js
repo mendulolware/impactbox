@@ -34,7 +34,7 @@ export class Mission {
     const ctx = this.ctx;
     this.on = false;                       // (so resetting the map does not count as casualties)
     ctx.setMap(ctx.map.id);
-    const people = ctx.ragdolls.filter((r) => r.kind !== 'zombie');
+    const people = ctx.ragdolls.filter((r) => r.kind !== 'zombie' && r.kind !== 'swat');
     const suspects = people.filter((r) => r.kind === 'thug');
     const rest = people.filter((r) => r.kind !== 'thug').sort(() => Math.random() - 0.5);
     while (suspects.length < Math.max(3, Math.floor(people.length * 0.45)) && rest.length > 2) suspects.push(rest.pop());
@@ -48,6 +48,14 @@ export class Mission {
       break;
     }
     this.people = people;
+    // your squad: two officers at your back
+    const sp = ctx.map.spawn, yaw = ctx.map.yaw;
+    const bx = Math.sin(yaw), bz = Math.cos(yaw);                        // behind you
+    for (let i = 0; i < 2; i++) {
+      const s = ctx.spawnRagdoll({ x: sp.x + bx * 1.4 - bz * (i ? 1.1 : -1.1), y: sp.y - 0.95, z: sp.z + bz * 1.4 + bx * (i ? 1.1 : -1.1) }, yaw, { kind: 'swat', model: 'Ch15' });   // (sp is where your capsule sits; they stand on the floor)
+      s.arm('Rifle');
+      s.slot = i;
+    }
     this.log = [];
     this.over = false;
     this.on = true;
@@ -117,7 +125,9 @@ export class Mission {
 
   /** Someone died. Was it within the rules? */
   onKill(r) {
-    if (!this.on || !r.role) return;
+    if (!this.on) return;
+    if (r.kind === 'swat') { this.log.push([-20, 'Officer down']); this.ctx.toast('OFFICER DOWN'); this.refresh(); return; }
+    if (!r.role) return;
     const gaveUp = r.arrested || r.brain.gaveUp || r.brain.comply || r.brain.flashed > 0;    // (shooting someone you have already stunned counts too)
     if (r.heldBy) this.log.push([-40, 'Hostage killed']);
     else if (r.role === 'civilian') this.log.push([-30, 'Civilian killed']);
