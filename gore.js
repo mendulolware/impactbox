@@ -519,6 +519,9 @@ export class Gore {
       { scaleFn: (f) => 0.3 + 0.7 * (1 - f * f), fadeFn: (f) => f });
     this.fire = new ParticleSet(scene, 500, new THREE.SphereGeometry(0.5, 10, 8), softMaterial(1, THREE.AdditiveBlending),
       { scaleFn: (f) => 0.25 + 0.75 * f, fadeFn: (f) => Math.min(1, f * 2.5) });
+    // rain: thin grey streaks, no collisions (they fall through the ground and die), only emitted under open sky
+    this.rain = new ParticleSet(scene, 2600, new THREE.SphereGeometry(0.5, 5, 4),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false }), { stretch: true });
     this.smoke = new ParticleSet(scene, 300, new THREE.SphereGeometry(0.5, 10, 8), softMaterial(0.75),
       { scaleFn: (f) => Math.min(1, f * 3) * (1.6 - 0.6 * f), fadeFn: (f) => Math.min(1, f * 2.2) });
 
@@ -588,12 +591,21 @@ export class Gore {
     }
   }
 
-  /** Blood on the lens: drops that hang there, run down the glass and fade. */
-  lens(n) {
+  /** Rain, for a frame: fresh drops over the camera unless something is overhead, and all of them falling. */
+  rainStep(dt, cam, covered) {
+    if (!covered) for (let k = Math.ceil(dt * 1100); k > 0; k--) {
+      this.rain.emit(cam.x + rnd(-15, 15), cam.y + rnd(3, 9), cam.z + rnd(-15, 15), 0.6, -13, 0.4, 0.017, 1.0, 0, 0.78, 0.86, 0.96, 0, 0);
+    }
+    this.rain.update(dt);
+  }
+
+  /** Blood on the lens: drops that hang there, run down the glass and fade. (kind 'rain': clear water instead.) */
+  lens(n, kind = '') {
     const el = this.lensEl;
     if (!el) return;
     for (let k = 0; k < Math.min(n, 3) && el.childElementCount < 14; k++) {
       const d = document.createElement('i');
+      d.className = kind;
       const size = rnd(5, 15) * (Math.random() < 0.15 ? 2.5 : 1);
       d.style.cssText = `left:${rnd(0, 96)}%;top:${rnd(0, 90)}%;width:${size}px;height:${size * rnd(1, 1.5)}px;animation-duration:${rnd(5, 10)}s`;
       d.addEventListener('animationend', () => d.remove());
@@ -867,7 +879,7 @@ export class Gore {
 
   // ------------------------------------------------------------ housekeeping
   clear() {
-    this.drops.n = 0; this.fire.n = 0; this.smoke.n = 0; this.mists.n = 0;
+    this.drops.n = 0; this.fire.n = 0; this.smoke.n = 0; this.mists.n = 0; this.rain.n = 0;
     for (const k in this.sets) for (const s of this.sets[k]) s.clear();
     this.holes.clear();
     this.scorch.clear();

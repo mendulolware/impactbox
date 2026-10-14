@@ -10,7 +10,7 @@
 //   the ambience       a quiet bed of wind, room hum or city, per map
 let ac = null, master = null, wetIn = null, wetOut = null, noiseBuf = null, ears = null, comp = null;
 let deaf = 0, deafAt = 0, micHp = null, micClip = null, micOn = false;
-let space = 'yard', bed = null;
+let space = 'yard', bed = null, rainBed = null, rainWanted = false;
 
 // recordings: name -> how many takes there are (files are assets/sounds/<name>_<n>.mp3)
 const TAKES = {
@@ -106,6 +106,7 @@ export function initAudio() {
       wetIn.connect(conv); conv.connect(wetOut); wetOut.connect(ears);
       setSpace(space);
       loadClips();
+      if (rainWanted) setRain(true);
     }
     if (ac.state === 'suspended') ac.resume();
   } catch (e) { /* audio is optional */ }
@@ -157,6 +158,14 @@ export function deafen(amount, indoorsOnly = false) {
   }
 }
 
+/** Rain on the roof, the ground, everything: a second bed over the map's own. */
+export function setRain(on) {
+  rainWanted = on;
+  if (!ac) return;
+  if (on && !rainBed) rainBed = ambience('rain');
+  else if (!on && rainBed) { const old = rainBed; old.gain.gain.setTargetAtTime(0, ac.currentTime, 0.6); setTimeout(() => old.stop(), 3000); rainBed = null; }
+}
+
 /** Which map we are in: sets the echo and the background. Safe to call before the audio exists. */
 export function setSpace(id) {
   space = id;
@@ -198,6 +207,7 @@ function ambience(kind) {
   else if (kind === 'gale') { loop(520, 0.5, 0.07); }
   else if (kind === 'hum') { hum(60, 0.01); loop(260, 0.5, 0.02); }
   else if (kind === 'city') { loop(210, 0.5, 0.045); }
+  else if (kind === 'rain') { loop(2600, 0.3, 0.07, 'bandpass'); loop(700, 0.5, 0.03); }
   g.gain.setTargetAtTime(1, ac.currentTime, 0.8);
   return { gain: g, stop: () => { for (const n of nodes) { try { n.stop(); } catch (e) { /* already stopped */ } } g.disconnect(); } };
 }
@@ -300,6 +310,8 @@ export const sfx = {
   taser()     { for (let i = 0; i < 6; i++) tone({ f0: 60, f1: 50, dur: 0.05, gain: 0.3, type: 'square', delay: i * 0.08 }); noise({ dur: 0.5, f0: 6000, f1: 4000, type: 'highpass', gain: 0.18 }); },
   beanbag()   { play('shotgun', { gain: 0.45, rate: 0.7 }) || shot({ crack: 0.3, crackHz: 2500, body: 0.6, bodyHz: [1400, 200], bodyDur: 0.12, thump: 0.6, thumpHz: [150, 50], thumpDur: 0.1, tail: 0.2 }); },
   spray()     { noise({ dur: 0.1, f0: 7000, f1: 6000, type: 'highpass', gain: 0.16 }); },
+  /** Glass going: a crash and a few pieces tinkling after it. */
+  glass()     { noise({ dur: 0.12, f0: 5000, f1: 2500, type: 'highpass', gain: 0.4, send: 0.2 }); for (let i = 0; i < 5; i++) tone({ f0: 3000 + Math.random() * 2500, f1: 2800, dur: 0.08, gain: 0.06, type: 'triangle', delay: 0.05 + i * 0.07 + Math.random() * 0.05, send: 0.2 }); },
   /** A door on its hinges. */
   door()      { play('latch', { gain: 0.5, rate: 0.8 }); tone({ f0: 160, f1: 95, dur: 0.5, gain: 0.08, type: 'sawtooth' }); },
   /** A round into what it hit: a crack off concrete, a ring off steel, a thud into wood. */

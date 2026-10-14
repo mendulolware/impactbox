@@ -136,3 +136,4 @@ body.touch #weapon-bar { left: 38%; }
 #mirror { display: none; position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 26%, rgba(0,0,0,.55) 36%, rgba(0,0,0,.97) 46%); }
 #mirror span { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); font: 600 14px Consolas, monospace; letter-spacing: 3px; opacity: .7; }
 body.mirror #mirror { display: block; }
+#lens i.rain { background: radial-gradient(circle at 36% 30%, rgba(235,245,255,.5), rgba(200,220,240,.28) 58%, rgba(200,220,240,0) 72%); filter: blur(.7px); animation-duration: 5s; }

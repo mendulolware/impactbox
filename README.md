@@ -28,7 +28,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | J / K | suppressor on the current gun (quieter: heard 9 m away instead of 40, no flash) / laser (a red dot where the barrel points, and the beam at night) |
 | P | record a video of what you see and hear; P again saves it as a .webm (in bodycam it is cut to 4:3, with the timestamp burned in) |
 | Q / E | lean left / right (hold) |
-| N / L | night on the current map / flashlight |
+| N / L / O | night on the current map / flashlight / rain |
 | Tab | spawn menu |
 | T | slow-mo |
 | X | delete what you're aiming at (or holding) |
@@ -204,6 +204,14 @@ Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted aft
   top. Every map collider remembers what it is made of (`ctx.surfaces`, set by `MapBuilder`): your footsteps go hollow
   and low on boards and ring on sheet metal, and a round into wood thuds and throws splinters, into steel rings, into
   concrete cracks and sparks (`step()` and `impact()` in `audio.js`).
+
+- **Rain (O, or the start-screen button):** grey streaks falling around you under open sky (`gore.rain`, 2,600 of
+  them, no collisions; none are made while something is overhead, so rooms stay dry), the ground dark and shiny
+  (`MapBuilder.wet()`), the sky overcast unless it is night, clear drops on the lens, and the sound of it over the map's
+  own (`setRain()` in `audio.js`). **Glass** (`MapBuilder.pane()`): the house's windows and the street's shopfronts
+  are their own meshes with colliders. A round, a blade or a blast within range shatters one (shards, a crash, a few
+  tinkles) and rounds carry on through it; until it breaks it blocks sight like any wall. **Lamps** (`MapBuilder.light()`)
+  come from a bulb with a collider: shoot it, or set something off near it, and the light goes out.
 
 ## First person
 

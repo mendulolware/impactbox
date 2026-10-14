@@ -590,9 +590,11 @@ export class Weapons {
         const hit = ctx.raycast(from, d, w.range || 300);
         if (!hit) { end = from.clone().addScaledVector(d, w.range || 120); break; }
         end = from.clone().addScaledVector(d, hit.timeOfImpact);
+        const glass = ctx.owners.get(hit.collider.handle)?.kind === 'glass';
         ctx.applyHit(hit, end, d, dmg, w.impulse * dmg / w.dmg, w.bolt ? { hole: w.hole, stab: true } : { hole: w.hole, pen, blunt: w.blunt, daze: w.daze, tase: w.tase });
         if (w.bolt) { this.stickBolt(hit, end, d); break; }
         first ??= end;
+        if (glass) { from = end.clone().addScaledVector(d, 0.05); continue; }     // through the window, and on
         if (ctx.owners.get(hit.collider.handle)?.kind === 'part') {
           if (--bodies <= 0) break;
           from = end.clone().addScaledVector(d, 0.45);

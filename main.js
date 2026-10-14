@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { initAudio, sfx, setSpace, deafen, bodycam, audioStream } from './audio.js';
+import { initAudio, sfx, setSpace, deafen, bodycam, audioStream, setRain } from './audio.js';
 import { Gore } from './gore.js';
 import { Ragdoll, selfCollide } from './ragdoll.js';
 import { tickWounds } from './wounds.js';
@@ -120,6 +120,10 @@ ctx.applyHit = (hit, point, dir, dmg, impulse, opts = {}) => {
     ctx.gore.blood(point, dir, 5, 3, 0.8);
   } else if (owner?.kind === 'prop') {
     owner.prop.hit(dmg, point, dir, impulse, opts);
+  } else if (owner?.kind === 'glass') {
+    owner.pane.break(point);
+  } else if (owner?.kind === 'lamp') {
+    owner.lamp.out(point);
   } else if (owner?.kind === 'door') {
     ctx.gore.bulletHole(point, new THREE.Vector3(hit.normal.x, hit.normal.y, hit.normal.z));
     owner.door.shot(point, dmg);
@@ -183,6 +187,8 @@ ctx.explode = (p, radius = 7, power = 1) => {
   ctx.alert('explosion', p, 45);
   const center = new THREE.Vector3(p.x, p.y, p.z);
   for (const d of ctx.doors) if (d.hinge.distanceTo(center) < radius * 0.6) d.kick(center, true);   // blown open
+  for (const p of ctx.panes) if (!p.broken && p.pos.distanceTo(center) < radius * 0.9) p.break();
+  for (const l of ctx.lamps) if (!l.off && l.pos.distanceTo(center) < radius * 0.7) l.out();
 
   for (const r of ctx.ragdolls) {
     if (r.removed) continue;
@@ -458,7 +464,7 @@ ctx.torch = torch;
 ctx.night = false;
 function toggleNight() {
   ctx.night = !ctx.night;
-  ctx.setSky(ctx.night ? 'night' : ctx.map.sky);
+  ctx.setSky(ctx.night ? 'night' : ctx.rain ? 'overcast' : ctx.map.sky);
   torch.visible = ctx.night;
   $('night').classList.toggle('on', ctx.night);
   toast(ctx.night ? 'NIGHT - L flashlight' : 'DAY');
@@ -504,6 +510,19 @@ function recordFrame() {
   g.fillText(camTimeEl.textContent || new Date().toISOString().slice(0, 19) + 'Z', w * 0.95, H * 0.08);
   g.fillText('BWC 07 \u00b7 X60A31F2', w * 0.95, H * 0.08 + H / 32);
   g.shadowBlur = 0;
+}
+
+// O: rain. The ground goes wet, the sky overcast (unless it is night), drops on the lens, and the sound of it.
+ctx.rain = false;
+let rainLensT = 0;
+function toggleRain() {
+  ctx.rain = !ctx.rain;
+  ctx.map.builder.wet(ctx.rain);
+  setRain(ctx.rain);
+  ctx.setSky(ctx.night ? 'night' : ctx.rain ? 'overcast' : ctx.map.sky);
+  $('rain').classList.toggle('on', ctx.rain);
+  if (!ctx.rain) ctx.gore.rain.n = 0;
+  toast(ctx.rain ? 'RAIN' : 'DRY');
 }
 
 // G: switch the effects pipeline off on slow machines (plain rendering, no occlusion or bloom)
@@ -592,6 +611,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyV') toggleHelmet();
   if (e.code === 'KeyG') toggleGraphics();
   if (e.code === 'KeyN') toggleNight();
+  if (e.code === 'KeyO') toggleRain();
   if (e.code === 'KeyP') toggleRecording();
   if (e.code === 'KeyL') { torch.visible = !torch.visible; sfx.tick(); }
   if (e.code === 'Enter' && ctx.mission.over) ctx.mission.start();
@@ -652,6 +672,7 @@ ctx.map.populate();
 ctx.mission = new Mission(ctx);
 $('swat').addEventListener('click', () => { ctx.mission.start(); $('swat').classList.add('on'); });
 $('night').addEventListener('click', toggleNight);
+$('rain').addEventListener('click', toggleRain);
 if (ctx.map.def.night) toggleNight();                             // (a night map asked for by ?map= or remembered from last time)
 
 // ------------------------------------------------------------------ main loop
@@ -781,6 +802,11 @@ function tick(now) {
   if (ctx.props.some((p) => p.removed)) ctx.props = ctx.props.filter((p) => !p.removed);
 
   ctx.gore.update(sdt);
+  if (ctx.rain) {
+    const c = camera.position, covered = !!ctx.gore.castFixed(c.x, c.y, c.z, 0, 1, 0, 14);
+    ctx.gore.rainStep(sdt, c, covered);
+    if (!covered && camera.rotation.x > -0.35 && (rainLensT -= dt) <= 0) { rainLensT = 0.3; ctx.gore.lens(1, 'rain'); }
+  }
   ctx.mission.update(dt);
   tickWounds(sdt);
 

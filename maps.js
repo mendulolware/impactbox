@@ -344,7 +344,7 @@ export const MAPS = {
         for (let i = 0; i < n; i++) {
           const x = x0 + pad + i * 3.4;
           if (i === Math.floor(n / 2)) b.box(x, 1.2, zf - side * 0.03, 1.1, 2.2, 0.08, door, { solid: false });
-          else b.box(x, 1.65, zf - side * 0.03, 2.5, 2.1, 0.08, b.rnd() < 0.45 ? shop : glass, { solid: false });
+          else b.pane(x, 1.65, zf - side * 0.03, 2.5, 2.1, 0.08, b.rnd() < 0.45 ? shop : glass);
         }
         b.box((x0 + x1) / 2, 3.1, zf - side * 0.25, x1 - x0 - 0.6, 0.18, 0.5, steel, { solid: false });      // sign band
       };
@@ -381,7 +381,7 @@ export const MAPS = {
 
       // a bus shelter
       for (const x of [18.2, 21.8]) b.box(x, 1.3, 7.9, 0.08, 2.3, 0.08, steel);
-      b.box(20, 1.35, 8.05, 3.6, 2.0, 0.05, glass);
+      b.pane(20, 1.35, 8.05, 3.6, 2.0, 0.05, glass);
       b.box(20, 2.5, 7.4, 4.0, 0.08, 1.5, steel);
       b.box(20, 0.6, 7.75, 2.6, 0.08, 0.4, wood);
     },
@@ -432,7 +432,7 @@ export const MAPS = {
         const o = { ry: yaw };
         b.box(x, y0 + 0.5, z, 1.2, 1.0, T, brick, o);
         b.box(x, y0 + 2.45, z, 1.2, 0.5, T, brick, o);
-        b.box(x, y0 + 1.6, z, 1.1, 1.2, 0.02, glass, { ...o, solid: false });
+        b.pane(x, y0 + 1.6, z, 1.1, 1.2, 0.02, glass, o);
       };
       const H2 = Math.PI / 2;
       for (const y0 of [0, Y1]) {                                          // the outside walls, both floors

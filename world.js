@@ -125,10 +125,11 @@ export function buildWorld(ctx, mapId = 'yard') {
 export function loadMap(ctx, id) {
   const def = MAPS[id] || MAPS.yard;
   if (ctx.map) ctx.map.builder.dispose();
-  ctx.setSky(ctx.night ? 'night' : def.sky);
+  ctx.setSky(ctx.night ? 'night' : ctx.rain ? 'overcast' : def.sky);
   const builder = new MapBuilder(ctx);
   def.build(builder);
   builder.finish();
+  if (ctx.rain) builder.wet(true);
   ctx.map = {
     id: def.id, name: def.name, def, builder,
     bounds: def.bounds,             // { x0, x1, z0, z1 }: where NPCs keep to
@@ -144,6 +145,77 @@ const _e = new THREE.Euler();
 const _m = new THREE.Matrix4();
 const _p = new THREE.Vector3();
 const ONE = new THREE.Vector3(1, 1, 1);
+const BULB = new THREE.SphereGeometry(0.07, 10, 8);
+
+/** A pane of glass: its own mesh and collider, so one round (or a blast) takes it out and the round carries on. */
+class Pane {
+  constructor(ctx, body, x, y, z, w, h, t, material, o = {}) {
+    this.ctx = ctx;
+    this.pos = new THREE.Vector3(x, y, z);
+    this.area = w * h;
+    this.geo = new THREE.BoxGeometry(w, h, t);
+    this.mesh = new THREE.Mesh(this.geo, material);
+    this.mesh.position.set(x, y, z);
+    this.mesh.rotation.set(o.rx || 0, o.ry || 0, o.rz || 0);
+    this.mesh.receiveShadow = true;
+    _q.setFromEuler(_e.set(o.rx || 0, o.ry || 0, o.rz || 0));
+    this.collider = ctx.world.createCollider(RAPIER.ColliderDesc.cuboid(w / 2, h / 2, Math.max(t, 0.04) / 2)
+      .setTranslation(x, y, z).setRotation({ x: _q.x, y: _q.y, z: _q.z, w: _q.w }), body);
+    ctx.owners.set(this.collider.handle, { kind: 'glass', pane: this });
+    ctx.surfaces.set(this.collider.handle, 'glass');
+    this.broken = false;
+  }
+  break(point) {
+    if (this.broken) return;
+    this.broken = true;
+    this.ctx.owners.delete(this.collider.handle);
+    this.ctx.surfaces.delete(this.collider.handle);
+    this.ctx.world.removeCollider(this.collider, false);
+    this.mesh.visible = false;
+    const p = point || this.pos;
+    this.ctx.gore.debris(p, 0xd8ecf6, Math.min(36, 8 + Math.round(this.area * 5)));
+    this.ctx.sfx.glass();
+    this.ctx.alert('violence', p, 14);
+  }
+  dispose() {
+    this.geo.dispose();
+    if (!this.broken) { this.ctx.owners.delete(this.collider.handle); this.ctx.surfaces.delete(this.collider.handle); }   // (the collider goes with the map's body)
+  }
+}
+
+/** A lamp: a light, the bulb it comes from, and a collider so a round can put it out. */
+class Lamp {
+  constructor(ctx, body, x, y, z, color, power, reach) {
+    this.ctx = ctx;
+    this.pos = new THREE.Vector3(x, y, z);
+    this.light = new THREE.PointLight(color, power, reach, 2);
+    this.light.position.set(x, y, z);
+    this.mat = new THREE.MeshStandardMaterial({ color: 0x202020, emissive: color, emissiveIntensity: 3, roughness: 0.3 });
+    this.bulb = new THREE.Mesh(BULB, this.mat);
+    this.bulb.position.set(x, y, z);
+    this.collider = ctx.world.createCollider(RAPIER.ColliderDesc.ball(0.14).setTranslation(x, y, z), body);
+    ctx.owners.set(this.collider.handle, { kind: 'lamp', lamp: this });
+    ctx.surfaces.set(this.collider.handle, 'glass');
+    this.off = false;
+  }
+  out(point) {
+    if (this.off) return;
+    this.off = true;
+    this.light.intensity = 0;
+    this.mat.emissiveIntensity = 0;
+    this.ctx.owners.delete(this.collider.handle);
+    this.ctx.surfaces.delete(this.collider.handle);
+    this.ctx.world.removeCollider(this.collider, false);
+    const p = point || this.pos;
+    this.ctx.gore.sparks(p, new THREE.Vector3(0, -1, 0), 10);
+    this.ctx.gore.debris(p, 0xd8ecf6, 6);
+    this.ctx.sfx.glass();
+  }
+  dispose() {
+    this.mat.dispose();
+    if (!this.off) { this.ctx.owners.delete(this.collider.handle); this.ctx.surfaces.delete(this.collider.handle); }
+  }
+}
 
 /** What a map description builds with. Everything it makes is static. */
 export class MapBuilder {
@@ -158,6 +230,10 @@ export class MapBuilder {
     this.trash = [];              // what to dispose of when the map goes
     this.doors = [];
     ctx.doors = this.doors;
+    this.panes = [];
+    ctx.panes = this.panes;
+    this.lamps = [];
+    ctx.lamps = this.lamps;
     let s = 12345;
     /** The same "random" numbers every time, so a map is the same map on every visit. */
     this.rnd = (a = 0, b = 1) => { s = (s * 16807) % 2147483647; return a + (s / 2147483647) * (b - a); };
@@ -234,6 +310,8 @@ export class MapBuilder {
     const geo = new THREE.PlaneGeometry(size, size);
     const uv = geo.attributes.uv;
     for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * size / S.tile.asphalt, uv.getY(i) * size / S.tile.asphalt);
+    this.groundMat = mat;
+    this.groundColor = color;
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI / 2;
     mesh.receiveShadow = true;
@@ -305,11 +383,28 @@ export class MapBuilder {
     return d;
   }
 
-  /** A lamp: light that reaches `reach` metres. (No shadows: they are dear, and the sun has the only one.) */
+  /** A lamp: light that reaches `reach` metres, from a bulb a round can put out. (No shadows: they are dear, and the sun has the only one.) */
   light(x, y, z, color = 0xffd9a0, power = 40, reach = 20) {
-    const l = new THREE.PointLight(color, power, reach, 2);
-    l.position.set(x, y, z);
-    this.group.add(l);
+    const l = new Lamp(this.ctx, this.body, x, y, z, color, power, reach);
+    this.group.add(l.light, l.bulb);
+    this.lamps.push(l);
+    return l;
+  }
+
+  /** A pane of glass centred on (x, y, z): breaks when shot, and rounds carry on through it once it has. */
+  pane(x, y, z, w, h, t, material, o = {}) {
+    const p = new Pane(this.ctx, this.body, x, y, z, w, h, t, material, o);
+    this.group.add(p.mesh);
+    this.panes.push(p);
+    return p;
+  }
+
+  /** Rain on, rain off: the ground goes dark and shiny, or back to how it was. */
+  wet(on) {
+    if (!this.groundMat) return;
+    this.groundMat.roughness = on ? 0.22 : 1;
+    this.groundMat.color.set(this.groundColor).multiplyScalar(on ? 0.55 : 1);
+    this.groundMat.needsUpdate = true;
   }
 
   /** Join everything up. Called once the description has run. */
@@ -327,6 +422,9 @@ export class MapBuilder {
   }
 
   dispose() {
+    for (const p of this.panes) p.dispose();
+    for (const l of this.lamps) l.dispose();
+    this.panes.length = this.lamps.length = 0;
     this.ctx.surfaces.clear();
     for (const d of this.doors) d.dispose();
     this.doors.length = 0;
