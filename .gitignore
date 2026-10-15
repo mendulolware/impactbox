@@ -3,4 +3,4 @@ __pycache__/
 *.blend1
 models/_wip/
 trailer-frames/
-impactbox-trailer.mp4
+impactbox-trailer*.mp4
