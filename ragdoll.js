@@ -640,8 +640,9 @@ export class Ragdoll {
         _t.copy(dir).multiplyScalar(-0.5); _t.y += 0.4;
         gore.blood(point, _t, 9, 2.8, 0.9);               // wells up out of the wound
       } else {
-        // entry hole, and a bigger one where the bullet leaves
-        openWound(p, lp, opts.hole || 0.026, maxR, null, ld);
+        // a small entry hole, about the round's own width, and a torn, wider one where it leaves
+        const hole = opts.hole || 0.026;
+        openWound(p, lp, hole * 0.5, maxR, null, ld);
         this.bleed(p, lp, big ? 5 : name === 'head' ? 4 : 3, big ? 0.4 : name === 'head' ? 0.4 : 0.18);
         let k = 0.6;
         for (let i = 0; i < 3; i++) {
@@ -650,11 +651,14 @@ export class Ragdoll {
         }
         if (k > 0.03) {
           const out = lp.clone().addScaledVector(ld, k);
-          openWound(p, out, (opts.hole || 0.026) * 1.5, maxR, null, ld);
+          openWound(p, out, hole * 0.9, maxR, null, ld);
           this.bleed(p, out, 3, 0);
         }
-        gore.blood(point, dir, Math.round(14 * Math.min(2, (opts.hole || 0.026) / 0.026)), 7, 0.35);   // exit spray carries on past the body (more from a bigger round)
-        if (name === 'torso' && !this.gutted && p.hp - dmg < p.def.hp * 0.3) {
+        // the exit spray: a fine one a metre or two past the body, by how hard the round hit
+        // (a pistol round 6 drops, a shotgun pellet or an SMG round 2 or 3, a sniper round 14)
+        gore.blood(point, dir, Math.min(14, Math.max(2, Math.round(dmg / 6))), 4.5, 0.35);
+        // opened right up: a heavy round, or a torso riddled long after one would have done
+        if (name === 'torso' && !this.gutted && (dmg >= 60 || p.hp - dmg < -p.def.hp * 1.5)) {
           // shot to pieces: the front of the body opens and what was inside comes out
           this.gutted = true;
           openWound(p, lp, 0.07, maxR, null, ld, 0.09);
@@ -663,9 +667,9 @@ export class Ragdoll {
           gore.gush(point, _t.set(-dir.x, 0.2, -dir.z), 36, 4);
         }
         _t.copy(dir).multiplyScalar(-0.4); _t.y += 0.3;
-        gore.blood(point, _t, 5, 2.5, 0.8);                // a little comes back out the front
-        gore.mist(point, dir, name === 'head' ? 7 : 4, name === 'head' ? 1.5 : 1);
-        gore.wallSplatter(point, dir, 4.5 * Math.min(2, (opts.hole || 0.026) / 0.03));   // a bigger round carries more, further
+        gore.blood(point, _t, 2, 2, 0.8);                  // a little comes back out the front
+        gore.mist(point, dir, dmg < 20 ? 1 : name === 'head' ? 6 : 3, name === 'head' ? 1.3 : 1);
+        if (dmg >= 20 || Math.random() < 0.25) gore.wallSplatter(point, dir, 4.5 * Math.min(2, hole / 0.03));   // (one blast's pellets do not each paint the wall)
       }
       if (big) this.gutShot = true;
     }
@@ -694,22 +698,23 @@ export class Ragdoll {
         if (ARMS.has(name)) this.dangle(name);
       } else if (name === 'head') {
         if (opts.blade || opts.explosion) this.sever('head', dir);
-        else if (p.hp < -26) this.gib('head');   // overkill: the head pops
+        else if (dmg >= 120) this.gib('head');   // a sniper round: the head comes apart
         else {
-          if (!opts.blunt) {
-            // the back of the skull goes with the round
-            gore.chunks(point, 4, 2.5, { x: dir.x * 7, y: dir.y * 7 + 0.6, z: dir.z * 7 }, 'head');
-            gore.gush(point, dir, 30, 7);
-            gore.wallSplatter(point, dir, 7, true);
+          if (!opts.blunt && !this.skullOpen) {
+            // some of the back of the skull goes with the round (once: more rounds into it just go through)
+            this.skullOpen = true;
+            gore.chunks(point, 2, 2, { x: dir.x * 4, y: dir.y * 4 + 0.4, z: dir.z * 4 }, 'head');
+            gore.gush(point, dir, 14, 4);
+            gore.wallSplatter(point, dir, 5, true);
           }
           this.die(opts.blunt ? 'beaten' : 'headshot');
         }
       } else if (LIMBS.has(name)) {
-        if (opts.blunt) {
-          // clubs break limbs, they do not take them off
+        if (opts.blunt || (!opts.blade && !opts.explosion && dmg < 90)) {
+          // clubs and ordinary rounds break limbs, they do not take them off (that takes a blade, a blast or a sniper round)
           p.hp = 1;
           if (ARMS.has(name)) this.dangle(name); else this.lame[name.slice(-1)] = 1;
-          sfx.crack();
+          if (opts.blunt) sfx.crack();
         } else this.sever(name, dir);
       } else if (name === 'torso') {
         if (opts.blade || opts.explosion) this.sever('torso', dir);

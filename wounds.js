@@ -95,8 +95,8 @@ function woundMaterial(base, uniforms, { posScale = 1, holeScale = 1, look = 'sk
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;\nuniform vec3 uOrigin;\nuniform float uShrink;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = position - uOrigin;\ntransformed -= normal * uShrink;');
     const paint = look === 'skin' ? `
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.15, 0.004, 0.004), wf.y * 0.92);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.36, 0.02, 0.02), 1.0 - smoothstep(1.0, 1.25, wf.x));   // raw edge
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.075, 0.003, 0.003), wf.y * 0.92);     // soaked: near black-red, as blood in cloth is
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.17, 0.01, 0.01), 1.0 - smoothstep(1.0, 1.25, wf.x));   // raw edge
         float charK = 0.0;
         if (uBurn > 0.0) {
           vec3 rp = wp + uOrigin;             // whole-body coordinates, so the scorching runs across the joints
@@ -271,7 +271,10 @@ function buildInside(part) {
     core.scale.setScalar(CORE_SCALE);
     part.mesh.add(core);
   }
-  part.mesh.add(innards(part.name));
+  // a downloaded (skinned) body's arms and legs do not line up exactly with their physics capsules, so a bone rod
+  // there can show beside the limb: those show meat through a hole, and no bone
+  const limb = !['torso', 'pelvis', 'head'].includes(part.name);
+  if (!(limb && part.skin.some((s) => s.mesh.isSkinnedMesh))) part.mesh.add(innards(part.name));
 }
 
 /**

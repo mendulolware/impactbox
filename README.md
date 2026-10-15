@@ -349,8 +349,18 @@ the bullet or blade went and bores along that, so the hole opens cleanly whereve
 clothes around a wound with blood that spreads and then runs down the body as the wound ages (`woundClock`), and chars whatever an
 explosion burned (`burn`). Behind the skin: the skin's own back faces painted as the far wall of the cavity, a layer of meat (the same
 skin pulled in along its normals, with narrower holes, so the wound has depth), and innards (ribs, spine, lungs, heart, liver, gut, brain,
-limb bones) as one mesh per body part. Bullets cut an entry hole and a larger exit hole; hits near an existing hole widen it.
-Hole size per weapon is `hole` in the `WEAPONS` table; a part holds up to 12 wounds.
+limb bones) as one mesh per body part (on the downloaded people, arms and legs show meat and no bone: their limbs do not line up exactly
+with the physics capsules, and a bone rod there stood out beside the arm). Bullets cut a small entry hole (half the weapon's `hole`) and a
+torn, wider exit (nine tenths of it); hits near an existing hole widen it. A part holds up to 12 wounds.
+Soaked cloth and skin go near black-red, as blood in cloth does; pools are deep dark red, splats a little brighter.
+
+**What a round does** (the realism pass, `hit()` in `ragdoll.js`): rounds **break** arms and legs (the arm hangs, the leg gives) and do not
+take them off; that takes a blade, a blast, or a hit of 90 or more (the sniper). A head only comes apart from a hit of 120 or more (the
+sniper again, or a blast); any other killing head shot takes some of the back of the skull out with it, once. The torso only opens and
+spills from a hit of 60 or more, or once it has taken one and a half times its health in rounds. The exit spray goes by the round's damage
+(about one drop per 6 points: a pistol round 6, a shotgun pellet or an SMG round 2 or 3, the sniper 14), drops are finer, the finest leave
+no mark, and only the odd shotgun pellet throws spatter onto the wall behind, so a body is marked mostly by its wounds and the pool that
+spreads under it rather than by blood thrown metres round it.
 
 `makeStump()` builds the torn end left where a limb comes off: a mound of muscle ringed with fat, snapped bone standing out of it (two for a forearm
 or shin, spine and windpipe for a neck), ragged skin round the edge, and gut hanging out of a body cut in half. `ragdoll.js` adds the pulsing arterial spray.
@@ -360,10 +370,10 @@ Explosions burn and pepper bodies rather than launching them out of the arena, a
   - **Pieces stick.** Meat, skull and bone that slap into a wall or a ceiling at speed stay there (`_stick` in `gore.js`): on a wall a piece slides down the bottom of its own streak (`run` hands back the streak, `_slide` follows it), on a ceiling it hangs for a moment; both drip, then let go and fall. Doors, glass and lamps are left out because they move or break.
   - **Ceilings drip.** Blood that lands on a ceiling comes back down a drop at a time for a while, slower as it runs dry (`dripFrom`), and so does anything stuck up there.
   - **Blood dries.** Every mark records when it was made (`aBirth` on each decal set) and its shader (`dries`) turns it from wet red to dull brown-black and matte over about two minutes of game time.
-  - **Head shots carry matter.** A killing head shot throws the back of the skull hard enough to reach the wall behind, and leaves pink-grey brain matter in the spatter (`wallSplatter(..., matter)`). A bigger round throws more out of the exit (scaled by `hole`). Gibbing paints the walls all round.
+  - **Head shots carry matter.** A killing head shot throws the back of the skull hard enough to reach the wall behind, and leaves pink-grey brain matter in the spatter (`wallSplatter(..., matter)`). A bigger round throws it further (scaled by `hole`). Gibbing paints the walls all round.
   - **Handprints.** A bleeding person walking past a wall puts a hand on it now and then: a red print at hand height, sometimes with a run under it (`handprint`, a sixth decal shape). Up to six each.
   - **Smears and splashes.** A piece sliding or rolling over the floor smears it; one landing in a pool splashes.
-- **Second gore pass:** blood from a hit within 2.4 m lands on the lens and runs down it (`lens()` in `gore.js`, the `#lens` overlay); anyone who walks through a pool, you included, prints the next nine steps (`wetAt`, `footprint`); a killing head shot takes skull and brain out the back; a torso shot down to its last third opens up and spills (`gutted`); pieces of meat now lie for a minute or two instead of twenty seconds.
+- **Second gore pass:** blood from a hit within 2.4 m lands on the lens and runs down it (`lens()` in `gore.js`, the `#lens` overlay); anyone who walks through a pool, you included, prints the next nine steps (`wetAt`, `footprint`); a killing head shot takes skull and brain out the back; a torso hit hard enough opens up and spills (`gutted`, see What a round does); pieces of meat now lie for a minute or two instead of twenty seconds.
 
 ## Models
 

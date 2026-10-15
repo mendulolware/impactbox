@@ -621,10 +621,10 @@ export class Gore {
     for (let k = 0; k < count; k++) {
       const s = speed * rnd(0.25, 1.15);
       const j = spread * speed * 0.5;
-      const big = Math.random() < 0.15;
+      const big = Math.random() < 0.1;
       this.drops.emit(p.x, p.y, p.z,
         dir.x * s + rnd(-1, 1) * j, dir.y * s + rnd(-0.4, 1) * j, dir.z * s + rnd(-1, 1) * j,
-        big ? rnd(0.016, 0.026) : rnd(0.006, 0.014), rnd(1.5, 2.6), 9.8,
+        big ? rnd(0.012, 0.02) : rnd(0.004, 0.011), rnd(1.5, 2.6), 9.8,
         rnd(0.09, 0.17), 0.003, 0.003, BLOOD);
     }
   }
@@ -806,7 +806,7 @@ export class Gore {
   }
 
   /** opts: r,g,b colour; drip = hang down walls; along = direction it was travelling; stretch; kind = shape. */
-  splat(p, normal, size, { r = rnd(0.2, 0.33), g = 0.004, b = 0.004, drip = true, along = null, stretch = 1, kind = 'splat' } = {}) {
+  splat(p, normal, size, { r = rnd(0.12, 0.21), g = 0.004, b = 0.004, drip = true, along = null, stretch = 1, kind = 'splat' } = {}) {
     const wall = this._orient(p, normal, 0.012, along);
     const set = pick(this.sets[kind]);
     let sx = size * rnd(0.8, 1.25), sy = size * rnd(0.8, 1.25) * stretch;
@@ -822,7 +822,7 @@ export class Gore {
     this._orient(p, normal, 0.014);
     size *= this._fit(size, size);
     const set = pick(this.sets.pool);
-    const i = set.add(_p, _q, size * 0.12, size * 0.12, rnd(0.1, 0.15), 0.003, 0.003);
+    const i = set.add(_p, _q, size * 0.12, size * 0.12, rnd(0.06, 0.09), 0.002, 0.002);     // collected blood is deep, nearly black red
     this.growing.push({ set, i, pos: _p.clone(), quat: _q.clone(), from: size * 0.12, to: size, t: 0, dur: rnd(6, 11) });
     this.pools.push({ x: _p.x, y: _p.y, z: _p.z, r: size * 0.42 });
     if (this.pools.length > 40) this.pools.shift();
@@ -1006,12 +1006,12 @@ export class Gore {
     const t = hit.timeOfImpact;
     const size = d.size[i];
     const big = size > 0.0155;
-    if (!big && kind !== BIT && Math.random() < 0.35) return true;       // the finest spray leaves no mark
+    if (!big && kind !== BIT && Math.random() < 0.5) return true;        // the finest spray leaves no mark
     const at = { x: d.pos[i3] + vx / sp * t, y: d.pos[i3 + 1] + vy / sp * t, z: d.pos[i3 + 2] + vz / sp * t };
     const n = hit.normal;
     const vn = vx * n.x + vy * n.y + vz * n.z;
     const slide = Math.sqrt(Math.max(0, sp * sp - vn * vn));
-    const r = d.col[i3] * 1.9;
+    const r = d.col[i3] * 1.25;
     if (slide > 2.5 && slide > -vn * 0.7) {
       // came in at an angle: a long mark pointing the way it was going
       this.splat(at, n, size * rnd(5, 8), { r, along: _t.set(vx, vy, vz), stretch: 1 + Math.min(2.6, slide * 0.3) });
