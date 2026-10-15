@@ -400,8 +400,16 @@ function marker(kind) {
   m.className = kind;
 }
 ctx.feed = feed;
-/** Die on purpose and come back at the start (stuck, or want a fresh go): the ordinary death, then the ordinary respawn. */
-ctx.suicide = () => { if (!ctx.player.dead) { ctx.player.hurt(1e3); feed('SUICIDE'); } };
+/**
+ * Die on purpose and come back at the start: with a real gun in hand it goes to the head and off (weapons.selfShot);
+ * otherwise (a knife, a taser, from the menu, driving) just the ordinary death. Then the ordinary respawn.
+ */
+ctx.suicide = () => {
+  if (ctx.player.dead || ctx.weapons.selfT > 0) return;
+  const w = ctx.weapons.current;
+  if (w.type === 'gun' && w.dmg >= 9 && gameActive() && !ctx.car && !ctx.drone) ctx.weapons.selfShot();
+  else { ctx.player.hurt(1e3); feed('SUICIDE'); }
+};
 ctx.marker = marker;
 
 // ------------------------------------------------------------------ spawning helpers
@@ -1062,7 +1070,7 @@ function tick(now) {
     dmgEl.style.opacity = Math.min(1, pl.hurtFlash * 1.4);
   } else if (dmgEl.style.opacity !== '0') dmgEl.style.opacity = '0';
   hurtEl.style.opacity = Math.min(0.85, pl.hurtFlash * 0.55 + (1 - pl.health / 100) * 0.4 + (pl.dead ? 0.5 : 0));
-  if (pl.dead !== wasDead) { wasDead = pl.dead; if (pl.dead) { toast('YOU DIED'); toastT = 3; ctx.weapons.releaseGrab(); } }
+  if (pl.dead !== wasDead) { wasDead = pl.dead; if (pl.dead) { toast('YOU DIED'); toastT = 3; ctx.weapons.releaseGrab(); ctx.weapons.selfT = 0; } }
 
   // crosshair is hidden while looking down the sights, and always in helmet cam
   crosshairEl.classList.toggle('hide', ctx.helmet || ctx.weapons.ads > 0.4 || !!mirror);

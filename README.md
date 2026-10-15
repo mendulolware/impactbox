@@ -34,7 +34,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | T | slow-mo |
 | X | delete what you're aiming at (or holding) |
 | C | clear everything |
-| Backspace | suicide: the ordinary death, then back at the start (also in the spawn menu, World) |
+| Backspace | suicide: with a gun in hand you put it to your head and fire (`selfShot` in `weapons.js`); otherwise the ordinary death. Then back at the start (also in the spawn menu, World) |
 
 **Phones and tablets** (`touch.js`): a stick under your left thumb wherever it lands (push it all the way to sprint), drag on the right to look (the FIRE button looks too while held), buttons for fire, aim, jump, reload, next weapon, lean left and right (held) and use (shout, arrest, clear a jam), and a row along the top for the spawn menu, bodycam, night, flashlight, slow-mo, kick, mirror, rain, suppressor, laser, squad and record. Play goes full screen and sideways. Tap a weapon group on the bar at the bottom to pick it (again for the next one in it). Shots and hits you take buzz the phone where it can, the screen stays awake while you play, sound stops when you switch away, and a notice asks you to turn the phone sideways. Phones draw at up to 1.25x pixel ratio and lower it on their own when the frame rate drops under 42 (back up when it is over 56, never under 0.6x: `adaptResolution` in `main.js`), start on the Low graphics setting (no ambient occlusion, bloom or shadows) and skip screen multisampling, keep half as many people (18), meat chunks (60) and blood drops (1,600, with simpler spheres) and half the rain.
 

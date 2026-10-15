@@ -131,6 +131,9 @@ const _u = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _m = new THREE.Vector3();
 const _q = new THREE.Quaternion();
+// the gun turned on its holder: low at the right of the picture, the muzzle turned in at the head
+const TEMPLE = new THREE.Vector3(0.12, -0.11, -0.17);
+const TEMPLE_Q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), TEMPLE.clone().negate().normalize());
 const FWD = new THREE.Vector3(0, 0, -1);
 
 function hand(name, [x, y, z, pitch]) {
@@ -229,6 +232,7 @@ export class Weapons {
     this.reloadT = 0;      // seconds left of the reload in hand (0 = not reloading)
     this.clearT = 0;       // seconds left of clearing a jam
     this.busy = 0;         // 0..1: how far the weapon is lowered while being worked on
+    this.selfT = 0;        // > 0: suicide under way, seconds since it began (selfShot)
     this.ammoEl = document.getElementById('ammo');
     this.spin = 0;         // minigun barrels: 0 = stopped, 1 = up to speed
     this.tickT = 0;        // chainsaw / flamethrower: time to the next bite
@@ -344,7 +348,7 @@ export class Weapons {
 
   select(i) {
     i = (i + WEAPONS.length) % WEAPONS.length;
-    if (i === this.index || (this.allowed && !this.allowed.has(i))) return;
+    if (i === this.index || (this.allowed && !this.allowed.has(i)) || this.selfT > 0) return;
     this.releaseGrab();
     this.index = i;
     this.last[WEAPONS[i].slot] = i;
@@ -909,6 +913,26 @@ export class Weapons {
     }
   }
 
+  /** Suicide (main.js): the gun comes up to the head (placeRig, over 0.6 s) and goes off; then the ordinary death. */
+  selfShot(w) {
+    if (!w) { this.selfT = 1e-3; return; }
+    const ctx = this.ctx, cam = ctx.camera;
+    this.selfT = 0;
+    this.rig.visible = false;                  // (out of the picture until the respawn: update() puts it back)
+    cam.getWorldPosition(_o);
+    const left = new THREE.Vector3(-1, 0, 0).applyQuaternion(cam.getWorldQuaternion(_q));
+    ctx.soundAt = _o;
+    sfx[w.sound]();
+    deafen(1);
+    _o.addScaledVector(left, 0.14);            // (out the far side of the head, not from inside the camera)
+    ctx.gore.lens(14);
+    ctx.gore.blood(_o, left, 16, 5, 0.4);
+    ctx.gore.mist(_o, left, 6, 1.3);
+    ctx.gore.wallSplatter(_o, left, 4, true);
+    ctx.feed('SUICIDE');
+    ctx.player.hurt(1e3);
+  }
+
   /** Position the rig between the hip pose and the aimed pose. */
   placeRig(s) {
     const v = this.view, pl = this.ctx.player;
@@ -951,6 +975,11 @@ export class Weapons {
       u.off.rotation.x = (this.view.handL || this.view.handS || [0, 0, 0, 0])[3] + 0.9 * e;
       u.mag.visible = t >= 0.35 && t < 0.8;        // comes up in the hand, goes in at the top of the stroke
     }
+    if (this.selfT > 0) {                        // suicide: up to the right temple, muzzle turned in
+      const e = Math.min(1, this.selfT / 0.45), k = e * e * (3 - 2 * e);
+      this.rig.position.lerp(TEMPLE, k);
+      this.rig.quaternion.slerp(TEMPLE_Q, k);
+    }
     if (this.thrust > 0) {                       // a stab: straight out toward the middle of the view and back
       const t = Math.sin((1 - this.thrust / 0.24) * Math.PI);
       this.rig.position.x -= 0.12 * t;
@@ -986,7 +1015,10 @@ export class Weapons {
     this.rig.visible = !scoped;
     document.body.classList.toggle('scoped', scoped);
 
-    if (this.ctx.drone) {
+    if (this.selfT > 0) {
+      this.ads = 0;
+      if ((this.selfT += dt) > 0.6) this.selfShot(w);
+    } else if (this.ctx.drone) {
       if (input.leftDown) this.ctx.drone.life = 0;          // flying: the trigger sets it off
     } else if (w.type === 'knife') {
       this.updateKnife(input, w);
