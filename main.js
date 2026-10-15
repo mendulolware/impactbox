@@ -3,13 +3,13 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { initAudio, setVolume, sfx, setSpace, deafen, bodycam, audioStream, setRain, hum } from './audio.js';
 import { Gore } from './gore.js';
 import { Ragdoll, selfCollide } from './ragdoll.js';
-import { tickWounds } from './wounds.js';
+import { tickWounds, openWound, makeStump } from './wounds.js';
 import { Prop, PROP_TYPES } from './props.js';
 import { Player } from './player.js';
 import { Weapons } from './weapons.js';
 import { buildWorld, loadMap } from './world.js';
 import { MAPS, MAP_LIST } from './maps.js';
-import { loadModels } from './models.js';
+import { loadModels, looks } from './models.js';
 import { Post } from './post.js';
 import { Mission } from './mission.js';
 import { Survival } from './survival.js';
@@ -417,6 +417,19 @@ ctx.suicide = () => {
 ctx.marker = marker;
 
 // ------------------------------------------------------------------ spawning helpers
+/** Run a spawn menu item (in co-op the other player's clicks run in the host's game, except the ones about their own screen). */
+function runItem(it) {
+  if (ctx.spawnMenu && !it.local) { ctx.spawnMenu(SPAWN_ITEMS.indexOf(it)); if (it.cat === 'Maps' || it.cat === 'Modes') setMenu(false); }
+  else it.run();
+  sfx.pop();
+}
+/** Middle click (SPAWN on a phone, or Z): another of the last thing taken from the spawn menu, where you are looking. */
+let lastSpawn = null;
+function quickSpawn() {
+  if (lastSpawn) runItem(lastSpawn);
+  else toast('PICK SOMETHING IN THE SPAWN MENU (TAB) - THEN MIDDLE CLICK SPAWNS MORE');
+}
+
 function spawnPoint() {
   if (ctx.spawnAt) return ctx.spawnAt.clone();        // (co-op: the other player's menu click, from where they look)
   camera.getWorldPosition(_v);
@@ -577,9 +590,8 @@ function buildMenu() {
     el.innerHTML = `<span class="ico">${it.icon}</span>${it.label}<small>${it.small || '&nbsp;'}</small>`;
     // (in co-op the other player's clicks run in the host's game, except the ones about their own screen)
     el.addEventListener('click', () => {
-      if (ctx.spawnMenu && !it.local) { ctx.spawnMenu(SPAWN_ITEMS.indexOf(it)); if (it.cat === 'Maps' || it.cat === 'Modes') setMenu(false); }
-      else it.run();
-      sfx.pop();
+      runItem(it);
+      if (!['World', 'Maps', 'Modes'].includes(it.cat)) lastSpawn = it;      // (what middle click spawns again)
     });
     grid.appendChild(el);
   }
@@ -776,6 +788,7 @@ document.addEventListener('mousedown', (e) => {
   if (!gameActive()) return;
   if (e.button === 0) { input.left = true; input.leftDown = true; }
   if (e.button === 2) { input.right = true; input.rightDown = true; }
+  if (e.button === 1) { e.preventDefault(); quickSpawn(); }
 });
 document.addEventListener('mouseup', (e) => {
   if (e.button === 0) input.left = false;
@@ -811,6 +824,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Enter' && ctx.mission.over) ctx.mission.start();
   if (e.code === 'Enter' && ctx.survival.over) ctx.survival.start();
   if (e.code === 'KeyR') ctx.weapons.reload();
+  if (e.code === 'KeyZ') quickSpawn();
   if (e.code === 'Backspace') ctx.suicide();
   if (e.code === 'KeyF') {
     if (ctx.car) ctx.driving.exit();
@@ -1109,4 +1123,32 @@ function tick(now) {
 $('loading').remove();
 $('play').disabled = false;
 requestAnimationFrame(frame);
+prewarm();
+
+/**
+ * What a first wound needs on the GPU (the cut skin, the meat under it, what is inside, a stump, a burnt stump) used to be
+ * built at the moment of the first hit on each look of person, which stalled the game for a moment (a long one on a phone,
+ * and in co-op on both screens). So while the start screen is up, each look is spawned out of sight, opened up once and
+ * taken away again, and the GPU builds all of it in the background (compileAsync).
+ */
+async function prewarm() {
+  // (20 m under the player: out of sight, but inside the sun's shadow camera, so their shadow versions get built too)
+  const o = new THREE.Vector3(), at = { x: ctx.player.pos.x, y: ctx.player.pos.y - 20, z: ctx.player.pos.z };
+  const stumps = [makeStump(0.05, 0.05), makeStump(0.05, 0.05, 'limb', true)];
+  for (const s of stumps) { s.position.set(at.x, at.y, at.z); scene.add(s); }
+  for (const model of looks()) {
+    const r = new Ragdoll(ctx, at, 0, { kind: 'civilian', model });
+    r.split();
+    for (const n in r.parts) openWound(r.parts[n], o, 0.001);
+    r.sever('farmL', null, true);                 // (the cut faces too)
+    // built for where the picture is really drawn: post.js's target (its colour space and tone mapping differ from the screen's)
+    renderer.setRenderTarget(post.enabled ? post.target : null);
+    const ready = renderer.compileAsync(scene, camera);
+    renderer.render(scene, camera);               // (one real draw: the shadow pass has its own versions)
+    renderer.setRenderTarget(null);
+    try { await ready; } catch (e) { /* (only ever a head start) */ }
+    r.destroy();
+  }
+  for (const s of stumps) scene.remove(s);
+}
 if (new URLSearchParams(location.search).has('trailer')) import('./trailer.js').then((m) => m.start(ctx));   // the launch trailer (trailer.js)

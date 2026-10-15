@@ -367,6 +367,7 @@ export const sfx = {
   // ---- hand weapons
   slash()     { play('slice', { gain: 0.5 }) || noise({ dur: 0.18, f0: 700, f1: 4500, q: 1.2, gain: 0.3, type: 'bandpass' }); },
   chop()      { play('chop', { gain: 0.8 }) || noise({ dur: 0.14, f0: 2500, f1: 200, gain: 0.7 }); },
+  launcher()  { noise({ dur: 0.2, f0: 1400, f1: 180, gain: 0.55, send: 0.3 }); tone({ f0: 130, f1: 48, dur: 0.16, gain: 0.7, send: 0.1 }); },
   saber()     { tone({ f0: 150, f1: 250, dur: 0.24, gain: 0.22, type: 'sawtooth', send: 0.2 }); tone({ f0: 310, f1: 190, dur: 0.2, gain: 0.08, type: 'sawtooth' }); noise({ dur: 0.22, f0: 900, f1: 3500, q: 2, gain: 0.12, type: 'bandpass' }); },
   sizzle()    { noise({ dur: 0.32, f0: 7000, f1: 2600, type: 'highpass', gain: 0.32, send: 0.12 }); tone({ f0: 95, f1: 62, dur: 0.26, gain: 0.16, type: 'sawtooth' }); },
   saw()       { tone({ f0: 95 + Math.random() * 25, f1: 70, dur: 0.1, gain: 0.3, type: 'sawtooth' }); noise({ dur: 0.09, f0: 2600, f1: 1200, q: 3, gain: 0.22, type: 'bandpass' }); },

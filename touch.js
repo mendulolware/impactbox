@@ -23,7 +23,7 @@ export function initTouch(ctx, input) {
     <div class="row">
       <button data-key="Tab">&#9776;</button><button data-key="KeyV">CAM</button><button data-key="KeyN">NIGHT</button>
       <button data-key="KeyL">LIGHT</button><button data-key="KeyT">SLOW</button><button data-key="KeyH">KICK</button><button data-key="KeyM">MIRROR</button><button data-key="KeyO">RAIN</button>
-      <button data-key="KeyJ">SUPP</button><button data-key="KeyK">LASER</button><button data-key="KeyU">SQUAD</button><button data-key="KeyP">REC</button><button data-key="KeyY">SHOP</button>
+      <button data-key="KeyJ">SUPP</button><button data-key="KeyK">LASER</button><button data-key="KeyU">SQUAD</button><button data-key="KeyP">REC</button><button data-key="KeyY">SHOP</button><button data-key="KeyZ">SPAWN</button>
     </div>
     <button class="b" id="t-fire">FIRE</button>
     <button class="b" id="t-aim">AIM</button>

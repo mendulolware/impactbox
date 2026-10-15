@@ -31,6 +31,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | Q / E | lean left / right (hold) |
 | N / L / O | night on the current map / flashlight / rain |
 | Tab | spawn menu |
+| Middle click / Z | spawn another of the last thing you took from the spawn menu, where you are looking (SPAWN on a phone) |
 | T | slow-mo |
 | X | delete what you're aiming at (or holding) |
 | C | clear everything |
@@ -58,7 +59,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | `net.js` | finding the other player by a four-letter code; a direct line (PeerJS, `vendor/peerjs.min.js`, MIT) or, where networks block that, a public MQTT relay |
 | `survival.js` | Zombie Survival: waves, lives, the best wave |
 | `tools.js` | the Rope Tool and the Weld Tool |
-| `traps.js` | saw blade, spike trap, launch pad, crusher |
+| `traps.js` | saw blade, spike trap, launch pad, crusher (the Grab Gun carries one and sets it down again where you let go) |
 | `trailer.js` | the launch trailer: a scripted cinematic in the game itself, its music and sound made in code (see Launch trailer) |
 | `trailer_render.py` | renders the trailer to `impactbox-trailer.mp4` with ffmpeg (not part of the game) |
 | `drive.js` | driving cars: getting in and out, the handling, the view behind, running people over |
@@ -276,6 +277,16 @@ Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted aft
 
 ## Graphics
 
+**No stall on the first hit.** What a wound needs on the GPU (the cut skin, the meat under it, what is inside, the cut faces, a burnt
+stump, and the shadow versions of all of them) used to be built at the moment of the first hit on each look of person, a visible stall
+(longer on a phone, and on both screens in co-op). `prewarm()` in `main.js` now builds it all while the start screen is up: each look is
+spawned 20 m under the player (out of sight, but inside the sun's shadow camera), opened up once, compiled for post.js's target with
+`compileAsync` and drawn once, then taken away. A first hit went from 47-107 ms to about 12.
+
+**Grenade Launcher** (heavy weapons): six grenades lobbed in an arc that go off on whatever they land on (a grenade launched as a
+rocket that falls: `launch` in `props.js`). Any grenade, thrown or launched, also goes off when a round hits it (and sets off the
+next), once.
+
 Nothing is loaded from image files. `textures.js` bakes tileable surface materials at startup, `world.js` draws the sky in a shader and bakes
 it into the environment map that lights everything, and `post.js` renders the scene to an HDR image and applies ambient occlusion
 (soft shadow in creases and where things touch), bloom (glow from the sun, fire and muzzle flashes) and a colour grade. Press G to switch
@@ -291,7 +302,7 @@ Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of
 | 2 | SMGs | SMG, Uzi |
 | 3 | Shotguns | Shotgun, Double Barrel, Beanbag (a bag, not a shot: a bruise, knocked flat, 3 s dazed; stops at the first thing it hits) |
 | 4 | Rifles | Rifle, AR-15, Sniper, Crossbow |
-| 5 | Heavy | Rocket, Minigun, Flamethrower |
+| 5 | Heavy | Rocket, Grenade Launcher, Minigun, Flamethrower |
 | 6 | Blades | Knife, Machete, Katana, Laser Sword, Axe, Chainsaw |
 | 7 | Blunt | Bat, Crowbar, Sledgehammer |
 | 8 | Gear | Pepper Spray (a 3 m cone: anyone in it is 3.5 s dazed, a can lasts 8 s), Grenade, Flashbang (1.5 s fuse: whites out your screen if you look at it and rings your ears; anyone within 13 m who can see it doubles over for 2 to 6 s, stops fighting, gives up far more easily when shouted at, and can be cuffed), Grab Gun, Rope Tool and Weld Tool (below), Drone (flies where you look from its own camera, Shift = fast, click or a crash sets it off; it is a slow steered rocket, `flyDrone()` in `main.js`) |

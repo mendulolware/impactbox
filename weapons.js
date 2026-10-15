@@ -33,6 +33,7 @@ export const WEAPONS = [
   { name: 'Sniper',   slot: 3, type: 'gun', auto: false, rate: 1.30,  dmg: 150, impulse: 420, pellets: 1,  spread: 0,     sound: 'sniper',   kick: 0.22,  hole: 0.05, pierce: 3, zoom: 0.82, rec: [0.085, 0.01], shell: true, mag: 5, reload: 2.8, pen: 0.7 },
   { name: 'Crossbow', slot: 3, type: 'gun', auto: false, rate: 1.25,  dmg: 85,  impulse: 180, pellets: 1,  spread: 0.001, sound: 'twang',    kick: 0.05,  hole: 0.02, bolt: true, quiet: true, zoom: 0.45, rec: [0.01, 0.002], mag: 1, reload: 1.1, selfLoad: true },
   { name: 'Rocket',   slot: 4, type: 'rocket', auto: false, rate: 0.3, sound: 'rocket', kick: 0.13, mag: 1, reload: 1.4, selfLoad: true },
+  { name: 'Grenade Launcher', slot: 4, type: 'rocket', bomb: true, auto: false, rate: 0.6, sound: 'launcher', kick: 0.09, mag: 6, reload: 2.4 },
   { name: 'Minigun',  slot: 4, type: 'gun', auto: true,  rate: 0.028, dmg: 12,  impulse: 70,  pellets: 1,  spread: 0.030, sound: 'minigun',  kick: 0.018, hole: 0.026, spin: 0.7, hipOnly: true, rec: [0.0045, 0.004], shell: true, mag: 200, reload: 4.5, jam: 0.002, pen: 0.3 },
   { name: 'Flamethrower', slot: 4, type: 'flame', range: 7.5, dmg: 5, heat: 0.13, mag: 100, reload: 3.0 },
   { name: 'Knife',    slot: 5, type: 'knife', slice: { rate: 0.32, dmg: 8, impulse: 15, range: 1.9 }, stab: { rate: 0.55, dmg: 16, impulse: 25, range: 1.8 } },
@@ -97,6 +98,8 @@ const VIEW = [
     handR: [0, -0.070, 0.094, -0.3], handL: [0, -0.020, -0.18, 0] },
   { model: 'RocketLauncher', hip: [0.22, -0.13, -0.26], sight: 0.14, adsZ: -0.24, muzzle: [0, 0.07, -0.84],
     handR: [0, -0.03, 0.010, -0.15], handL: [0, 0.0445, -0.27, 0] },
+  { model: 'Shotgun', hip: [0.19, -0.2, -0.42], sight: 0.0521, adsZ: -0.44, muzzle: [0, 0.03, -0.759], tint: 0x5a6640,   // the grenade launcher: the pump gun in olive
+    handR: [0, -0.038, 0.135, -0.3], handL: [0, -0.0369, -0.27, 0] },
   { model: 'Minigun', hip: [0.24, -0.3, -0.32], muzzle: [0, 0, -0.76],
     handR: [0, -0.060, 0.068, -0.2], handL: [0, 0.107, -0.10, 0] },
   { model: 'Flamethrower', hip: [0.22, -0.26, -0.3], muzzle: [0, 0.03, -0.69],
@@ -561,6 +564,16 @@ export class Weapons {
   }
 
   releaseGrab() {
+    const t = this.grab?.trap;
+    if (t && !t.removed) {
+      // a carried trap is set down on whatever is under where it was let go (built again there: traps are bolted down)
+      const at = t.group.position.clone();
+      t.remove();
+      const hit = this.ctx.raycast(at.clone().setY(at.y + 0.5), { x: 0, y: -1, z: 0 }, 12);
+      if (hit) at.y += 0.5 - hit.timeOfImpact;
+      this.ctx.spawnTrap(t.type, at, t.yaw);
+      sfx.thud(0.8);
+    }
     this.grab = null;
     this.beam.visible = false;
     document.getElementById('crosshair').classList.remove('grab');
@@ -689,6 +702,18 @@ export class Weapons {
     this.aim();
     const fwd = _d.clone();
     const muzzle = this.muzzlePoint(new THREE.Vector3());
+    if (w.bomb) {
+      // a grenade lobbed a little high, that goes off on whatever it lands on (props.js)
+      const g = ctx.spawnProp('grenade', muzzle.clone().addScaledVector(fwd, 0.3));
+      g.launch(fwd.clone().setY(fwd.y + 0.12).normalize(), 24);
+      ctx.gore.smoke.emit(muzzle.x, muzzle.y, muzzle.z, fwd.x, fwd.y + 0.3, fwd.z, 0.2, 0.6, -0.3, 0.5, 0.5, 0.5, 0, 2);
+      sfx[w.sound]();
+      ctx.alert('shot', ctx.player.pos, 30);
+      this.kick = w.kick;
+      ctx.player.recoil(w.kick * 0.5);
+      this.spend(w);
+      return;
+    }
     const r = ctx.spawnProp('rocket', muzzle.clone().addScaledVector(fwd, 0.2));
     r.launch(fwd, 46);
     // backblast
@@ -897,8 +922,12 @@ export class Weapons {
 
     if (input.left && !this.grab) {
       const hit = ctx.raycast(_o, _d, 16);
-      if (hit) {
-        const owner = ctx.owners.get(hit.collider.handle);
+      const owner = hit && ctx.owners.get(hit.collider.handle);
+      if (owner?.kind === 'trap' && !owner.trap.puppet) {
+        // traps are bolted down: one is carried as it is and set down again where you let go (releaseGrab)
+        this.grab = { trap: owner.trap, dist: Math.max(1.5, hit.timeOfImpact) };
+        crosshair.classList.add('grab');
+      } else if (hit) {
         if (owner?.kind === 'part') owner.ragdoll.goLimp(2); // grabbing an NPC drops it into physics
         const body = hit.collider.parent();
         if (body && body.isDynamic()) {
@@ -915,6 +944,18 @@ export class Weapons {
 
     const g = this.grab;
     if (!g) return;
+    if (g.trap) {
+      if (g.trap.removed) { this.grab = null; this.releaseGrab(); return; }
+      g.dist = THREE.MathUtils.clamp(g.dist + input.wheel * -0.004, 1.5, 14);
+      const at = _o.clone().addScaledVector(_d, g.dist);
+      g.trap.group.position.copy(at).y -= 0.5;          // (held by its middle)
+      const pos = this.beam.geometry.attributes.position;
+      this.muzzlePoint(_m);
+      pos.setXYZ(0, _m.x, _m.y, _m.z); pos.setXYZ(1, at.x, at.y, at.z);
+      pos.needsUpdate = true;
+      this.beam.visible = true;
+      return;
+    }
     // body might have been destroyed (gib, delete, clear)
     if (ctx.world.getRigidBody(g.body.handle) !== g.body) { this.releaseGrab(); return; }     // (the same body: its slot may hold a new one)
     if (g.rag) g.rag.goLimp(1.2); // stays limp for as long as it is held

@@ -23,7 +23,7 @@ const TYPES = {
   mag:       { label: 'Magazine',         icon: '', shape: 'box', half: [0.014, 0.06, 0.03], color: 0x1b1b1d, density: 2500, hp: Infinity, rest: 0.25 },
   rocket:    { label: 'Rocket',           icon: '🚀', shape: 'ball', r: 0.06, color: 0x4a5a3a, density: 400, hp: Infinity, rest: 0 },
   flashbang: { label: 'Flashbang',        icon: '', shape: 'cyl', r: 0.03, h: 0.065, color: 0x30363a, density: 1400, hp: Infinity, rest: 0.3, fuse: 1.5 },
-  grenade:   { label: 'Grenade',          icon: '💣', shape: 'ball', r: 0.07, color: 0x2e4a2e, density: 5200, hp: Infinity, rest: 0.3, fuse: 2.4 },
+  grenade:   { label: 'Grenade',          icon: '💣', shape: 'ball', r: 0.07, color: 0x2e4a2e, density: 5200, hp: 8, rest: 0.3, fuse: 2.4, explosive: true, blast: [6.5, 1] },   // (a round into one sets it off)
 };
 
 export const PROP_TYPES = TYPES;
@@ -122,9 +122,9 @@ export class Prop {
     ctx.owners.set(this.collider.handle, { kind: 'prop', prop: this });
   }
 
-  /** Send a rocket on its way. */
+  /** Send a rocket on its way (or a grenade from the launcher: that one falls like anything else, and goes off on what it meets). */
   launch(dir, speed) {
-    this.body.setGravityScale(0.12, true);
+    this.body.setGravityScale(this.type === 'grenade' ? 1 : 0.12, true);
     this.body.setLinvel({ x: dir.x * speed, y: dir.y * speed, z: dir.z * speed }, true);
     this.life = 5;
   }
@@ -142,11 +142,11 @@ export class Prop {
     if (hit || this.life <= 0) {
       const k = hit ? hit.timeOfImpact : 0;
       this.exploded = true;
-      this.ctx.explode({ x: t.x + d.x * k, y: t.y + d.y * k, z: t.z + d.z * k }, 7, 1.15);
+      this.ctx.explode({ x: t.x + d.x * k, y: t.y + d.y * k, z: t.z + d.z * k }, this.type === 'grenade' ? 6.5 : 7, this.type === 'grenade' ? 1 : 1.15);
       this.remove();
       return true;
     }
-    if (this.drone) return false;
+    if (this.drone || this.type === 'grenade') return false;          // (no exhaust)
     for (let i = 0; i < 2; i++) {
       const g = rnd(0.3, 0.5);
       gore.smoke.emit(t.x - d.x * 0.2, t.y - d.y * 0.2, t.z - d.z * 0.2, rnd(-0.4, 0.4), rnd(0, 0.6), rnd(-0.4, 0.4),
@@ -167,12 +167,13 @@ export class Prop {
   }
 
   destroyed() {
-    if (this.removed) return;
+    if (this.removed || this.exploded) return;          // (already went off: its own blast does not set it off again)
     const t = this.body.translation();
     const p = { x: t.x, y: t.y, z: t.z };
     if (this.def.explosive) {
       // slight delay so chain reactions ripple instead of recursing
       this.removeSoon = true;
+      this.exploded = true;                       // (a grenade shot before its fuse ran out goes off once)
       const [radius, power] = this.def.blast || [7, 1];
       this.ctx.later(0.08, () => { this.ctx.explode(p, radius, power); this.remove(); });
       this.hp = Infinity;
