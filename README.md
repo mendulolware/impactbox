@@ -59,6 +59,8 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | `survival.js` | Zombie Survival: waves, lives, the best wave |
 | `tools.js` | the Rope Tool and the Weld Tool |
 | `traps.js` | saw blade, spike trap, launch pad, crusher |
+| `trailer.js` | the launch trailer: a scripted cinematic in the game itself, its music and sound made in code (see Launch trailer) |
+| `trailer_render.py` | renders the trailer to `impactbox-trailer.mp4` with ffmpeg (not part of the game) |
 | `drive.js` | driving cars: getting in and out, the handling, the view behind, running people over |
 | `water.js` | water: floating, drag, splashes, rounds slowing down under it, swimming, the view under it |
 | `gore.js` | blood droplets and mist, fire and smoke; decals that dry (splats, spatter, runs, pools, smears, handprints); physical chunks (meat, bone, skull, ribs, gut, eyes) that stick to walls and ceilings |
@@ -91,6 +93,24 @@ Every box gets a collider on one fixed body, and the visible boxes are joined in
 pieces is a handful of draw calls. `loadMap()` removes the old map (meshes, materials, colliders) and builds the next.
 Times of day are `SKIES` in `world.js`: sun direction and colour, sky colours, cloud cover, fog.
 To add a map, add an entry to `MAPS`; both menus list it automatically.
+
+## Launch trailer
+
+**Watch it:** https://mendulolware.github.io/impactbox/?trailer (click to start: browsers only play sound after a click).
+
+`trailer.js` is a 45-second trailer filmed by the game itself: fifteen shots and cards (the street at dusk, the office, the pool, a leg shot
+and a knee, a shotgun in slow motion into a stack of crates, a round through meeting-room glass, a car through a pedestrian, two bodies into
+the deep end, a fall from a roof, a zombie horde, a ring of explosive barrels, the logo). Each shot is a map, a setup (who and what is
+where), scripted events at set seconds (rounds fired with `fire()`, a car driven, a blast), a camera move and the words over it. Everything
+in the picture is the real engine: real ragdolls, wounds, blood, water and physics, so no two playbacks are quite the same. The game steps
+one tick at a time under the trailer's control (`ctx.frozen`, `debugStep`) and the trailer draws its own frames from its own camera
+(`debugView`); the player waits out of every shot, high above the map, so nobody reacts to them. The music and the sound effects are
+synthesised in `score()` (Web Audio: a drone, a pulse, a riser, trailer "braams", gunshots, glass, splashes, blasts) from the same cue list
+as the pictures, so they land on the cuts and the hits.
+
+**Render it to a video:** run `python serve.py` and `python trailer_render.py`, then open `http://localhost:8123/?trailer=render`. The page
+renders the soundtrack offline, then every frame at 1920x1080, 30 fps, and posts them to `trailer_render.py`, which has ffmpeg make
+`impactbox-trailer.mp4` (H.264, AAC, loudness normalised to -14 LUFS). About two minutes.
 
 ## Driving
 

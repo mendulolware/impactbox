@@ -1068,7 +1068,11 @@ export class Weapons {
     this.swayYaw *= decay; this.swayPitch *= decay;
     this.pivot.rotation.set(pl.aimOff.pitch + this.swayPitch, pl.aimOff.yaw + this.swayYaw, 0);
     this.updateLaser();
+    this.fade(dt);
+  }
 
+  /** The muzzle flash and the tracers die away (main.js runs this even while nobody is using the weapons: NPCs fire tracers too). */
+  fade(dt) {
     if (this.muzzleT > 0) {
       if (this.flashFollow) {
         const m = this.models[this.index];

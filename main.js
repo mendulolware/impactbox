@@ -84,6 +84,7 @@ const ctx = {
   menuOpen: false,
 };
 window.__game = ctx; // handy for debugging in the console
+ctx.post = post;     // (trailer.js draws its own frames)
 
 ctx.gore = new Gore(ctx);
 ctx.water = new Water(ctx);
@@ -973,6 +974,7 @@ function tick(now) {
   }
   ctx.weapons.pivot.visible = !mirror && !ctx.drone && !ctx.car;
   if (active && !ctx.car) ctx.weapons.update(dt, input);
+  else ctx.weapons.fade(dt);
   flyDrone(now);
   for (const d of ctx.doors) d.update(sdt);
   // footsteps: one for every half turn of the walk cycle
@@ -1033,9 +1035,9 @@ function tick(now) {
   ctx.survival.update(dt);
   tickWounds(sdt);
 
-  // shadow camera follows the player
-  const sun = ctx.sun;
-  sun.target.position.set(Math.round(ctx.player.pos.x), Math.round(ctx.player.pos.y - 1), Math.round(ctx.player.pos.z));
+  // shadow camera follows the player (or whatever the trailer is filming)
+  const sun = ctx.sun, sp = ctx.shadowAt || ctx.player.pos;
+  sun.target.position.set(Math.round(sp.x), Math.round(sp.y - 1), Math.round(sp.z));
   sun.position.copy(sun.target.position).add(ctx.sunOffset);
 
   if (toastT > 0) { toastT -= dt; if (toastT <= 0) $('toast').classList.remove('show'); }
@@ -1094,6 +1096,7 @@ function tick(now) {
   const dyaw = Math.atan2(Math.sin(rot.y - lastRot.y), Math.cos(rot.y - lastRot.y)), dpitch = rot.x - lastRot.x;
   post.final.uniforms.uBlur.value.set(THREE.MathUtils.clamp(dyaw * pm[0] * 0.3, -0.05, 0.05), THREE.MathUtils.clamp(dpitch * pm[5] * 0.3, -0.05, 0.05));
   lastRot.copy(rot);
+  if (ctx.frozen) return;                 // (stepped from outside, by the trailer or a debugger, which draws its own view)
   post.render(scene, camera, ctx.helmet);
   recordFrame();
 }
@@ -1101,3 +1104,4 @@ function tick(now) {
 $('loading').remove();
 $('play').disabled = false;
 requestAnimationFrame(frame);
+if (new URLSearchParams(location.search).has('trailer')) import('./trailer.js').then((m) => m.start(ctx));   // the launch trailer (trailer.js)
