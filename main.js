@@ -400,6 +400,8 @@ function marker(kind) {
   m.className = kind;
 }
 ctx.feed = feed;
+/** Die on purpose and come back at the start (stuck, or want a fresh go): the ordinary death, then the ordinary respawn. */
+ctx.suicide = () => { if (!ctx.player.dead) { ctx.player.hurt(1e3); feed('SUICIDE'); } };
 ctx.marker = marker;
 
 // ------------------------------------------------------------------ spawning helpers
@@ -543,6 +545,7 @@ const SPAWN_ITEMS = [
   { cat: 'World', label: 'Helmet Cam', icon: '📹', small: 'toggle (V)', local: true, run: () => toggleHelmet() },
   { cat: 'World', label: 'Graphics', icon: '✨', small: 'high / fast (G)', local: true, run: () => toggleGraphics() },
   { cat: 'World', label: 'Settings', icon: '⚙️', small: 'look, FOV, volume, graphics', local: true, run: () => setSettings(true) },
+  { cat: 'World', label: 'Suicide', icon: '💀', small: 'die and respawn (Backspace)', local: true, run: () => ctx.suicide() },
 ];
 
 function buildMenu() {
@@ -796,6 +799,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Enter' && ctx.mission.over) ctx.mission.start();
   if (e.code === 'Enter' && ctx.survival.over) ctx.survival.start();
   if (e.code === 'KeyR') ctx.weapons.reload();
+  if (e.code === 'Backspace') ctx.suicide();
   if (e.code === 'KeyF') {
     if (ctx.car) ctx.driving.exit();
     else { const d = doorAhead(); if (d) d.door.toggle(ctx.player.pos); else if (!ctx.driving.tryEnter()) { ctx.weapons.unjam(); ctx.mission.act(); } }
