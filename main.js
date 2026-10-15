@@ -369,7 +369,10 @@ ctx.onKill = (rag, cause) => {
   ctx.kills++;
   ctx.feed((rag.killedBy ? rag.killedBy + ' · ' : '') + (KILL_TEXT[cause] || 'KILLED'));     // (killedBy: P1 or P2, in co-op)
   if (rag.kind === 'zombie') ctx.survival?.kill(cause);
-  if (performance.now() - (rag.shotAt || -1e9) < 2500) ctx.marker('kill');     // (red only for your own kills)
+  if (performance.now() - (rag.shotAt || -1e9) < 2500) {
+    ctx.marker('kill');                                       // (red only for your own kills)
+    if (!ctx.net?.role) ctx.hitstop = cause === 'headshot' || cause === 'gib' ? 0.09 : 0.055;   // the world holds its breath for a moment (not in co-op: it is the other player's world too)
+  }
   ctx.mission.onKill(rag);
 };
 
@@ -949,7 +952,8 @@ function adaptResolution(dt) {
 function tick(now) {
   const dt = Math.min(Math.max((now - last) / 1000, 0), 0.05);
   last = now;
-  const sdt = dt * ctx.timeScale;
+  if (ctx.hitstop > 0) ctx.hitstop -= dt;
+  const sdt = dt * ctx.timeScale * (ctx.hitstop > 0 ? 0.08 : 1);
 
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.5) { fps = Math.round(fpsN / fpsAcc); fpsAcc = 0; fpsN = 0; }

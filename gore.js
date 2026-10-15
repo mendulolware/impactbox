@@ -616,7 +616,7 @@ export class Gore {
   blood(p, dir, count = 12, speed = 4, spread = 0.9) {
     // a hit this close puts some of it on the camera
     const cam = this.ctx.camera.position, near = Math.hypot(p.x - cam.x, p.y - cam.y, p.z - cam.z);
-    if (near < 2.4 && count >= 12) this.lens(Math.ceil((2.4 - near) * 2.5));
+    if (near < 2.4 && count >= 4) this.lens(Math.ceil((2.4 - near) * 2.5));
     count = Math.ceil(count * (this.lite ? 0.8 : 1.5));
     for (let k = 0; k < count; k++) {
       const s = speed * rnd(0.25, 1.15);
@@ -668,13 +668,13 @@ export class Gore {
       rnd(0.009, 0.016), 2.5, 9.8, rnd(0.09, 0.16), 0.003, 0.003, BLOOD);
   }
 
-  /** Fine red haze hanging where a round went through. */
-  mist(p, dir, count = 5, size = 1) {
+  /** Fine red haze hanging where a round went through. puff: the brighter burst a hit throws back at the shooter. */
+  mist(p, dir, count = 5, size = 1, puff = false) {
     for (let k = 0; k < count; k++) {
-      const s = rnd(0.3, 1.7);
-      this.mists.emit(p.x + rnd(-0.03, 0.03), p.y + rnd(-0.03, 0.03), p.z + rnd(-0.03, 0.03),
+      const s = rnd(0.3, 1.7) * (puff ? 1.4 : 1);
+      this.mists.emit(p.x + dir.x * 0.05 + rnd(-0.03, 0.03), p.y + dir.y * 0.05 + rnd(-0.03, 0.03), p.z + dir.z * 0.05 + rnd(-0.03, 0.03),
         dir.x * s + rnd(-0.5, 0.5), dir.y * s + rnd(-0.2, 0.6), dir.z * s + rnd(-0.5, 0.5),
-        rnd(0.1, 0.24) * size, rnd(0.3, 0.7), 0.7, rnd(0.14, 0.2), 0.008, 0.008, 0, 3.5);
+        rnd(0.1, 0.24) * size, puff ? rnd(0.18, 0.32) : rnd(0.3, 0.7), 0.7, puff ? rnd(0.3, 0.42) : rnd(0.14, 0.2), puff ? 0.018 : 0.008, puff ? 0.015 : 0.008, 0, 3.5);
     }
   }
 

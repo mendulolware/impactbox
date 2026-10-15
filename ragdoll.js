@@ -643,6 +643,12 @@ export class Ragdoll {
         // a small entry hole, about the round's own width, and a torn, wider one where it leaves
         const hole = opts.hole || 0.026;
         openWound(p, lp, hole * 0.5, maxR, null, ld);
+        sfx.flesh(name === 'head');
+        // a round through a big artery (the thigh's, the upper arm's, the neck's) spurts in time with the heart, and empties them
+        if (!this.dead && (name.startsWith('thigh') || name.startsWith('uarm') || (name === 'head' && lp.y < -0.04)) && Math.random() < 0.4) {
+          this.bleeders.push({ part: p, local: lp.clone(), out: ld.clone().negate(), t: 7, rate: 16, pooled: false });
+          this.sevBleed += 1.5;
+        }
         this.bleed(p, lp, big ? 5 : name === 'head' ? 4 : 3, big ? 0.4 : name === 'head' ? 0.4 : 0.18);
         let k = 0.6;
         for (let i = 0; i < 3; i++) {
@@ -668,6 +674,7 @@ export class Ragdoll {
         }
         _t.copy(dir).multiplyScalar(-0.4); _t.y += 0.3;
         gore.blood(point, _t, 2, 2, 0.8);                  // a little comes back out the front
+        gore.mist(point, _t.set(-dir.x, 0.15 - dir.y, -dir.z), dmg < 20 ? 3 : 5, name === 'head' ? 2.8 : 2.3, true);   // and a puff of it, toward whoever fired (what they see of the hit)
         gore.mist(point, dir, dmg < 20 ? 1 : name === 'head' ? 6 : 3, name === 'head' ? 1.3 : 1);
         if (dmg >= 20 || Math.random() < 0.25) gore.wallSplatter(point, dir, 4.5 * Math.min(2, hole / 0.03));   // (one blast's pellets do not each paint the wall)
       }

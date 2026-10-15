@@ -383,6 +383,13 @@ spills from a hit of 60 or more, or once it has taken one and a half times its h
 no mark, and only the odd shotgun pellet throws spatter onto the wall behind, so a body is marked mostly by its wounds and the pool that
 spreads under it rather than by blood thrown metres round it.
 
+**How a hit feels:** every round into a person is heard (`sfx.flesh`: a wet slap and a thump, with the crack of bone for a head) and
+seen from where you stand (a short, bright puff of blood mist thrown back out of the entry toward the shooter, `mist(..., puff)`, bigger
+for a head). A round through a big artery (the thigh, the upper arm, the neck; 40%) spurts in time with the heart for several seconds and
+empties them in about a minute (`bleeders`, the same spray as a stump). A hit within 2.4 m of the camera puts blood on the lens again. And
+your own kills hold the world almost still for a moment, 0.055 s, or 0.09 s for a head shot (`ctx.hitstop` in `main.js`; not in co-op,
+where the world is the other player's too).
+
 `makeStump()` builds the torn end left where a limb comes off: a mound of muscle ringed with fat, snapped bone standing out of it (two for a forearm
 or shin, spine and windpipe for a neck), ragged skin round the edge, and gut hanging out of a body cut in half. `ragdoll.js` adds the pulsing arterial spray.
 Explosions burn and pepper bodies rather than launching them out of the arena, and only destroy the parts that were right on top of the blast.

@@ -356,6 +356,13 @@ export const sfx = {
   glass()     { noise({ dur: 0.12, f0: 5000, f1: 2500, type: 'highpass', gain: 0.4, send: 0.2 }); for (let i = 0; i < 5; i++) tone({ f0: 3000 + Math.random() * 2500, f1: 2800, dur: 0.08, gain: 0.06, type: 'triangle', delay: 0.05 + i * 0.07 + Math.random() * 0.05, send: 0.2 }); },
   /** A door on its hinges. */
   door()      { play('latch', { gain: 0.5, rate: 0.8 }); tone({ f0: 160, f1: 95, dur: 0.5, gain: 0.08, type: 'sawtooth' }); },
+  /** A round into a person: a wet slap and a thump (a head: the crack of bone as well). */
+  flesh(head = false) {
+    noise({ dur: 0.07, f0: 2400, f1: 380, q: 0.9, gain: 0.42, send: 0.06 });
+    tone({ f0: 130, f1: 52, dur: 0.09, gain: 0.32 });
+    play('chop', { gain: 0.2, rate: 1.7, jitter: 0.12 });
+    if (head) { noise({ dur: 0.05, f0: 3600, f1: 1400, q: 3, gain: 0.32, type: 'bandpass' }); tone({ f0: 300, f1: 120, dur: 0.04, gain: 0.16, type: 'square' }); }
+  },
   /** A round into what it hit: a crack off concrete, a ring off steel, a thud into wood. */
   impact(on = 'concrete') {
     if (on === 'planks') { noise({ dur: 0.07, f0: 1600, f1: 300, gain: 0.3, send: 0.08 }); tone({ f0: 140, f1: 60, dur: 0.07, gain: 0.18 }); return; }
