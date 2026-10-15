@@ -27,6 +27,7 @@ export const SHOP = [
   { id: 'ar15', label: 'AR-15', weapon: 'AR-15', cost: 300 },
   { id: 'sniper', label: 'Sniper', weapon: 'Sniper', cost: 350 },
   { id: 'chainsaw', label: 'Chainsaw', weapon: 'Chainsaw', cost: 400 },
+  { id: 'laser', label: 'Laser Sword', weapon: 'Laser Sword', cost: 600 },
   { id: 'flame', label: 'Flamethrower', weapon: 'Flamethrower', cost: 500 },
   { id: 'rocket', label: 'Rocket Launcher', weapon: 'Rocket', cost: 700 },
   { id: 'minigun', label: 'Minigun', weapon: 'Minigun', cost: 800 },

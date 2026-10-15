@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { initAudio, setVolume, sfx, setSpace, deafen, bodycam, audioStream, setRain } from './audio.js';
+import { initAudio, setVolume, sfx, setSpace, deafen, bodycam, audioStream, setRain, hum } from './audio.js';
 import { Gore } from './gore.js';
 import { Ragdoll, selfCollide } from './ragdoll.js';
 import { tickWounds } from './wounds.js';
@@ -979,6 +979,7 @@ function tick(now) {
   ctx.weapons.pivot.visible = !mirror && !ctx.drone && !ctx.car;
   if (active && !ctx.car) ctx.weapons.update(dt, input);
   else ctx.weapons.fade(dt);
+  hum(active && !ctx.car && ctx.weapons.current.laser ? Math.min(1, ctx.weapons.swing * 3.5) : null);   // (the laser sword, while it is out)
   flyDrone(now);
   for (const d of ctx.doors) d.update(sdt);
   // footsteps: one for every half turn of the walk cycle

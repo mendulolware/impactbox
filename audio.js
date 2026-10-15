@@ -231,6 +231,30 @@ function ambience(kind) {
   return { gain: g, stop: () => { for (const n of nodes) { try { n.stop(); } catch (e) { /* already stopped */ } } g.disconnect(); } };
 }
 
+/** The laser sword's hum while it is out (main.js): level 0..1 (more while it swings), or null for off. */
+let buzz = null;
+export function hum(level) {
+  if (!ac) return;
+  const t = ac.currentTime;
+  if (level === null) {
+    if (!buzz) return;
+    const b = buzz; buzz = null;
+    b.g.gain.setTargetAtTime(0, t, 0.05);
+    setTimeout(() => { for (const o of b.o) o.stop(); b.g.disconnect(); }, 500);
+    return;
+  }
+  if (!buzz) {
+    const f = ac.createBiquadFilter(), g = ac.createGain();
+    f.type = 'lowpass'; f.frequency.value = 520; g.gain.value = 0;
+    const o = [86, 88.6].map((fr) => { const x = ac.createOscillator(); x.type = 'sawtooth'; x.frequency.value = fr; x.connect(f); x.start(); return x; });
+    f.connect(g); out(g, 0.08);
+    buzz = { o, f, g };
+  }
+  buzz.o[0].frequency.setTargetAtTime(86 * (1 + level * 0.25), t, 0.03);
+  buzz.o[1].frequency.setTargetAtTime(88.6 * (1 + level * 0.25), t, 0.03);
+  buzz.g.gain.setTargetAtTime(0.035 + level * 0.05, t, 0.04);
+}
+
 /** The engine of the car you are driving (drive.js): rev 0..1, or null to switch it off. */
 let eng = null;
 export function engine(rev) {
@@ -343,6 +367,8 @@ export const sfx = {
   // ---- hand weapons
   slash()     { play('slice', { gain: 0.5 }) || noise({ dur: 0.18, f0: 700, f1: 4500, q: 1.2, gain: 0.3, type: 'bandpass' }); },
   chop()      { play('chop', { gain: 0.8 }) || noise({ dur: 0.14, f0: 2500, f1: 200, gain: 0.7 }); },
+  saber()     { tone({ f0: 150, f1: 250, dur: 0.24, gain: 0.22, type: 'sawtooth', send: 0.2 }); tone({ f0: 310, f1: 190, dur: 0.2, gain: 0.08, type: 'sawtooth' }); noise({ dur: 0.22, f0: 900, f1: 3500, q: 2, gain: 0.12, type: 'bandpass' }); },
+  sizzle()    { noise({ dur: 0.32, f0: 7000, f1: 2600, type: 'highpass', gain: 0.32, send: 0.12 }); tone({ f0: 95, f1: 62, dur: 0.26, gain: 0.16, type: 'sawtooth' }); },
   saw()       { tone({ f0: 95 + Math.random() * 25, f1: 70, dur: 0.1, gain: 0.3, type: 'sawtooth' }); noise({ dur: 0.09, f0: 2600, f1: 1200, q: 3, gain: 0.22, type: 'bandpass' }); },
 
   // ---- what hits do

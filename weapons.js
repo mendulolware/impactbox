@@ -38,6 +38,7 @@ export const WEAPONS = [
   { name: 'Knife',    slot: 5, type: 'knife', slice: { rate: 0.32, dmg: 8, impulse: 15, range: 1.9 }, stab: { rate: 0.55, dmg: 16, impulse: 25, range: 1.8 } },
   { name: 'Machete',  slot: 5, type: 'melee', rate: 0.60, dmg: 14, impulse: 60,  range: 1.7 },
   { name: 'Katana',   slot: 5, type: 'melee', rate: 0.55, dmg: 18, impulse: 50,  range: 1.9 },
+  { name: 'Laser Sword', slot: 5, type: 'melee', rate: 0.42, dmg: 12, impulse: 15, range: 2.3, laser: true },
   { name: 'Axe',      slot: 5, type: 'melee', rate: 0.90, dmg: 22, impulse: 110, range: 1.6 },
   { name: 'Chainsaw', slot: 5, type: 'saw',   rate: 0.08, dmg: 3,  impulse: 20,  range: 1.6 },
   { name: 'Bat',      slot: 6, type: 'melee', rate: 0.60, dmg: 9,  impulse: 150, range: 1.7, blunt: true },
@@ -103,6 +104,7 @@ const VIEW = [
   { model: 'Knife',   hip: [0.2, -0.2, -0.42], knife: true },
   { model: 'Machete', hip: [0.3, -0.3, -0.5], melee: true },
   { model: 'Katana',  hip: [0.3, -0.32, -0.5], melee: true, tilt: 0.75 },
+  { model: 'LaserSword', hip: [0.3, -0.32, -0.5], melee: true, tilt: 0.75, laser: true },
   { model: 'Axe',     hip: [0.3, -0.3, -0.5], melee: true, tilt: 0.7, grip: -0.18 },
   { model: 'Chainsaw', hip: [0.2, -0.3, -0.34], muzzle: [0.07, 0.005, -0.8],
     handR: [0, 0, 0, -0.1], handL: [0, 0.185, -0.275, 0] },
@@ -144,6 +146,21 @@ function hand(name, [x, y, z, pitch]) {
   return h;
 }
 
+/** The laser sword, built here: a steel hilt and a metre of blade brighter than white (the bloom takes it), glowing red on what is near. */
+function laserSword() {
+  const g = new THREE.Group();
+  const along = (geo) => geo.rotateX(Math.PI / 2);          // (melee models lie along -Z, handle at the origin)
+  const hilt = new THREE.Mesh(along(new THREE.CylinderGeometry(0.017, 0.019, 0.24, 14)), new THREE.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.9, roughness: 0.3 }));
+  const core = new THREE.Mesh(along(new THREE.CylinderGeometry(0.008, 0.011, 1.0, 10)), new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 2.4, 2.4) }));
+  const glow = new THREE.Mesh(along(new THREE.CylinderGeometry(0.022, 0.026, 1.02, 12)),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 0.12, 0.08), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
+  core.position.z = glow.position.z = -0.62;
+  const light = new THREE.PointLight(0xff3020, 1.6, 3.5, 2);
+  light.position.z = -0.6;
+  g.add(hilt, core, glow, light);
+  return g;
+}
+
 /** One group per weapon: the weapon model plus the hands holding it. */
 function buildViewmodel(v) {
   const g = new THREE.Group();
@@ -155,6 +172,7 @@ function buildViewmodel(v) {
     cap.position.y = 0.08;
     model.add(tin, cap);
   }
+  if (!model && v.laser) model = laserSword();
   model ||= new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.3), new THREE.MeshStandardMaterial({ color: 0x4a4a52 }));
   if (v.tint) model.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.set(v.tint); } });
   if (v.knife) {
@@ -721,8 +739,25 @@ export class Weapons {
     const origin = _o.clone();
     const fwd = _d.clone();
     const right = _r.clone();
-    sfx.slash();
     this.swing = 0.28;
+    if (w.laser) {
+      // a metre of light swept right to left: it goes through everything in the arc and cuts every part it meets (ragdoll.js)
+      sfx.saber();
+      const seen = new Set(), across = right.clone().negate();
+      let cut = false;
+      for (let k = -3; k <= 3; k++) {
+        const d = fwd.clone().addScaledVector(right, k * 0.17).normalize();
+        const hit = ctx.raycast(origin, d, w.range);
+        if (!hit || seen.has(hit.collider.handle)) continue;
+        seen.add(hit.collider.handle);
+        const pt = origin.clone().addScaledVector(d, hit.timeOfImpact), kind = ctx.owners.get(hit.collider.handle)?.kind;
+        if (kind === 'part' || kind === 'prop' || kind === 'chunk') { ctx.applyHit(hit, pt, across, w.dmg, w.impulse, { blade: true, laser: true }); cut = true; }
+        else ctx.gore.sparks(pt, d.clone().negate(), 4);
+      }
+      if (cut) { sfx.sizzle(); ctx.alert('violence', ctx.player.pos, 12); }
+      return;
+    }
+    sfx.slash();
 
     const seen = new Set();
     let hitSomething = false;

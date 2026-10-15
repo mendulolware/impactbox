@@ -610,7 +610,11 @@ export class Ragdoll {
         this.bleed(p, lp, 3, 0.3);
       }
     } else if (dmg > 0) {
-      if (opts.blade) {
+      if (opts.laser) {
+        // a blade of light: it does not gash, it burns its way through, and seals what it cuts (see the cut below)
+        burn(p, 0.55);
+        gore.smoke.emit(point.x, point.y, point.z, rnd(-0.2, 0.2), rnd(0.3, 0.7), rnd(-0.2, 0.2), rnd(0.05, 0.1), rnd(0.6, 1.1), -0.3, 0.3, 0.28, 0.27, 0, 1.5);
+      } else if (opts.blade) {
         // a gash: along the blade's travel for a swipe, any way across the body for a chop
         const ln = opts.normal ? new THREE.Vector3(opts.normal.x, opts.normal.y, opts.normal.z).applyQuaternion(_q).normalize() : ld.clone().negate();
         const swipe = opts.light && !opts.chop;
@@ -697,7 +701,12 @@ export class Ragdoll {
     }
 
     // resolve what happens to the part first so the kill gets the right label
-    if (p.hp <= 0) {
+    if (opts.laser) {
+      // it cuts through at the first touch, at the joint nearest the blade; a lost arm or leg is sealed and survivable,
+      // a head or a body cut in half is not (sever() says so)
+      const c = this.cutAt(name, lp);
+      if (c) this.sever(c, dir, true);
+    } else if (p.hp <= 0) {
       if (opts.explosion && p.hp < -75 && name !== 'pelvis') {      // right on top of it: nothing left
         this.gib(name);
       } else if (opts.explosion && name !== 'torso' && name !== 'pelvis' && Math.random() < 0.45) {
@@ -722,11 +731,13 @@ export class Ragdoll {
           p.hp = 1;
           if (ARMS.has(name)) this.dangle(name); else this.lame[name.slice(-1)] = 1;
           if (opts.blunt) sfx.crack();
-        } else this.sever(name, dir);
+        } else this.sever(opts.blade ? this.cutAt(name, lp) || name : name, dir);
       } else if (name === 'torso') {
-        if (opts.blade || opts.explosion) this.sever('torso', dir);
+        if (opts.blade) this.sever(this.cutAt('torso', lp) || 'torso', dir);       // (where it landed: the waist, a shoulder, the neck)
+        else if (opts.explosion) this.sever('torso', dir);
         if (!zombie || this.severed.has('torso')) this.die(opts.blunt ? 'beaten' : 'torso');
       } else if (name === 'pelvis') {
+        if (opts.blade) { const c = this.cutAt('pelvis', lp); if (c) this.sever(c, dir); }   // a leg off at the hip, or in half at the waist
         if (!zombie) this.die(opts.blunt ? 'beaten' : 'pelvis');
       }
     }
@@ -850,8 +861,24 @@ export class Ragdoll {
     this.ctx.toast('IT GETS BACK UP');
   }
 
-  /** Cut a part (and anything hanging off it) free of its parent. */
-  sever(name, dir) {
+  /**
+   * Where a blade landing at lp (in the part's own space) on part `name` cuts: the part hanging off whichever of its
+   * joints is nearest the blow and still whole (a forearm hit by the elbow comes off there, a thigh hit by the knee
+   * loses the shin, the pelvis loses a leg or the body above it). null: nothing left to cut there.
+   */
+  cutAt(name, lp) {
+    const at = PARTS[name].pos;
+    let best = null, bd = Infinity;
+    for (const j of JOINTS) {
+      if ((j.a !== name && j.b !== name) || this.severed.has(j.b) || this.parts[j.b].gone) continue;
+      const d = Math.hypot(j.anchor[0] - at[0] - lp.x, j.anchor[1] - at[1] - lp.y, j.anchor[2] - at[2] - lp.z);
+      if (d < bd) { bd = d; best = j.b; }
+    }
+    return best;
+  }
+
+  /** Cut a part (and anything hanging off it) free of its parent. sealed: burnt shut as it was cut (the laser sword): no spray, no bleeding. */
+  sever(name, dir, sealed = false) {
     if (this.severed.has(name) || !JOINT_OF[name]) return;   // (the pelvis is the root: it hangs off nothing)
     const jd = this.joints[JOINT_OF[name].name];
     if (!jd) return;
@@ -866,9 +893,8 @@ export class Ragdoll {
     const parent = this.parts[jd.def.a];
     const child = this.parts[name];
     const wp = this.localToWorld(parent, jd.a1);
-    gore.gush(wp, dir || UP, 42, 6);
-    gore.chunks(wp, 2, 3, null, 'limb');
-    sfx.chop();
+    if (sealed) { gore.smoke.emit(wp.x, wp.y, wp.z, 0, 0.6, 0, 0.12, 1.4, -0.3, 0.3, 0.28, 0.27, 0, 1.5); sfx.sizzle(); }
+    else { gore.gush(wp, dir || UP, 42, 6); gore.chunks(wp, 2, 3, null, 'limb'); sfx.chop(); }
 
     // wound direction in each part's local frame: along the limb. (The shoulder is cut under the
     // cap of the shoulder, so the body's side of it faces down the arm, not up.)
@@ -876,13 +902,16 @@ export class Ragdoll {
     const outA = new THREE.Vector3(0, side ? -1 : Math.sign(jd.a1.y) || 1, 0);
     const outB = new THREE.Vector3(0, Math.sign(jd.a2.y) || 1, 0);
     if (!parent.gone) {
-      this.addStump(parent, jd.a1, outA, jd.def);
-      this.bleeders.push({ part: parent, local: jd.a1, out: outA, t: 10, rate: 42, pooled: false });
+      this.addStump(parent, jd.a1, outA, jd.def, sealed);
+      if (!sealed) this.bleeders.push({ part: parent, local: jd.a1, out: outA, t: 10, rate: 42, pooled: false });
     }
-    this.addStump(child, jd.a2, outB, jd.def);
-    this.bleeders.push({ part: child, local: jd.a2, out: outB, t: 6, rate: 24, pooled: false });
-    this.sevBleed += name.startsWith('farm') || name.startsWith('shin') ? 1.6 : 2.6;   // the nearer the body, the faster it empties
-    this.bled = true;
+    this.addStump(child, jd.a2, outB, jd.def, sealed);
+    if (sealed) { burn(parent, 0.5); burn(child, 0.5); }
+    else {
+      this.bleeders.push({ part: child, local: jd.a2, out: outB, t: 6, rate: 24, pooled: false });
+      this.sevBleed += name.startsWith('farm') || name.startsWith('shin') ? 1.6 : 2.6;   // the nearer the body, the faster it empties
+      this.bled = true;
+    }
 
     this.damage(12);
     if (name === 'head') this.die('decap');
@@ -946,8 +975,8 @@ export class Ragdoll {
     }
   }
 
-  addStump(part, local, out, def) {
-    const s = makeStump(def.cut[0], def.cut[1], def.kind);
+  addStump(part, local, out, def, sealed = false) {
+    const s = makeStump(def.cut[0], def.cut[1], def.kind, sealed);
     s.quaternion.setFromUnitVectors(UP, out);
     s.position.copy(local);
     part.mesh.add(s);

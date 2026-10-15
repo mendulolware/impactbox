@@ -334,6 +334,7 @@ export function burn(part, amount) {
 
 // ---- stumps -----------------------------------------------------------------------------------
 const stumpMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.27 });
+const charMat = new THREE.MeshStandardMaterial({ vertexColors: true, color: 0x2e1a14, roughness: 0.95 });   // a cut burnt shut (the laser sword)
 const MEAT = [0.4, 0.028, 0.026], MEAT_DARK = [0.17, 0.008, 0.01], FAT = [0.74, 0.5, 0.33], BONE = [0.68, 0.61, 0.48];
 const MARROW = [0.3, 0.03, 0.03], GUT = [0.5, 0.22, 0.2];
 const mix3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
@@ -471,11 +472,11 @@ const stumpCache = new Map();
  * Mesh for the wound left where a limb came off. +Y points out of the wound.
  * rx, rz = half-widths of the cut; kind = 'limb' (one bone), 'limb2' (two), 'neck', 'gut' (torso cut in half).
  */
-export function makeStump(rx, rz, kind = 'limb') {
+export function makeStump(rx, rz, kind = 'limb', sealed = false) {
   const key = kind + ((Math.random() * 4) | 0);
   let g = stumpCache.get(key);
   if (!g) { g = stumpGeometry(kind, key.charCodeAt(key.length - 1) + kind.length * 7); stumpCache.set(key, g); }
-  const m = new THREE.Mesh(g, stumpMat);
+  const m = new THREE.Mesh(g, sealed ? charMat : stumpMat);
   m.scale.set(rx, Math.min(rx, rz), rz);
   m.castShadow = true;
   return m;

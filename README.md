@@ -292,7 +292,7 @@ Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of
 | 3 | Shotguns | Shotgun, Double Barrel, Beanbag (a bag, not a shot: a bruise, knocked flat, 3 s dazed; stops at the first thing it hits) |
 | 4 | Rifles | Rifle, AR-15, Sniper, Crossbow |
 | 5 | Heavy | Rocket, Minigun, Flamethrower |
-| 6 | Blades | Knife, Machete, Katana, Axe, Chainsaw |
+| 6 | Blades | Knife, Machete, Katana, Laser Sword, Axe, Chainsaw |
 | 7 | Blunt | Bat, Crowbar, Sledgehammer |
 | 8 | Gear | Pepper Spray (a 3 m cone: anyone in it is 3.5 s dazed, a can lasts 8 s), Grenade, Flashbang (1.5 s fuse: whites out your screen if you look at it and rings your ears; anyone within 13 m who can see it doubles over for 2 to 6 s, stops fighting, gives up far more easily when shouted at, and can be cuffed), Grab Gun, Rope Tool and Weld Tool (below), Drone (flies where you look from its own camera, Shift = fast, click or a crash sets it off; it is a slow steered rocket, `flyDrone()` in `main.js`) |
 
@@ -316,6 +316,14 @@ Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of
 
 - **Sniper** rounds pass through up to three bodies; aiming swaps the weapon for a full-screen scope.
 - **Rocket** is a physical projectile (`flyRocket` in `props.js`) that explodes on whatever is in front of it.
+- **Laser Sword**: a metre of red light (built in `laserSword()`, brighter than white so the bloom takes it, and lighting what is near) that
+  hums while it is out (`hum` in `audio.js`). One swing sweeps an arc of seven rays and cuts through every body part it meets on the
+  first touch, through several people at once (`opts.laser` in `Ragdoll.hit`). The cut is burnt shut: no spray, no bleeding, charred
+  ends (`sever(..., sealed)`, the stump in `charMat`), so someone who loses only an arm or a leg lives. In the Zombie Survival shop for 600.
+- **Where a blade cuts** (every blade, the saw blade trap too): at whichever joint of the part it lands on is nearest the blow (`cutAt` in
+  `ragdoll.js`). A thigh hit by the knee loses the shin, by the hip the whole leg; an upper arm hit by the elbow loses the forearm; the
+  side of the chest by a shoulder takes the arm, its top the head, its bottom cuts the body in half; and the pelvis, which nothing
+  could cut before, loses a leg at the hip or the body above it at the waist.
 - **Knife**: left button slices (a quick sideways cut that opens a gash running the way the blade travelled), right button
   stabs (a thrust: slower, shorter reach, twice the damage, a puncture). Both are in `updateKnife`; numbers are on the Knife's
   line in `WEAPONS`.
