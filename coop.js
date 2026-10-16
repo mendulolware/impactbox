@@ -241,7 +241,7 @@ export class Coop {
     };
     woundHooks.burn = (part, amount) => { const r = this.partOwner.get(part); if (r) this.q(['burn', r.nid, part.name, amount]); };
     const proto = Ragdoll.prototype;
-    for (const name of ['split', 'sever', 'gib']) {
+    for (const name of ['split', 'sever', 'gib', 'slice']) {
       const f = proto[name];
       proto[name] = function (...a) {
         if (self.role === 'host' && this.nid) self.q([name, this.nid, ...a.map((x) => (x && x.isVector3 ? P(x) : x))]);
@@ -500,6 +500,7 @@ export class Coop {
     ctx.applyHit = (hit, point, dir, dmg, impulse, opts = {}) => {
       const o = ctx.owners.get(hit.collider.handle);
       if (o?.kind === 'chunk') { o.body.applyImpulse({ x: dir.x * 2, y: dir.y * 2 + 1, z: dir.z * 2 }, true); return; }
+      if (o?.kind === 'piece') { o.piece.body.applyImpulse({ x: dir.x * 2, y: dir.y * 2 + 1, z: dir.z * 2 }, true); return; }   // (a cut-off piece: the other player's is their own)
       let target = null;
       if (o?.kind === 'part') {
         target = o.ragdoll === this.avatar ? ['pl'] : o.ragdoll.nid ? ['r', o.ragdoll.nid, o.name] : null;
@@ -725,6 +726,7 @@ export class Coop {
     } else if (t === 'split') this.rags.get(e[1])?.split();
     else if (t === 'sever') { const r = this.rags.get(e[1]); if (r && !r.removed) r.sever(e[2], e[3] && V(e[3])); }
     else if (t === 'gib') { const r = this.rags.get(e[1]); if (r && !r.removed && !r.parts[e[2]].gone) r.gib(e[2]); }
+    else if (t === 'slice') { const r = this.rags.get(e[1]); if (r && !r.removed) r.slice(e[2], e[3], e[4] && V(e[4]), e[5]); }
     else if (t === 'gclear') ctx.gore.clear();
     else if (t === 'toast') ctx.toast(e[1]);
     else if (t === 'feed') ctx.feed(e[1]);

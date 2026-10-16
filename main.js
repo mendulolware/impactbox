@@ -65,7 +65,8 @@ const eventQueue = new RAPIER.EventQueue(true); // Rapier only runs hooks when a
 const physicsHooks = {
   filterContactPair(c1, c2) {
     const a = ctx.owners.get(c1), b = ctx.owners.get(c2);
-    if (a && b && a.kind === 'part' && b.kind === 'part' && a.ragdoll === b.ragdoll && !selfCollide(a.name, b.name)) return null;
+    // parts (and pieces cut off them) of one body: only those that do not share a joint touch (a piece takes its part's name)
+    if (a && b && (a.kind === 'part' || a.kind === 'piece') && (b.kind === 'part' || b.kind === 'piece') && a.ragdoll === b.ragdoll && !selfCollide(a.name, b.name)) return null;
     return RAPIER.SolverFlags.COMPUTE_IMPULSE;
   },
   filterIntersectionPair() { return true; },
@@ -189,6 +190,9 @@ ctx.applyHit = (hit, point, dir, dmg, impulse, opts = {}) => {
     marker('hit');                       // (before the hit: a kill it causes turns it red)
     owner.ragdoll.shotAt = performance.now();
     owner.ragdoll.hit(owner.name, dmg, point, dir, impulse, { ...opts, normal: hit.normal });
+  } else if (owner?.kind === 'piece') {
+    marker('hit');
+    owner.ragdoll.hitPiece(owner.piece, dmg, point, dir, impulse, opts);
   } else if (owner?.kind === 'chunk') {
     owner.body.applyImpulse({ x: dir.x * 2, y: dir.y * 2 + 1, z: dir.z * 2 }, true);
     ctx.gore.blood(point, dir, 5, 3, 0.8);
@@ -322,6 +326,14 @@ ctx.explode = (p, radius = 7, power = 1) => {
       // thrown metres, not out of the arena: what a blast does to a body is tear it, not launch it
       part.body.applyImpulse({ x: _d.x * m * 7.5 * f * power, y: _d.y * m * 7.5 * f * power, z: _d.z * m * 7.5 * f * power }, true);
       r.hit(name, 105 * f * power, _v.clone(), _d.clone(), 0, { explosion: true, heat: f });
+    }
+    for (const p of r.pieces) {                // and whatever had been cut off them
+      if (p.gone) continue;
+      const t = p.body.translation(), dist = _v.set(t.x, t.y, t.z).distanceTo(center);
+      if (dist > radius) continue;
+      const f = 1 - dist / radius, m = p.body.mass();
+      _d.copy(_v).sub(center); _d.y += 0.5; _d.normalize();
+      p.body.applyImpulse({ x: _d.x * m * 7.5 * f * power, y: _d.y * m * 7.5 * f * power, z: _d.z * m * 7.5 * f * power }, true);
     }
   }
 

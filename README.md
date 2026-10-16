@@ -370,10 +370,13 @@ Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of
   hums while it is out (`hum` in `audio.js`). One swing sweeps an arc of seven rays and cuts through every body part it meets on the
   first touch, through several people at once (`opts.laser` in `Ragdoll.hit`). The cut is burnt shut: no spray, no bleeding, charred
   ends (`sever(..., sealed)`, the stump in `charMat`), so someone who loses only an arm or a leg lives. In the Zombie Survival shop for 600.
-- **Where a blade cuts** (every blade, the saw blade trap too): at whichever joint of the part it lands on is nearest the blow (`cutAt` in
-  `ragdoll.js`). A thigh hit by the knee loses the shin, by the hip the whole leg; an upper arm hit by the elbow loses the forearm; the
-  side of the chest by a shoulder takes the arm, its top the head, its bottom cuts the body in half; and the pelvis, which nothing
-  could cut before, loses a leg at the hip or the body above it at the waist.
+- **Where a blade cuts** (every blade, the saw blade trap too): where it lands. Near a joint the part comes off there (`cutAt` in
+  `ragdoll.js`): a thigh hit by the knee loses the shin, by the hip the whole leg; the side of the chest by a shoulder takes the arm,
+  its top the head; the pelvis loses a leg at the hip or the body above it at the waist. Anywhere else the part is cut through right
+  there (`slice`): half a forearm, the top of a thigh with the rest of the leg still hanging off it, the chest across the middle with
+  the head and both arms on the upper half. Each piece has its own body, its own collider and its own share of the skin, a torn end on
+  both faces, and can be cut again (`hitPiece`: a blade, a laser or a hit of 90+), down to pieces about 6 cm long. The laser sword,
+  the Laser Grid and the Guillotine cut the same way, and keep cutting the pieces that cross them; a blast throws them.
 - **Knife**: left button slices (a quick sideways cut that opens a gash running the way the blade travelled), right button
   stabs (a thrust: slower, shorter reach, twice the damage, a puncture). Both are in `updateKnife`; numbers are on the Knife's
   line in `WEAPONS`.

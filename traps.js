@@ -88,6 +88,19 @@ class Trap {
     return out;
   }
 
+  /** Every piece cut off someone (ragdoll.js slice): [ragdoll, piece, the middle of it]. */
+  pieces() {
+    const out = [];
+    for (const r of this.ctx.ragdolls) {
+      if (r.removed) continue;
+      for (const p of r.pieces) {
+        if (p.gone) continue;
+        out.push([r, p, r.localToWorld(p, { x: 0, y: (p.range[0] + p.range[1]) / 2, z: 0 })]);
+      }
+    }
+    return out;
+  }
+
   /** Not more often than every `gap` seconds for the same thing. */
   ready(key, gap) {
     if (this.t < (this.cools.get(key) || 0)) return false;
@@ -645,6 +658,17 @@ class LaserGrid extends Trap {
         break;
       }
     }
+    for (const [r, p, t] of this.pieces()) {
+      this.local(t, _v);
+      if (Math.abs(_v.x) > LASER_W || Math.abs(_v.z) > 0.11) continue;
+      for (let i = 0; i < 5; i++) {
+        const h = this.height(i);
+        if (Math.abs(_v.y - h) > 0.15 || !this.ready(p, 0.4)) continue;
+        r.hitPiece(p, 30, new THREE.Vector3(t.x, this.pos.y + h, t.z), new THREE.Vector3(0, 0, Math.sign(_v.z) || 1).applyQuaternion(this.rot), 0, { laser: true });
+        this.ctx.sfx.sizzle();
+        break;
+      }
+    }
     for (const pl of players(this.ctx)) {
       if (pl.dead) continue;
       this.local(pl.pos, _v);
@@ -713,6 +737,11 @@ class Guillotine extends Trap {
       if (r.mode !== 'ragdoll') r.goLimp(3);
       r.hit(name, 200, new THREE.Vector3(t.x, t.y + 0.05, t.z), new THREE.Vector3(0, -1, 0), 40, { blade: true, chop: true });
       this.ctx.sfx.chop();
+    }
+    for (const [r, p, t] of this.pieces()) {
+      this.local(t, _v);
+      if (Math.abs(_v.x) > 0.36 || Math.abs(_v.z) > 0.16 || _v.y > hi + 0.1 || _v.y < lo - 0.1 || !this.ready(p, 1)) continue;
+      r.hitPiece(p, 200, new THREE.Vector3(t.x, t.y, t.z), new THREE.Vector3(0, -1, 0), 40, { blade: true });
     }
     for (const pl of players(this.ctx)) {
       this.local(pl.pos, _v);

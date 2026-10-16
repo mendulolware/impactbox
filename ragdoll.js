@@ -110,6 +110,30 @@ const PARENT = {};
 const JOINT_OF = {};
 for (const j of JOINTS) { PARENT[j.b] = j.a; JOINT_OF[j.b] = j; }
 
+// Where each part can be cut through (local y along it: parts stand upright in the rest pose) and where its joints are.
+const rangeOf = (d) => d.shape === 'cap' ? [-(d.h + d.r), d.h + d.r] : d.shape === 'box' ? [-d.half[1], d.half[1]] : [-d.r, d.r];
+const JOINT_Y = {};
+for (const n in PARTS) JOINT_Y[n] = [];
+for (const j of JOINTS) { JOINT_Y[j.a].push(j.anchor[1] - PARTS[j.a].pos[1]); JOINT_Y[j.b].push(j.anchor[1] - PARTS[j.b].pos[1]); }
+const MAX_PIECES = 24;     // per person: past that a blade parts the nearest joint, as it always used to
+
+/** Split a skinned piece's triangles at height cutY of the rest pose: [this side, the other side] (they share the vertex data). */
+function splitGeometry(geo, cutY, keepHi) {
+  const pos = geo.attributes.position, idx = geo.index ? geo.index.array : null, n = idx ? idx.length : pos.count;
+  const keep = [], cut = [];
+  for (let i = 0; i < n; i += 3) {
+    const a = idx ? idx[i] : i, b = idx ? idx[i + 1] : i + 1, c = idx ? idx[i + 2] : i + 2;
+    ((pos.getY(a) + pos.getY(b) + pos.getY(c)) / 3 >= cutY) === keepHi ? keep.push(a, b, c) : cut.push(a, b, c);
+  }
+  const make = (list) => {
+    const g = new THREE.BufferGeometry();
+    for (const k in geo.attributes) g.setAttribute(k, geo.attributes[k]);
+    g.setIndex(list);
+    return g;
+  };
+  return [make(keep), cut.length ? make(cut) : null];
+}
+
 // Which parts of one body may collide with each other: everything except neighbours across a joint.
 // (Neighbours overlap by design; the joint and its limits keep them apart.)
 const SELF = new Set();
@@ -251,6 +275,7 @@ export class Ragdoll {
     this.twitch = 0;
     this.buckle = 0;
     this.ko = 0;               // knocked out: seconds left lying there with nothing working
+    this.pieces = [];          // what has been cut off the middle of a part (slice): its own body, and its share of the skin
 
     const skin = this.kind === 'zombie' ? 0x8fbf6a : SKIN[Math.floor(Math.random() * SKIN.length)];
     const colors = {
@@ -716,8 +741,7 @@ export class Ragdoll {
     if (opts.laser) {
       // it cuts through at the first touch, at the joint nearest the blade; a lost arm or leg is sealed and survivable,
       // a head or a body cut in half is not (sever() says so)
-      const c = this.cutAt(name, lp);
-      if (c) this.sever(c, dir, true);
+      if (!this.cutThrough(name, lp, dir, true)) { const c = this.cutAt(name, lp); if (c) this.sever(c, dir, true); }
     } else if (p.hp <= 0) {
       if (opts.explosion && p.hp < -75 && name !== 'pelvis') {      // right on top of it: nothing left
         this.gib(name);
@@ -725,7 +749,8 @@ export class Ragdoll {
         // blasts don't take every limb off: this one is mangled but still attached
         if (ARMS.has(name)) this.dangle(name);
       } else if (name === 'head') {
-        if (opts.blade || opts.explosion) this.sever('head', dir);
+        if (opts.blade && this.cutThrough('head', lp, dir)) this.die('headshot');   // (through the skull, above the neck)
+        else if (opts.blade || opts.explosion) this.sever('head', dir);
         else if (dmg >= 120 || (opts.pop && p.hp <= -HEAD_POP)) this.gib('head', true, dir);   // a sniper round, or enough of anything heavier than a sidearm: the head comes apart
         else {
           if (!opts.blunt && !this.skullOpen) {
@@ -744,9 +769,9 @@ export class Ragdoll {
           if (ARMS.has(name)) this.dangle(name); else this.lame[name.slice(-1)] = 1;
           if (opts.blunt) sfx.crack();
           else if (!p.fractured) this.fracture(p, lp, ld);     // a round: open, the bone through the skin
-        } else this.sever(opts.blade ? this.cutAt(name, lp) || name : name, dir);
+        } else if (!(opts.blade && this.cutThrough(name, lp, dir))) this.sever(opts.blade ? this.cutAt(name, lp) || name : name, dir);
       } else if (name === 'torso') {
-        if (opts.blade) this.sever(this.cutAt('torso', lp) || 'torso', dir);       // (where it landed: the waist, a shoulder, the neck)
+        if (opts.blade && !this.cutThrough('torso', lp, dir)) this.sever(this.cutAt('torso', lp) || 'torso', dir);   // (through the chest or the belly; near a joint, the waist, a shoulder, the neck)
         else if (opts.explosion || opts.rail) this.sever('torso', dir);     // (a blast, or a railgun slug: in half)
         if (!zombie || this.severed.has('torso')) this.die(opts.blunt ? 'beaten' : 'torso');
       } else if (name === 'pelvis') {
@@ -881,6 +906,164 @@ export class Ragdoll {
    * joints is nearest the blow and still whole (a forearm hit by the elbow comes off there, a thigh hit by the knee
    * loses the shin, the pelvis loses a leg or the body above it). null: nothing left to cut there.
    */
+  /**
+   * A blade through a part at lp (its own space). Near one of its joints that joint parts (cutAt, the caller's job: this
+   * returns false); anywhere else the part is cut in two right there (slice). True if it was cut.
+   */
+  cutThrough(name, lp, dir, sealed = false) {
+    const seg = this.segment(name);
+    if (!seg) return false;
+    const [y0, y1] = seg.range, full = rangeOf(PARTS[name]), len = full[1] - full[0];
+    if (JOINT_Y[name].some((ay) => ay >= y0 - 0.02 && ay <= y1 + 0.02 && Math.abs(lp.y - ay) < len * 0.2)) return false;
+    if (y1 - y0 < 0.13) return true;                       // too little of it left to cut again
+    return this.slice(name, THREE.MathUtils.clamp(lp.y, y0 + 0.065, y1 - 0.065), dir, sealed);
+  }
+
+  /** What can be cut: a part (by name) or a piece cut off one (by number). Null for the pelvis, and for bodies with no skinned figure. */
+  segment(id) {
+    if (typeof id === 'number') {
+      const p = this.pieces[id];
+      return p && !p.gone ? { body: p.body, name: p.name, range: p.range, meshes: p.meshes, frame: p.group, colliders: p.colliders, keep: p.keep, piece: p, skeleton: p.skeleton } : null;
+    }
+    const p = this.parts[id];
+    if (!p || p.gone || id === 'pelvis' || !this.skinned) return null;
+    p.range ??= rangeOf(PARTS[id]);
+    return { body: p.body, name: id, range: p.range, meshes: p.skinned, frame: p.mesh, colliders: p.colliders,
+      keep: JOINT_OF[id].anchor[1] > PARTS[id].pos[1] ? 'hi' : 'lo', piece: null, skeleton: p.skeleton || this.skeleton };
+  }
+
+  /** The collider for the stretch r0..r1 of a part (in its own space). */
+  segCollider(d, r0, r1) {
+    const len = r1 - r0;
+    const cd = d.shape === 'cap' ? (len > 2 * d.r ? RAPIER.ColliderDesc.capsule(len / 2 - d.r, d.r) : RAPIER.ColliderDesc.cuboid(d.r * 0.85, len / 2, d.r * 0.85))   // (a short round chunk: a block, a ball would roll off forever)
+      : d.shape === 'box' ? RAPIER.ColliderDesc.cuboid(d.half[0], Math.max(0.02, len / 2), d.half[2])
+      : RAPIER.ColliderDesc.cuboid(d.r * 0.85, Math.max(0.02, len / 2), d.r * 0.85);          // (a head, cut: a block of it)
+    return cd.setTranslation(0, (r0 + r1) / 2, 0).setDensity(900).setFriction(0.9).setRestitution(0.02).setActiveHooks(RAPIER.ActiveHooks.FILTER_CONTACT_PAIRS);
+  }
+
+  /**
+   * Cut a part (or a piece already cut off one) in two at height y of its own length. The side it hangs from keeps its body;
+   * the other side becomes a piece with a body of its own, its share of the skin (the triangles of each mesh on that side of
+   * the cut, following the new body), its own collider, and whatever hung off that end (a shin below a cut thigh; the head and
+   * arms above a chest cut through). Both faces get a torn end, and bleed unless the cut was a laser's.
+   */
+  slice(id, y, dir = null, sealed = false) {
+    const seg = this.segment(id);
+    if (!seg || this.pieces.length >= MAX_PIECES) return false;
+    const [y0, y1] = seg.range;
+    if (y < y0 + 0.06 || y > y1 - 0.06) return false;     // (no slivers: a few grams of collider gets thrown about)
+    const { world, owners, scene, gore, sfx } = this.ctx, d = PARTS[seg.name];
+    this.split();
+    this.goLimp(3);
+    const keepHi = seg.keep === 'hi' || (seg.keep == null && y1 - y >= y - y0);
+    const keepR = keepHi ? [y, y1] : [y0, y], cutR = keepHi ? [y0, y] : [y, y1];
+    // the new body starts exactly where this one is, moving as it moves (so its frame is the part's own frame)
+    const b0 = seg.body, t = b0.translation(), q = b0.rotation(), lv = b0.isDynamic() ? b0.linvel() : { x: 0, y: 0, z: 0 }, av = b0.isDynamic() ? b0.angvel() : { x: 0, y: 0, z: 0 };
+    const body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(t.x, t.y, t.z).setRotation(q)
+      .setLinvel(lv.x, lv.y, lv.z).setAngvel(av).setLinearDamping(0.05).setAngularDamping(0.3).setCcdEnabled(true));
+    const piece = { id: this.pieces.length, name: seg.name, body, colliders: [], group: new THREE.Group(), meshes: [], range: cutR, keep: null, gone: false, skeleton: null };
+    this.pieces.push(piece);
+    const own = (c, p) => { owners.set(c.handle, p ? { kind: 'piece', ragdoll: this, name: seg.name, piece: p } : { kind: 'part', ragdoll: this, name: seg.name }); this.colHandles.add(c.handle); return c; };
+    // colliders: this side's shortened, the other side's on the new body, and the hand or foot goes with whichever side has it
+    const old = seg.colliders[0];
+    owners.delete(old.handle); this.colHandles.delete(old.handle);
+    world.removeCollider(old, true);
+    seg.colliders[0] = own(world.createCollider(this.segCollider(d, ...keepR), b0), seg.piece);
+    if (!seg.piece) this.parts[seg.name].collider = seg.colliders[0];
+    piece.colliders.push(own(world.createCollider(this.segCollider(d, ...cutR), body), piece));
+    if (seg.colliders[1] && EXTRA[seg.name]) {
+      const ey = EXTRA[seg.name]().translation.y;
+      if (ey >= cutR[0] && ey <= cutR[1]) {
+        const ex = seg.colliders.splice(1, 1)[0];
+        owners.delete(ex.handle); this.colHandles.delete(ex.handle);
+        world.removeCollider(ex, true);
+        piece.colliders.push(own(world.createCollider(EXTRA[seg.name]().setDensity(500).setFriction(0.9).setRestitution(0.02).setActiveHooks(RAPIER.ActiveHooks.FILTER_CONTACT_PAIRS), body), piece));
+      }
+    }
+    if (seg.piece) seg.piece.range = keepR; else this.parts[seg.name].range = keepR;
+    // the skin: each mesh's triangles on the far side of the cut go to the piece, bound to a skeleton whose bone for this part
+    // is the piece (the rest pose has every part upright, so the cut is a level in model space)
+    scene.add(piece.group);
+    piece.group.position.set(t.x, t.y, t.z);
+    piece.group.quaternion.set(q.x, q.y, q.z, q.w);
+    const bones = seg.skeleton.bones.slice();
+    bones[BONE_INDEX[seg.name]] = piece.group;
+    piece.skeleton = new THREE.Skeleton(bones, REST_INV);
+    const cutY = d.pos[1] + y;
+    for (const m of seg.meshes) {
+      const [keepG, cutG] = splitGeometry(m.geometry, cutY, keepHi);
+      m.geometry = keepG;
+      if (!cutG) continue;
+      const sm = new THREE.SkinnedMesh(cutG, m.material);
+      sm.bind(piece.skeleton, IDENT);
+      sm.frustumCulled = false;
+      sm.castShadow = m.castShadow;
+      sm.receiveShadow = true;
+      sm.userData.inside = m.userData.inside;
+      scene.add(sm);
+      piece.meshes.push(sm);
+    }
+    // whatever hung off the far end now hangs off the piece: its joint is made again there, and its skin near the joint follows
+    for (const j of JOINTS) {
+      if (j.a !== seg.name) continue;
+      const jd = this.joints[j.name];
+      if (this.severed.has(j.b) || this.parts[j.b].gone || (jd.on || null) !== seg.piece) continue;
+      if (jd.a1.y < cutR[0] - 0.02 || jd.a1.y > cutR[1] + 0.02) continue;
+      if (world.getImpulseJoint(jd.joint.handle) === jd.joint) world.removeImpulseJoint(jd.joint, true);
+      const data = j.axis ? RAPIER.JointData.revolute(jd.a1, jd.a2, { x: j.axis[0], y: j.axis[1], z: j.axis[2] }) : RAPIER.JointData.spherical(jd.a1, jd.a2);
+      data.contactsEnabled = false;
+      jd.joint = world.createImpulseJoint(data, body, this.parts[j.b].body, true);
+      if (j.limits) jd.joint.setLimits(j.limits[0], j.limits[1]);
+      jd.on = piece;
+      piece.keep ??= jd.a1.y > (cutR[0] + cutR[1]) / 2 ? 'hi' : 'lo';
+      for (const n in PARTS) for (let a = n; a; a = PARENT[a]) if (a === j.b) this.severed.add(n);   // (no longer the body's: limp)
+      const child = this.parts[j.b];
+      if (!child.skeleton) { child.skeleton = new THREE.Skeleton(this.skeleton.bones, REST_INV); for (const m of child.skinned) m.bind(child.skeleton, IDENT); }
+      child.skeleton.bones[BONE_INDEX[seg.name]] = piece.group;
+    }
+    // the torn ends, facing each other across the cut, and the blood
+    const r = d.shape === 'cap' ? [d.r * 1.25, d.r * 1.25] : d.shape === 'box' ? [d.half[0] * 1.05, d.half[2] * 1.15] : [d.r * 0.95, d.r * 0.95];
+    const kind = d.shape === 'box' ? 'gut' : seg.name.startsWith('farm') || seg.name.startsWith('shin') ? 'limb2' : 'limb';
+    const at = new THREE.Vector3(0, y, 0), outKeep = new THREE.Vector3(0, keepHi ? -1 : 1, 0), outCut = outKeep.clone().negate();
+    for (const [frame, out] of [[seg.frame, outKeep], [piece.group, outCut]]) {
+      const s = makeStump(r[0], r[1], kind, sealed);
+      s.quaternion.setFromUnitVectors(UP, out);
+      s.position.copy(at);
+      frame.add(s);
+    }
+    const wp = this.localToWorld({ body: b0 }, at);
+    if (sealed) { gore.smoke.emit(wp.x, wp.y, wp.z, 0, 0.6, 0, 0.1, 1.2, -0.3, 0.3, 0.28, 0.27, 0, 1.5); sfx.sizzle(); }
+    else {
+      gore.gush(wp, dir || UP, 30, 5);
+      sfx.chop();
+      this.bleeders.push({ part: seg.piece || this.parts[seg.name], local: at.clone(), out: outKeep, t: 8, rate: 30, pooled: false });
+      this.bleeders.push({ part: piece, local: at.clone(), out: outCut, t: 5, rate: 18, pooled: false });
+      if (!seg.piece) { this.sevBleed += 1.2; this.bled = true; }
+    }
+    if (dir) body.applyImpulse({ x: dir.x * 3, y: 2, z: dir.z * 3 }, true);
+    if (!seg.piece) {
+      this.damage(10);
+      if (seg.name === 'torso' && !this.dead) this.die('bisect');
+      else if (LEGS.has(seg.name)) this.crippled = true;
+    }
+    return true;
+  }
+
+  /** Something hit a piece cut off someone: it bleeds and is knocked about, holes show on it, and a blade cuts it again. */
+  hitPiece(piece, dmg, point, dir, impulse = 0, opts = {}) {
+    if (piece.gone || this.removed) return;
+    const t = piece.body.translation(), r = piece.body.rotation();
+    _q.set(r.x, r.y, r.z, r.w).invert();
+    const lp = new THREE.Vector3(point.x - t.x, point.y - t.y, point.z - t.z).applyQuaternion(_q);
+    const k = Math.min(impulse * 0.05, 6);
+    piece.body.applyImpulseAtPoint({ x: dir.x * k, y: dir.y * k, z: dir.z * k }, point, true);
+    this.ctx.gore.blood(point, _t.set(dir.x * 0.4, 0.5, dir.z * 0.4), 6, 2.5, 0.9);
+    const part = this.parts[piece.name];
+    if (dmg > 0 && !opts.blade && !opts.laser && !opts.blunt && !part.gone && part.wounds?.inside) openWound(part,   // (its part still there, insides built: its meshes are in the scene)
+      lp, (opts.hole || 0.026) * 0.5, 0.06, null, new THREE.Vector3(dir.x, dir.y, dir.z).applyQuaternion(_q).normalize());
+    if ((opts.blade || opts.laser || (dmg >= 90 && !opts.blunt)) && piece.range[1] - piece.range[0] >= 0.13) this.slice(piece.id, THREE.MathUtils.clamp(lp.y, piece.range[0] + 0.065, piece.range[1] - 0.065), dir, !!opts.laser);
+  }
+
   cutAt(name, lp) {
     const at = PARTS[name].pos;
     let best = null, bd = Infinity;
@@ -1962,6 +2145,14 @@ export class Ragdoll {
       p.mesh.position.set(t.x, t.y, t.z);
       p.mesh.quaternion.set(r.x, r.y, r.z, r.w);
     }
+    for (const p of this.pieces) {
+      if (p.gone) continue;
+      const v = p.body.linvel(), sp = Math.hypot(v.x, v.y, v.z);
+      if (sp > 25) p.body.setLinvel({ x: v.x * 25 / sp, y: v.y * 25 / sp, z: v.z * 25 / sp }, true);   // (nothing sends a piece of someone faster)
+      const t = p.body.translation(), r = p.body.rotation();
+      p.group.position.set(t.x, t.y, t.z);
+      p.group.quaternion.set(r.x, r.y, r.z, r.w);
+    }
     if (this.mode === 'ragdoll') { this.impacts(); this.calm(); }
   }
 
@@ -1996,6 +2187,15 @@ export class Ragdoll {
       if (p.skeleton) p.skeleton.dispose();
     }
     if (this.whole) for (const m of this.whole) this.ctx.scene.remove(m);
+    for (const p of this.pieces) {
+      if (p.gone) continue;
+      p.gone = true;
+      for (const c of p.colliders) this.ctx.owners.delete(c.handle);
+      this.ctx.world.removeRigidBody(p.body);
+      this.ctx.scene.remove(p.group);
+      for (const m of p.meshes) this.ctx.scene.remove(m);
+      p.skeleton.dispose();
+    }
     if (this.skeleton) this.skeleton.dispose();
   }
 }
