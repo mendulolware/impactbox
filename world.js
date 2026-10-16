@@ -112,11 +112,13 @@ export function buildWorld(ctx, mapId = 'yard') {
     sun.color.set(k.light);
     sun.intensity = k.power;
     ctx.sunOffset.copy(u.sunDir.value).multiplyScalar(70);
-    if (scene.environment) scene.environment.dispose();
+    envTarget?.dispose();              // (the whole render target: disposing only its texture left two GPU textures behind per map)
     const pmrem = new THREE.PMREMGenerator(ctx.renderer);
-    scene.environment = pmrem.fromScene(envScene, 0, 0.1, 100).texture;
+    envTarget = pmrem.fromScene(envScene, 0, 0.1, 100);
+    scene.environment = envTarget.texture;
     pmrem.dispose();
   };
+  let envTarget = null;
 
   loadMap(ctx, mapId);
 }

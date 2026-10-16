@@ -46,6 +46,7 @@ class Out {
   u8(v) { this.dv.setUint8(this.o, v); this.o += 1; }
   u16(v) { this.dv.setUint16(this.o, v, true); this.o += 2; }
   f(v) { this.dv.setFloat32(this.o, v, true); this.o += 4; }
+  cm(v) { this.dv.setInt16(this.o, Math.max(-32767, Math.min(32767, Math.round(v * 100))), true); this.o += 2; }   // (a position: to the centimetre, +-327 m)
   q(r) { for (const c of [r.x, r.y, r.z, r.w]) { this.dv.setInt16(this.o, Math.round(c * 32767), true); this.o += 2; } }
   done() { return this.buf.slice(0, this.o); }
 }
@@ -54,6 +55,7 @@ class In {
   u8() { return this.dv.getUint8(this.o++); }
   u16() { const v = this.dv.getUint16(this.o, true); this.o += 2; return v; }
   f() { const v = this.dv.getFloat32(this.o, true); this.o += 4; return v; }
+  cm() { const v = this.dv.getInt16(this.o, true) / 100; this.o += 2; return v; }
   q(out) { const c = []; for (let i = 0; i < 4; i++) { c.push(this.dv.getInt16(this.o, true) / 32767); this.o += 2; } return out.set(c[0], c[1], c[2], c[3]).normalize(); }
 }
 
@@ -168,9 +170,10 @@ export class Coop {
     const clr = gore.clear.bind(gore);
     gore.clear = () => { this.q(['gclear']); clr(); };
     // sounds
+    this.sfxOrig = {};                                   // (the host's own, unsent: see the guest's hits below)
     for (const k of Object.keys(sfx)) {
       if (typeof sfx[k] !== 'function' || OWN_SFX.has(k)) continue;
-      const f = sfx[k];
+      const f = this.sfxOrig[k] = sfx[k];
       sfx[k] = (...a) => { if (!this.quiet) this.q(['s', k, a, P(ctx.soundAt || ctx.player.pos)]); return f.apply(sfx, a); };     // (some call each other through this)
     }
     // messages, kills
@@ -294,10 +297,11 @@ export class Coop {
   /** Where everything is, packed small. Bodies at rest go out once a second; moving ones every time. */
   snapshot() {
     const ctx = this.ctx, now = performance.now() / 1000;
-    const rags = [...this.rags.values()].filter((r) => !r.removed && (now - (r.sentAt || 0) > 1 || PARTS.some((n) => {
+    const odd = (this.snapN = (this.snapN || 0) + 1) % 2;
+    const rags = [...this.rags.values()].filter((r) => !r.removed && (now - (r.sentAt || 0) > 1 || (!(odd && r.mode === 'anim') && PARTS.some((n) => {
       const b = r.parts[n].body;
       return !r.parts[n].gone && (!b.isDynamic() || !b.isSleeping());
-    })));
+    }))));
     const props = [...this.props.values()].filter((p) => !p.removed && (now - (p.sentAt || 0) > 1 || !p.body.isSleeping()));
     const traps = [...this.traps.values()].filter((t) => !t.removed);
     const doors = ctx.doors || [];
@@ -324,7 +328,7 @@ export class Coop {
           const p = r.parts[n];
           if (p.gone) continue;
           const t = p.body.translation();
-          o.f(t.x); o.f(t.y); o.f(t.z);
+          o.cm(t.x); o.cm(t.y); o.cm(t.z);
           o.q(p.body.rotation());
         }
       }
@@ -332,7 +336,7 @@ export class Coop {
       for (const p of ps) {
         p.sentAt = now;
         const t = p.body.translation();
-        o.u16(p.nid); o.f(t.x); o.f(t.y); o.f(t.z); o.q(p.body.rotation());
+        o.u16(p.nid); o.cm(t.x); o.cm(t.y); o.cm(t.z); o.q(p.body.rotation());
       }
       this.link.stream(o.done());
     }
@@ -360,7 +364,12 @@ export class Coop {
       const p = V(point), d = V(dir);
       if (target?.[0] === 'r') {
         const r = this.rags.get(target[1]);
-        if (r && !r.removed) { r.guestShotAt = performance.now(); r.hit(target[2], dmg, p, d, impulse, { ...opts, normal }); }
+        if (r && !r.removed) {
+          r.guestShotAt = performance.now();
+          const relayed = sfx.flesh;
+          sfx.flesh = this.sfxOrig.flesh || relayed;      // (the guest played its own the moment it fired)
+          try { r.hit(target[2], dmg, p, d, impulse, { ...opts, normal }); } finally { sfx.flesh = relayed; }
+        }
       } else if (target?.[0] === 'p') {
         const pr = this.props.get(target[1]);
         if (pr && !pr.removed) pr.hit(dmg, p, d, impulse, opts);
@@ -448,7 +457,17 @@ export class Coop {
       const o = ctx.owners.get(hit.collider.handle);
       if (o?.kind === 'chunk') { o.body.applyImpulse({ x: dir.x * 2, y: dir.y * 2 + 1, z: dir.z * 2 }, true); return; }
       let target = null;
-      if (o?.kind === 'part') { target = o.ragdoll === this.avatar ? ['pl'] : o.ragdoll.nid ? ['r', o.ragdoll.nid, o.name] : null; if (target?.[0] === 'r') ctx.marker('hit'); }
+      if (o?.kind === 'part') {
+        target = o.ragdoll === this.avatar ? ['pl'] : o.ragdoll.nid ? ['r', o.ragdoll.nid, o.name] : null;
+        if (target?.[0] === 'r') {
+          ctx.marker('hit');
+          if (!opts.blade && !opts.blunt) {               // (no waiting for the host to see a hit land)
+            this.goreOK = true;
+            try { ctx.gore.mist(point, V({ x: -dir.x, y: 0.15 - dir.y, z: -dir.z }), 4, 2.3, true); } finally { this.goreOK = false; }
+            sfx.flesh(o.name === 'head');
+          }
+        }
+      }
       else if (o?.kind === 'prop') target = o.prop.nid ? ['p', o.prop.nid] : null;
       send(['hit', target, P(point), P(dir), dmg, impulse, opts, P(hit.normal)]);
     };
@@ -703,7 +722,7 @@ export class Coop {
       const nid = i.u16(), flags = i.u8(), mask = i.u16(), r = this.rags.get(nid);
       PARTS.forEach((n, b) => {
         if (!(mask & (1 << b))) return;
-        const x = i.f(), y = i.f(), z = i.f();
+        const x = i.cm(), y = i.cm(), z = i.cm();
         const q = i.q(new THREE.Quaternion());
         const p = r?.parts[n];
         if (!p || p.gone) return;
@@ -714,7 +733,7 @@ export class Coop {
     }
     const np = i.u16();
     for (let k = 0; k < np; k++) {
-      const nid = i.u16(), x = i.f(), y = i.f(), z = i.f();
+      const nid = i.u16(), x = i.cm(), y = i.cm(), z = i.cm();
       const q = i.q(new THREE.Quaternion()), p = this.props.get(nid);
       if (!p || p.removed) continue;
       if (!p.net) p.net = { p: new THREE.Vector3(x, y, z), q, cp: new THREE.Vector3(x, y, z), cq: q.clone() };
@@ -861,7 +880,7 @@ export class Coop {
       this.rosterT -= dt;
       if ((this.dirty && this.rosterT < 1.8) || this.rosterT <= 0) { this.rosterT = 2; this.dirty = false; this.link.send(['roster', this.roster()]); }
       if (this.events.length) { this.link.send(['ev', this.events]); this.events = []; }
-      if ((this.snapT -= dt) <= 0) { this.snapT = SNAP; this.snapshot(); }
+      if ((this.snapT -= dt) <= 0) { this.snapT = this.via === 'relay' ? SNAP * 2 : SNAP; this.snapshot(); }
     } else {
       // props this player's weapons made: the host makes the real ones
       for (const p of this.pending) {

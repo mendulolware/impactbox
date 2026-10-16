@@ -262,6 +262,7 @@ function buildInside(part) {
         woundMaterial(meatMat, uniforms, { shrink: SKIN_DEPTH, holeScale: 0.72, look: 'meat' }));
       core.bind(s.mesh.skeleton, s.mesh.bindMatrix);
       core.frustumCulled = false;
+      core.userData.inside = true;                  // (only drawn up close: Ragdoll.cull)
       s.mesh.parent.add(core);
       part.skinned.push(core);
       continue;
@@ -269,12 +270,13 @@ function buildInside(part) {
     const core = new THREE.Mesh(s.mesh.geometry,
       woundMaterial(meatMat, uniforms, { posScale: CORE_SCALE, holeScale: 0.72, look: 'meat' }));
     core.scale.setScalar(CORE_SCALE);
+    core.userData.inside = true;
     part.mesh.add(core);
   }
   // a downloaded (skinned) body's arms and legs do not line up exactly with their physics capsules, so a bone rod
   // there can show beside the limb: those show meat through a hole, and no bone
   const limb = !['torso', 'pelvis', 'head'].includes(part.name);
-  if (!(limb && part.skin.some((s) => s.mesh.isSkinnedMesh))) part.mesh.add(innards(part.name));
+  if (!(limb && part.skin.some((s) => s.mesh.isSkinnedMesh))) { const inn = innards(part.name); inn.userData.inside = true; part.mesh.add(inn); }
 }
 
 /**

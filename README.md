@@ -277,6 +277,14 @@ Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted aft
 
 ## Graphics
 
+**Only what is in view is drawn.** A person's skinned meshes sit at the origin while their bones are out in the world, so three.js
+cannot tell when one is off screen and drew every person every frame, behind you or not, about 50,000 triangles each, and drew every
+one of them into the shadow map as well. Before each picture `cullPeople` (main.js, `Ragdoll.cull`) now hides anyone wholly out of view
+more than 8 m away, lets only people within 30 m cast a shadow, and draws what shows through a wound (the meat layer, a second copy of
+the body, and the organs) only within 12 m. Turned away from a crowd of 22 that is 119 draw calls and 92,000 triangles instead of 588
+and 2.5 million. Phones also run half the physics solver passes. And a map change no longer leaves two GPU textures behind (the sky's
+lighting environment: its whole render target is freed now, not just its texture).
+
 **No stall on the first hit.** What a wound needs on the GPU (the cut skin, the meat under it, what is inside, the cut faces, a burnt
 stump, and the shadow versions of all of them) used to be built at the moment of the first hit on each look of person, a visible stall
 (longer on a phone, and on both screens in co-op). `prewarm()` in `main.js` now builds it all while the start screen is up: each look is
@@ -368,6 +376,11 @@ On the start screen, one player presses **Host a game** and gets a four-letter c
 - **What happened comes back as events** on a reliable channel: every blood and gore call the host makes (replayed, so the guest's blood lands where the host's does), every sound, wounds and burns (`woundHooks` in `wounds.js`), bodies split, cut and blown apart, glass, lamps, the kill feed, messages, and being hurt, blasted or flashed. A roster (who and what exists, map, night, rain, ropes, the mission panel) goes out every two seconds and on every change, which is also how someone joining late catches up.
 - **NPCs go for whichever player is nearest** (`Brain.nearest`, `ctx.remotes`); traps hurt and launch either player. Each player sees the other as a soldier with a rifle (an avatar: a ragdoll walked by the other's position and aim) with a P1 (host) or P2 tag over their head, seen through walls. The avatar's colliders are sensors: rays still hit it (shooting each other does half damage) but you walk through it, since you both start a map on the same spot (the guest steps 1.4 m aside when there is floor there). The kill feed says whose kill it was (the last of you to hit it in the last 2.5 s) and the badge keeps the score.
 - Sounds fade with distance: the host marks where each one comes from (`ctx.soundAt`, set by gunfire, impacts, explosions, flashbangs, falling bodies, doors, glass, lamps and traps; anything unmarked is where the host stands) and the other player hears it at 1 / (1 + d²/400) of its level (half at 20 m, never under 6%: `farAway` in `audio.js`).
+- **Kept lean, so it does not lag:** positions go as centimetres in two bytes each (every map fits in +-327 m), people walking about
+  go 10 times a second instead of 20 (the guest eases them along anyway; bodies in the air and props stay at 20), still bodies once a
+  second, and through the relay everything half as often again (a backlog on a shared relay was the lag). About a third of what it was.
+  The guest's own rounds show their puff and sound at once instead of after the round trip (the host does the rest, and does not send
+  that sound back).
 - Not in co-op: the drone and the Grab Gun are the host's only; an NPC the guest saw get hurt before joining shows no wounds.
 
 ## Ropes, welds and traps

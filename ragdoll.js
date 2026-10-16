@@ -88,6 +88,7 @@ const TWIST = { spine: 0.5, neck: 0.9, shoulderL: 1.2, shoulderR: 1.2, hipL: 0.7
 // A missing file just leaves the worked-out motion.
 const CLIPS = {};
 for (const k of ['walk', 'run', 'die', 'reload']) fetch(`assets/${k}.json`).then((r) => r.json()).then((j) => { CLIPS[k] = j; }).catch(() => {});
+const _sph = new THREE.Sphere();
 const _c0 = new THREE.Quaternion(), _c1 = new THREE.Quaternion();
 /** A clip's rotation for one joint. u = how far through it, 0..1 (wrapping round for a loop). */
 function clipAt(clip, name, u, out, loop = true) {
@@ -875,6 +876,40 @@ export class Ragdoll {
       if (d < bd) { bd = d; best = j.b; }
     }
     return best;
+  }
+
+  /**
+   * Shown or not, shadow or not (main.js asks before every picture). A person's skinned meshes sit at the origin while their
+   * bones are out in the world, so three.js cannot tell when one is off screen: it drew every one of them every frame,
+   * behind you or not, and drew every one into the shadow map too. Here: anyone wholly outside the view and more than 8 m
+   * away is hidden (nearer, their shadow could still fall in view), and only people within 30 m cast a shadow. What shows
+   * through a wound (the meat layer, a whole second copy of the body, and the organs) is only drawn within 12 m.
+   */
+  cull(frustum, eye) {
+    let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+    for (const n in this.parts) {
+      const p = this.parts[n];
+      if (p.gone) continue;
+      const t = p.body.translation();
+      x0 = Math.min(x0, t.x); y0 = Math.min(y0, t.y); z0 = Math.min(z0, t.z);
+      x1 = Math.max(x1, t.x); y1 = Math.max(y1, t.y); z1 = Math.max(z1, t.z);
+    }
+    if (x0 === Infinity) return;
+    _sph.center.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    _sph.radius = Math.hypot(x1 - x0, y1 - y0, z1 - z0) / 2 + 0.7;          // (the parts' centres, and a limb's length round them)
+    const d = _sph.center.distanceTo(eye);
+    const show = d < 8 || frustum.intersectsSphere(_sph), shadow = d < 30, near = d < 12;
+    if (show === this.shown && shadow === this.shadowed && near === this.near) return;
+    this.shown = show; this.shadowed = shadow; this.near = near;
+    const set = (m) => { m.visible = show && (near || !m.userData.inside); m.castShadow = shadow; };
+    if (this.whole) this.whole.forEach(set);
+    for (const n in this.parts) {
+      const p = this.parts[n];
+      if (p.gone) continue;
+      p.mesh.visible = show;
+      p.skinned.forEach(set);
+      for (const c of p.mesh.children) if (c.userData.inside) c.visible = near;
+    }
   }
 
   /** Cut a part (and anything hanging off it) free of its parent. sealed: burnt shut as it was cut (the laser sword): no spray, no bleeding. */

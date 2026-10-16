@@ -56,7 +56,7 @@ resize();
 
 // ------------------------------------------------------------------ physics + context
 const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
-world.numSolverIterations = 8;
+world.numSolverIterations = isTouch ? 4 : 8;       // (phones: half the solving; ragdolls a touch softer)
 
 // Parts of the same NPC collide with each other unless they share a joint (ragdoll.js decides),
 // so an arm lies on a chest instead of in it and legs do not pass through each other.
@@ -908,7 +908,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   if (crashed) return;
   if (ctx.frozen) {                       // debugging: time stands still, the free camera keeps drawing
-    if (ctx.view === 'fp') post.render(scene, camera, ctx.helmet);     // the player's own view, held still
+    if (ctx.view === 'fp') { cullPeople(camera); post.render(scene, camera, ctx.helmet); }     // the player's own view, held still
     else if (ctx.view) ctx.debugView(...ctx.view);
     return;
   }
@@ -924,6 +924,15 @@ function frame(now) {
 
 // debugging aid: advance the game n frames from the console (works even when the tab is throttled)
 ctx.debugStep = (n = 1) => { for (let i = 0; i < n; i++) tick(last + 1000 / 60); last = performance.now(); };
+/** Before a picture: hide the people out of view, and let only the near ones cast shadows (Ragdoll.cull says why). */
+const _frustum = new THREE.Frustum(), _pv = new THREE.Matrix4();
+function cullPeople(cam) {
+  cam.updateMatrixWorld();
+  _frustum.setFromProjectionMatrix(_pv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+  for (const r of ctx.ragdolls) r.cull(_frustum, cam.position);
+  if (ctx.net.avatar) ctx.net.avatar.cull(_frustum, cam.position);
+}
+
 /** Debugging: draw one frame from a free camera (no weapon in view) without advancing the game. */
 ctx.debugView = (from, at, fov = 40) => {
   ctx.view = [from, at, fov];
@@ -933,6 +942,7 @@ ctx.debugView = (from, at, fov = 40) => {
   camera.position.set(from[0], from[1], from[2]);
   camera.lookAt(at[0], at[1], at[2]);
   ctx.weapons.pivot.visible = false;
+  cullPeople(camera);
   post.render(scene, camera, false);
   ctx.weapons.pivot.visible = true;
   camera.fov = keep;
@@ -1116,6 +1126,7 @@ function tick(now) {
   post.final.uniforms.uBlur.value.set(THREE.MathUtils.clamp(dyaw * pm[0] * 0.3, -0.05, 0.05), THREE.MathUtils.clamp(dpitch * pm[5] * 0.3, -0.05, 0.05));
   lastRot.copy(rot);
   if (ctx.frozen) return;                 // (stepped from outside, by the trailer or a debugger, which draws its own view)
+  cullPeople(camera);
   post.render(scene, camera, ctx.helmet);
   recordFrame();
 }
