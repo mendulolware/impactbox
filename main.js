@@ -105,13 +105,14 @@ ctx.traps = [];
 ctx.post = post;
 
 // ------------------------------------------------------------------ settings (kept in this browser)
-const DEFAULTS = { sens: 1, fov: 75, volume: 1, scale: 1, quality: isTouch ? 'low' : 'high', invert: false, stats: true };
+const DEFAULTS = { sens: 1, fov: 75, volume: 1, scale: 1, quality: isTouch ? 'low' : 'high', invert: false, stats: true, shake: 1 };
 ctx.settings = { ...DEFAULTS };
 try { Object.assign(ctx.settings, JSON.parse(localStorage.getItem('impactbox.settings') || '{}')); } catch (e) { /* no storage */ }
 const SETTINGS_UI = [
   { id: 'sens', label: 'Look sensitivity', min: 0.2, max: 3, step: 0.05, fmt: (v) => v.toFixed(2) + 'x' },
   { id: 'fov', label: 'Field of view', min: 60, max: 105, step: 1, fmt: (v) => v + '\u00b0' },
   { id: 'volume', label: 'Volume', min: 0, max: 1, step: 0.05, fmt: (v) => Math.round(v * 100) + '%' },
+  { id: 'shake', label: 'Screen shake', min: 0, max: 1.5, step: 0.05, fmt: (v) => Math.round(v * 100) + '%' },
   { id: 'scale', label: 'Resolution', min: 0.5, max: 1, step: 0.05, fmt: (v) => Math.round(v * 100) + '%' },
   { id: 'quality', label: 'Graphics', options: ['low', 'medium', 'high'] },        // high: occlusion, glow, shadows; medium: shadows; low: none
   { id: 'invert', label: 'Invert look', toggle: true },
@@ -359,11 +360,34 @@ ctx.explode = (p, radius = 7, power = 1) => {
   for (const rp of ctx.remotes || []) rp.blast(center, radius, power);
 };
 
-/** What a blast does to you: rings your ears, and throws and hurts you if you were close. */
+/** A round went from a to b: anyone it passed close to without hitting ducks (brain.js nearMiss). */
+ctx.nearMiss = (a, b) => {
+  _d.copy(b).sub(a);
+  const len = _d.length();
+  if (len < 0.5) return;
+  _d.multiplyScalar(1 / len);
+  const now = performance.now();
+  for (const r of ctx.ragdolls) {
+    if (r.removed || r.dead || r.mode !== 'anim' || !r.brain || r.parts.head.gone || now - (r.shotAt || -1e9) < 250) continue;
+    const t = r.parts.head.body.translation();
+    const k = Math.max(0, Math.min(len, (t.x - a.x) * _d.x + (t.y - a.y) * _d.y + (t.z - a.z) * _d.z));
+    const dist = Math.hypot(a.x + _d.x * k - t.x, a.y + _d.y * k - t.y, a.z + _d.z * k - t.z);
+    if (dist < 1.1) r.brain.nearMiss(a, dist);
+  }
+};
+
+/** Something heavy happening at p: the ground shakes for anyone within `range` m (a body slammed down, a trap, a door booted). */
+ctx.quake = (p, amount, range = 12) => {
+  const d = ctx.player.eye.distanceTo(p);
+  if (d < range) ctx.player.jolt(amount * (1 - d / range), d > 0.5 ? p : null);
+};
+
+/** What a blast does to you: rings your ears, shakes you (from a long way off), and throws and hurts you if you were close. */
 ctx.blastPlayer = (center, radius, power) => {
   const pl = ctx.player;
   deafen(1.1 - pl.eye.distanceTo(center) / (radius * 3));
   const pd = pl.pos.distanceTo(center);
+  pl.jolt(Math.min(1, 1.3 * power * (1 - pd / (radius * 5))), center, 9 * Math.max(0, 1 - pd / (radius * 2.5)) * Math.min(1.5, power));
   if (pd < radius) {
     const f = 1 - pd / radius;
     _d.copy(pl.pos).sub(center);

@@ -234,6 +234,7 @@ class Spikes extends Trap {
         // up they come: everything on the plate is run through and thrown a little
         this.state = 'up'; this.timer = 1.8;
         this.ctx.sfx.chop(); this.ctx.sfx.crack();
+        this.ctx.quake(this.pos, 0.2, 10);
         for (const [r, name, p, t] of this.parts()) {
           if (p.gone || !this.onPlate(t)) continue;
           if (r.mode !== 'ragdoll') r.goLimp(3);
@@ -354,6 +355,7 @@ class Crusher extends Trap {
   slam() {
     const { sfx, gore, player: pl } = this.ctx;
     sfx.thud(1.8); sfx.crack();
+    this.ctx.quake(this.pos, 0.5, 16);
     gore.debris(new THREE.Vector3(this.pos.x, this.pos.y + 0.1, this.pos.z), 0x8a8a8a, 18);
     // under it: anything low in its footprint, and anyone still standing there (a walking body is kinematic, so the block went through them)
     const under = (t, kin = false) => { this.local(t, _w); return Math.abs(_w.x) < 0.85 && Math.abs(_w.z) < 0.65 && (_w.y < BOTTOM + 0.45 || (kin && _w.y < TOP)); };
@@ -497,6 +499,7 @@ class Wrecker extends Trap {
       if (r.mode !== 'ragdoll') r.knockBy(name, this.vel, speed, 1500);
       r.hit(name, speed * 7, point, dir, speed * 35, { blunt: true });
       this.ctx.sfx.thud(1.6);
+      this.ctx.quake(point, Math.min(0.4, speed * 0.06), 12);
       if (speed > 4) this.ctx.sfx.crack();
     }
     for (const pl of players(this.ctx)) {
@@ -747,7 +750,7 @@ class Guillotine extends Trap {
       this.local(pl.pos, _v);
       if (!pl.dead && Math.abs(_v.x) < 0.4 && Math.abs(_v.z) < 0.3 && _v.y - 0.9 < hi && _v.y + 0.8 > lo && this.ready(pl, 1)) pl.hurt(120, null);
     }
-    if (this.bladeY <= G_LOW + 1e-3) { this.ctx.sfx.thud(1.4); this.ctx.sfx.crack(); }
+    if (this.bladeY <= G_LOW + 1e-3) { this.ctx.sfx.thud(1.4); this.ctx.sfx.crack(); this.ctx.quake(this.pos, 0.3, 12); }
   }
 
   pose() { this.blade.position.y = this.bladeY; }
@@ -808,6 +811,7 @@ class IronMaiden extends Trap {
         // shut: every spike goes in
         this.state = 'shut'; this.timer = 3;
         this.ctx.sfx.chop(); this.ctx.sfx.crack(); this.ctx.sfx.thud(1.6);
+        this.ctx.quake(this.pos, 0.3, 10);
         this.held = [];
         for (const [r, name, p, t] of this.parts()) {
           if (!this.inside(t)) continue;

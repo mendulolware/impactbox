@@ -281,7 +281,33 @@ Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted aft
   tinkles) and rounds carry on through it; until it breaks it blocks sight like any wall. **Lamps** (`MapBuilder.light()`)
   come from a bulb with a collider: shoot it, or set something off near it, and the light goes out.
 
-## First person
+## Impact
+
+- **Screen shake** (`jolt()` in `player.js`): everything you feel adds trauma (0..1) that fades over a second or two, and
+  what shows is trauma^1.5 of smooth noise (two sines at odd rates per axis, not a jitter): pitch, yaw, roll and a little
+  height. Your own shots (by the gun's kick: a pistol barely, a Desert Eagle or a shotgun clearly, a minigun as a steady
+  rumble), blasts (felt up to five blast radii away, with a knock away from them that the view springs back from and the
+  view blown a few degrees wider for a moment), being hurt (knocked away from whatever did it), landing (the head drops
+  with the knees), melee blows that connect (a heavy one also holds the world still for an instant), and anything heavy
+  near you (`ctx.quake`: a body slammed down hard, a gib, the crusher, the wrecking ball, the guillotine, the iron maiden,
+  the spike trap, a door booted). **Screen shake** in the settings scales all of it (0 to 150%).
+- A deleted body could still be in the list for the rest of a frame, and the next look at it crashed the physics (in
+  Zombie Survival, a new zombie at the body limit drops the oldest body: "SIMULATION CRASHED"). `cull()` leaves it be now.
+
+## Everyday life (`brain.js`, `ragdoll.js`)
+
+- **Phones.** One in five walks along looking at theirs; standing about, some get it out and look down at it (the
+  `phone` gesture: both hands up in front, head down, a lit screen in the palm).
+- **Talking.** Two calm people standing near each other fall into conversation: they close up, face each other, and take
+  turns, the one talking with their hands going and the head nodding (`talk`), for 8 to 18 seconds.
+- **Filming.** Once things calm down after something happened (a shot, a death, a blast), nearly half of those who saw it
+  get it on their phone: from 5 to 16 m off, held up at the nearest body (`film`).
+- **Being sick.** Someone who goes to look at a body and finds it in pieces, or opened up, is usually sick (`retch`: bent
+  double, heaving; `gore.vomit` throws up a yellow-brown spray that leaves its own mess, not blood), then runs.
+- **Near misses.** A round passing within a metre of someone's head (`ctx.nearMiss`) makes them duck for half a second,
+  and they know where it came from.
+- **Losing blood** (`lost`): from 15 health bled away they slow down, and more and more the legs give (`stagger()`).
+- **A missing arm or hand:** the other hand grips what is left of it.
 
 - **Hands:** gloved hands with sleeves are attached per weapon: `HandR` grips, `HandL` cups a fore-end, `HandSupport` closes over the
   gripping hand for a two-handed pistol hold, and `KnifeHand` holds the knife, with a sleeve running back out of view.

@@ -74,6 +74,7 @@ export class Door {
   /** A boot (or a blast) against it. */
   kick(from, blast = false) {
     this.ctx.soundAt = this.hinge;
+    if (!blast) this.ctx.quake?.(this.hinge, 0.14, 6);
     const side = this.side(from);
     if (this.locked) {
       this.hp -= blast ? 3 : 1;

@@ -195,7 +195,20 @@ const REST_INV = Object.values(PARTS).map((d) => new THREE.Matrix4().makeTransla
 const IDENT = new THREE.Matrix4();
 const BODY_MATS = new Set(['Skin', 'Shirt', 'Pants']);   // what has flesh behind it
 
-const ZOMBIE = 0x9fc98a;     // what the dead look like when they are a downloaded person (a tint over their texture)
+const ZOMBIE = 0x9fc98a;
+// a phone, for people to look at and to film things with (a gesture: phone, film): dark, with a lit screen on both faces
+const PHONE_GEO = new THREE.BoxGeometry(0.009, 0.145, 0.068);     // (thin across the palm, long along the fingers)
+const PHONE_MATS = (() => {
+  const body = new THREE.MeshStandardMaterial({ color: 0x111114, roughness: 0.35, metalness: 0.4 });
+  const screen = new THREE.MeshStandardMaterial({ color: 0x050608, emissive: 0x9fc3ff, emissiveIntensity: 1.4, roughness: 0.15 });
+  return [screen, screen, body, body, body, body];
+})();
+function phoneMesh() {
+  const m = new THREE.Mesh(PHONE_GEO, PHONE_MATS);
+  m.position.set(0.038, -0.265, 0.047);           // against the palm (the hand hangs palm-in in the rest pose, its middle here)
+  m.castShadow = true;
+  return m;
+}     // what the dead look like when they are a downloaded person (a tint over their texture)
 const SKIN = [0xf1c8a0, 0xe0ac86, 0xc68a62, 0x9a6444, 0x6b4430];
 const HAIR = [0x17100b, 0x2a1a10, 0x4a3018, 0x6b4a26, 0x8a7a66, 0x101012];
 const SHIRT = [0xc0392b, 0x2e86c1, 0x27ae60, 0xf1c40f, 0x7d3c98, 0xecf0f1, 0xe67e22, 0x2c3e50];
@@ -296,7 +309,7 @@ export class Ragdoll {
     this.wantSpeed = 0;
     this.phase = Math.random() * 6;
     this.gesture = 'none';      // 'handsUp' | 'cower' | 'fight'
-    this.gw = { handsUp: 0, cower: 0, fight: 0, aim: 0, kneel: 0, hold: 0 };   // eased gesture weights
+    this.gw = { handsUp: 0, cower: 0, fight: 0, aim: 0, kneel: 0, hold: 0, phone: 0, film: 0, talk: 0, retch: 0 };   // eased gesture weights
     this.look = null;           // world point the head turns toward
     this.lookYaw = 0;
     this.lookPitch = 0;
@@ -530,6 +543,7 @@ export class Ragdoll {
   /** Drop into physics for at least `seconds`. Safe to call repeatedly. */
   goLimp(seconds = 1.5) {
     this.stun = Math.max(this.stun, seconds);
+    if (this.phone) this.phone.visible = false;       // (dropped: nobody holds a phone up going down)
     this.stumbleT = this.collapseT = this.reloadT = 0;
     if (this.mode !== 'ragdoll') {
       this.setMode('ragdoll');
@@ -846,6 +860,21 @@ export class Ragdoll {
     if (this.heat > 0.5) this.burnT = Math.max(this.burnT, 7);
     this.brain.notice('hurt', from);
     this.damage(dmg, 'burned');
+  }
+
+  /** Sick at what they saw: it comes up out of the mouth and down onto the ground (gore.vomit). */
+  vomit() {
+    const h = this.parts.head;
+    if (h.gone || this.isFree('head')) return;
+    this.ctx.gore.vomit(this.localToWorld(h, { x: 0, y: -0.06, z: -0.1 }), this.localToWorld(h, { x: 0, y: -0.5, z: -1 }, true).normalize());
+  }
+
+  /** Unsteady on their feet (losing blood): a stumble the way they were going, and maybe down. */
+  stagger(fall = false) {
+    if (this.mode !== 'anim' || this.stumbleT > 0 || this.dead) return;
+    this.stumbleT = STUMBLE;
+    this.stumbleFall = fall;
+    this.flinchDir.set(-Math.sin(this.heading), 0, -Math.cos(this.heading));
   }
 
   /** Hand this NPC a pistol: from now on it is an armed suspect (see suspect() in brain.js). */
@@ -1175,6 +1204,7 @@ export class Ragdoll {
    * through a wound (the meat layer, a whole second copy of the body, and the organs) is only drawn within 12 m.
    */
   cull(frustum, eye) {
+    if (this.removed) return;     // (dropped this frame to make room for a new one, still in the list: its bodies are gone)
     let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
     for (const n in this.parts) {
       const p = this.parts[n];
@@ -1273,6 +1303,7 @@ export class Ragdoll {
       this.ctx.sfx.crack();
     }
     const core = name === 'torso' || name === 'pelvis';
+    this.ctx.quake?.(at, core ? 0.35 : 0.25, 12);
     this.ctx.gore.gibs(at, core ? 70 : 45);
     if (pieces) this.ctx.gore.chunks(at, core ? 11 : name === 'head' ? 9 : 5, 6, v, core ? 'torso' : name === 'head' ? 'head' : 'limb');
     for (const c of p.colliders) {
@@ -1400,11 +1431,14 @@ export class Ragdoll {
     const pn = this.punchT > 0 ? Math.sin(Math.PI * (1 - this.punchT / PUNCH)) : 0;
     const lg = this.lungeT > 0 ? Math.sin(Math.PI * (1 - this.lungeT / LUNGE)) : 0;
     // hurt: a hand pressed to a body wound (if there is a working arm to do it with), a bad leg favoured
-    const armOk = (side) => !this.limp.has('farm' + side) && !this.isFree('farm' + side);
+    const lost = (side) => this.isFree('farm' + side) || this.parts['farm' + side].gone || this.parts['uarm' + side].gone
+      || (this.parts['farm' + side].range?.[0] ?? -1) > -0.1;                 // (the hand cut off it, or more)
+    const armOk = (side) => !this.limp.has('farm' + side) && !lost(side);
     const cSide = armOk('L') ? 'L' : armOk('R') ? 'R' : null;
-    // (and a broken arm: the good hand holds it)
+    // (and a broken arm: the good hand holds it; an arm gone: the good hand grips what is left of it)
     const brokenArm = this.limp.has('uarmL') || this.limp.has('farmL') || this.limp.has('uarmR') || this.limp.has('farmR');
-    const wantClutch = (this.gutShot || brokenArm) && !z && cSide && this.gesture === 'none' ? 1 : 0;
+    const stump = !z && (lost('L') || lost('R'));
+    const wantClutch = (this.gutShot || brokenArm || stump) && !z && cSide && this.gesture === 'none' ? 1 : 0;
     this.clutch += (wantClutch - this.clutch) * Math.min(1, dt * 4);
     const cl = cSide ? this.clutch : 0, sq = this.squat;
     const lameL = this.lame.L, lameR = this.lame.R;
@@ -1492,7 +1526,7 @@ export class Ragdoll {
     // clutching a wound: forearm across the belly, hunched over it
     let shLy = 0, shRy = 0;
     if (cl > 0.01) {
-      const hi = brokenArm ? 0.3 : 0;                             // a broken arm is held higher, across the chest
+      const hi = stump ? 0.55 : brokenArm ? 0.3 : 0;              // a broken arm is held higher, across the chest; a stump higher still
       if (cSide === 'L') { shLx = mix(shLx, 0.3 + hi, cl); shLy = (0.8 + hi) * cl; shLz = mix(shLz, 0, cl); elL = mix(elL, 1.6 + hi, cl); }
       else { shRx = mix(shRx, 0.3 + hi, cl); shRy = -(0.8 + hi) * cl; shRz = mix(shRz, 0, cl); elR = mix(elR, 1.6 + hi, cl); }
       spX -= 0.18 * cl;
@@ -1502,6 +1536,36 @@ export class Ragdoll {
     const hd = G.hold;
     shRx = mix(shRx, 1.5, hd); elR = mix(elR, 0.08, hd); shRz = mix(shRz, 0.12, hd);
     shLx = mix(shLx, 1.45, hd); elL = mix(elL, 1.35, hd); shLz = mix(shLz, -0.5, hd); shLy = mix(shLy, 0.6, hd);
+    // a phone: held low in both hands and looked down at, or held up at whatever is going on
+    const ph = G.phone, fm = G.film;
+    if (ph > 0.01) {
+      shRx = mix(shRx, 0.5, ph); shRy = mix(shRy, -0.45, ph); shRz = mix(shRz, 0.05, ph); elR = mix(elR, 1.85, ph);
+      shLx = mix(shLx, 0.45, ph); shLy = mix(shLy, 0.4, ph); shLz = mix(shLz, -0.05, ph); elL = mix(elL, 1.7, ph);
+      nkX -= 0.5 * ph; spX -= 0.06 * ph;
+    }
+    if (fm > 0.01) {
+      shRx = mix(shRx, 1.7, fm); shRy = mix(shRy, -0.3, fm); shRz = mix(shRz, 0.1, fm); elR = mix(elR, 0.9, fm);
+      shLx = mix(shLx, 1.45, fm); shLy = mix(shLy, 0.45, fm); elL = mix(elL, 1.25, fm);
+    }
+    // talking: the hands go with the words, the head nods along
+    const tk = G.talk;
+    if (tk > 0.01) {
+      const a1 = Math.sin(t * 3.1 + this.seed), a2 = Math.sin(t * 2.3 + this.seed * 2), a3 = Math.sin(t * 2.7 + 1);
+      shRx = mix(shRx, 0.45 + 0.22 * a1, tk); shRy = mix(shRy, -0.25, tk); elR = mix(elR, 1.35 + 0.35 * a2, tk);
+      shLx = mix(shLx, 0.3 + 0.15 * a3, tk); shLy = mix(shLy, 0.2, tk); elL = mix(elL, 1.05 + 0.25 * a1, tk);
+      nkX += 0.07 * Math.sin(t * 4.2 + this.seed) * tk; spY += 0.08 * a3 * tk;
+    }
+    // retching: bent double, hands on the knees, heaving
+    const rt = G.retch;
+    if (rt > 0.01) {
+      const heave = Math.max(0, Math.sin(t * 5.5)) ** 2;
+      spX = mix(spX, -0.95 - 0.15 * heave, rt); nkX = mix(nkX, 0.12 + 0.12 * heave, rt);
+      hipL = mix(hipL, 0.3, rt); hipR = mix(hipR, 0.3, rt); kneeL = mix(kneeL, -0.45, rt); kneeR = mix(kneeR, -0.45, rt);
+      shLx = mix(shLx, 0.6, rt); shRx = mix(shRx, 0.6, rt); shLz = mix(shLz, 0.25, rt); shRz = mix(shRz, -0.25, rt);
+      elL = mix(elL, 0.15, rt); elR = mix(elR, 0.15, rt);
+    }
+    if (ph + fm > 0.05 && !this.phone && !this.parts.farmR.gone) { this.phone = phoneMesh(); this.parts.farmR.mesh.add(this.phone); }
+    if (this.phone) this.phone.visible = ph + fm > 0.35 && !lost('R');
     // hit reactions (hit()): down on one knee with a hand on it, spun round by a hit to the arm, folded over the belly.
     // They ease in fast and out slow.
     let rk = 0;
@@ -1580,13 +1644,13 @@ export class Ragdoll {
     L('elbowL', elL);
     L('elbowR', elR);
     // running: the recorded stride takes over, as far as nothing else (a gesture, a bad leg, a stumble) wants the body
-    const free = z ? 0 : w * (1 - clamp(up + cw + ft + kn + sq + cl + fl + rk + Math.max(lameL, lameR) + (this.stumbleT > 0 ? 1 : 0), 0, 1));
+    const free = z ? 0 : w * (1 - clamp(up + cw + ft + kn + sq + cl + fl + rk + rt + Math.max(lameL, lameR) + (this.stumbleT > 0 ? 1 : 0), 0, 1));
     const u = this.phase / (Math.PI * 2);
     for (const [clip, k] of [[CLIPS.walk, free * (1 - run)], [CLIPS.run, free * run]]) {
       if (!clip || k < 0.01) continue;
       for (const name in this.joints) {
         if (name === 'neck' && this.look) continue;                         // the head is busy looking at something
-        if ((am > 0.01 || hd > 0.01) && (name.startsWith('shoulder') || name.startsWith('elbow'))) continue;   // the arms are busy with a gun
+        if ((am > 0.01 || hd > 0.01 || ph + fm + tk > 0.01) && (name.startsWith('shoulder') || name.startsWith('elbow'))) continue;   // the arms are busy (a gun, a phone)
         this.joints[name].local.slerp(clipAt(clip, name, u, _c0), k);
       }
     }
@@ -2033,6 +2097,7 @@ export class Ragdoll {
     _v.copy(p.pv).multiplyScalar(1 / sp);     // the way it was going
     sfx.thud(Math.min(1.6, 0.5 + dmg / 25));
     if (dmg > 8) {
+      this.ctx.quake?.(t, Math.min(0.3, dmg / 70), 9);   // a body hitting the ground that hard is felt nearby
       if (dmg > 16) sfx.crack();
       gore.blood(t, _t.set(-_v.x * 0.3, 0.6, -_v.z * 0.3), Math.min(24, 4 + dmg * 0.5), 3, 1.3);
       const b = other.parent();
@@ -2233,6 +2298,7 @@ export class Ragdoll {
       if (this.mode !== 'anim') return; // went over a ledge
       this.computePose(dt);
       this.applyPose();
+      if (this.gw.retch > 0.6 && Math.random() < dt * 3) this.vomit();
       if (this.limp.size) this.muscles(dt, true);
       this.checkKnocks();
     } else if (this.mode === 'getup') {

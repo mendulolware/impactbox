@@ -887,6 +887,7 @@ export class Weapons {
       }
       if (w.rail) this.railBeam(muzzle, end);
       else if (!w.bolt && (i < 3 || w.pellets === 1)) this.tracer(muzzle, first || end);
+      if (i < 3 && !w.quiet) ctx.nearMiss(origin, first || end);
     }
     const can = this.can[this.index];
     ctx.soundAt = null;                   // (the shot is heard from the gun, not from where the round landed)
@@ -915,6 +916,7 @@ export class Weapons {
     const rec = w.rec || [w.kick * 0.25, 0];
     const hold = RECOIL * (1 - 0.3 * this.ads);
     ctx.player.recoil(rec[0] * hold * rnd(0.85, 1.15), rec[1] * hold * (rnd(-1, 1) + (w.drift || 0) * 2));
+    ctx.player.jolt(w.kick * (1.6 - 0.6 * this.ads));      // the shot goes through you (a minigun's into a rumble)
     this.bloom = Math.min(1.5, this.bloom + rec[0] * 9);
     this.spend(w);
   }
@@ -933,6 +935,7 @@ export class Weapons {
       ctx.alert('shot', ctx.player.pos, 30);
       this.kick = w.kick;
       ctx.player.recoil(w.kick * 0.5);
+      ctx.player.jolt(w.kick * 1.6);
       this.spend(w);
       return;
     }
@@ -949,6 +952,7 @@ export class Weapons {
     ctx.alert('shot', ctx.player.pos, 40);
     this.kick = w.kick;
     ctx.player.recoil(w.kick * 0.5);
+    ctx.player.jolt(w.kick * 2.4);                          // (the backblast too)
     this.spend(w);
   }
 
@@ -1019,6 +1023,9 @@ export class Weapons {
       const pt = origin.clone().addScaledVector(d, hit.timeOfImpact);
       ctx.applyHit(hit, pt, d, w.dmg, w.impulse, w.blunt ? { blunt: true } : { blade: true, light: true, chop: true });
       this.bloody(hit, w.blunt ? 0.08 : 0.15);
+      // it connects: you feel it in your arms, and a heavy blow holds the world still for an instant
+      ctx.player.jolt(Math.min(0.35, 0.06 + w.dmg / 400) * (w.blunt ? 1.5 : 1), pt);
+      if (!ctx.net?.role && w.dmg >= 50) ctx.hitstop = Math.max(ctx.hitstop || 0, 0.04);
       hitSomething = true;
       break;                                   // one swing, one thing hit
     }
@@ -1250,6 +1257,7 @@ export class Weapons {
     ctx.soundAt = c;
     sfx.burst();
     ctx.player.shake = Math.min(1, ctx.player.shake + 0.3);
+    ctx.player.jolt(0.3);
     ctx.alert('violence', ctx.player.pos, 20);
   }
 

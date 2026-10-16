@@ -16,7 +16,7 @@ import { isTouch } from './touch.js';
 // Nothing here knows about NPCs; ragdoll.js and wounds.js decide when to call it.
 
 // drop kinds
-const BLOOD = 0, BIT = 1, DEBRIS = 2;
+const BLOOD = 0, BIT = 1, DEBRIS = 2, SICK = 3;
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -629,6 +629,16 @@ export class Gore {
     }
   }
 
+  /** Someone being sick: a gush out of the mouth along dir, yellow-brown, that splashes where it lands. */
+  vomit(p, dir) {
+    const n = this.lite ? 8 : 16;
+    for (let k = 0; k < n; k++) {
+      const s = rnd(1.2, 2.6), c = rnd(0.7, 1);
+      this.drops.emit(p.x, p.y, p.z, dir.x * s + rnd(-0.3, 0.3), dir.y * s + rnd(-0.2, 0.3), dir.z * s + rnd(-0.3, 0.3),
+        rnd(0.006, 0.016), rnd(1.2, 2), 9.8, 0.36 * c, 0.27 * c, 0.06 * c, SICK);
+    }
+  }
+
   /** Rain, for a frame: fresh drops over the camera unless something is overhead, and all of them falling. */
   rainStep(dt, cam, covered) {
     if (!covered) for (let k = Math.ceil(dt * (this.lite ? 500 : 1100)); k > 0; k--) {
@@ -1003,6 +1013,10 @@ export class Gore {
     if (!hit) return false;
     const kind = d.kind[i];
     if (kind === DEBRIS) return true;
+    if (kind === SICK) {           // a sour yellow-brown mess where it lands, not blood
+      if (Math.random() < 0.45) this.splat({ x: d.pos[i3], y: d.pos[i3 + 1], z: d.pos[i3 + 2] }, hit.normal, d.size[i] * rnd(6, 10), { r: d.col[i3], g: d.col[i3 + 1], b: d.col[i3 + 2], drip: false });
+      return true;
+    }
     const t = hit.timeOfImpact;
     const size = d.size[i];
     const big = size > 0.0155;

@@ -46,6 +46,10 @@ export class Player {
     this.recV = 0;            // ...and how fast that is changing
     this.recW = 0;
     this.shake = 0;
+    this.trauma = 0;          // screen shake, 0..1 (jolt): what shows grows faster than it, so knocks stay small and blasts are violent
+    this.punch = { p: 0, r: 0, vp: 0, vr: 0 };    // a knock the view springs back from (pitch, roll)
+    this.fovKick = 0;         // degrees the view is blown wider by a blast, fading
+    this.shakeT = Math.random() * 100;
     this.isPlayer = true;      // (zombies tell players from NPCs by this; the other player in co-op has it too)
     this.sens = 1;
     this.fov = FOV;
@@ -86,6 +90,8 @@ export class Player {
     sfx?.thud(Math.min(1.6, 0.6 + drop / 8));
     if (drop > 5) sfx?.crack();
     this.shake = Math.min(1, this.shake + drop * 0.08);
+    this.jolt(Math.min(0.8, drop * 0.06));
+    this.punch.vp -= Math.min(3, drop * 0.3);          // the head drops with the knees
     if (drop > 5 && !this.indestructible) this.limpT = Math.max(this.limpT, drop * 0.6);
     this.hurt((drop - 3) * 14, null);
   }
@@ -100,12 +106,33 @@ export class Player {
     this.ctx.sfx?.playerHurt();
     this.ctx.buzz?.(Math.min(120, 30 + amount * 2));
     this.shake = Math.min(1, this.shake + 0.7);
+    this.jolt(Math.min(0.6, 0.15 + amount / 70), from);
     this.hurtFrom = from ? { x: from.x, z: from.z } : null;      // (the HUD points at it)
     if (from) { // shoved away from the attacker
       const dx = this.pos.x - from.x, dz = this.pos.z - from.z, l = Math.hypot(dx, dz) || 1;
       this.vel.x += (dx / l) * 3; this.vel.z += (dz / l) * 3;
     }
     if (this.health <= 0) { this.health = 0; this.dead = true; this.deadT = 0; }
+  }
+
+  /**
+   * Feel something: `amount` of trauma (0..1, screen shake that fades), a knock away from `from` (a point in the world)
+   * that the view springs back from, and `fov` degrees of a blast's pressure wave widening the view. Screen shake in the
+   * settings scales all of it (0: none).
+   */
+  jolt(amount, from = null, fov = 0) {
+    if ((this.ctx.settings?.shake ?? 1) <= 0) return;
+    this.trauma = Math.min(1, this.trauma + amount);
+    if (from) {
+      const dx = this.pos.x - from.x, dz = this.pos.z - from.z, l = Math.hypot(dx, dz);
+      if (l > 1e-3) {
+        // pushed back by something in front (the head snaps up), over by something to one side
+        const ahead = -(dx * -Math.sin(this.yaw) + dz * -Math.cos(this.yaw)) / l, side = (dx * Math.cos(this.yaw) - dz * Math.sin(this.yaw)) / l;
+        this.punch.vp += ahead * amount * 2.4;
+        this.punch.vr -= side * amount * 2.8;
+      }
+    }
+    if (fov) this.fovKick = Math.max(this.fovKick, fov);
   }
 
   look(dx, dy) {
@@ -217,6 +244,13 @@ export class Player {
     this.kickYaw += this.recW * h;
     this.shake *= Math.max(0, 1 - rdt * 7);
     this.suppress *= Math.max(0, 1 - rdt * 0.9);
+    // trauma fades; a knock springs back with a little overshoot; a blast's widening closes again
+    this.trauma = Math.max(0, this.trauma * Math.exp(-rdt * 2.2) - rdt * 0.01);
+    const P = this.punch, hs = Math.min(rdt, 1 / 30);
+    P.vp += (-260 * P.p - 20 * P.vp) * hs; P.p += P.vp * hs;
+    P.vr += (-260 * P.r - 20 * P.vr) * hs; P.r += P.vr * hs;
+    this.fovKick *= Math.exp(-rdt * 5);
+    this.shakeT += rdt;
     // leaning out to one side: as far as there is room for the head
     let lean = enabled ? (k.has('KeyE') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0) : 0;
     if (lean) {
@@ -258,6 +292,10 @@ export class Player {
     // helmet cam: head sways with each step, and tips toward the stock when the weapon is shouldered
     const roll = helmet ? Math.sin(this.bob) * 0.014 * steady * (moving ? 1 : 0) - 0.05 * ads : 0;
     const sh = (helmet ? this.shake * 0.02 : this.shake * 0.004) + this.suppress * 0.012;
+    // screen shake: smooth, not a jitter (two sines at odd rates per axis), as big as trauma^1.5
+    const ks = this.ctx.settings?.shake ?? 1, q = Math.pow(this.trauma, 1.5) * ks * (helmet ? 1.4 : 1), qt = this.shakeT;
+    const wave = (a, b, c) => Math.sin(qt * a + b) * 0.6 + Math.sin(qt * c + b * 1.7) * 0.4;
+    const qP = q * 0.07 * wave(97, 0.3, 151) + P.p * ks, qY = q * 0.07 * wave(83, 2.1, 131), qR = q * 0.09 * wave(71, 4.2, 113) + P.r * ks;
 
     // dead: the view slumps to the floor and tips over
     const slump = this.dead ? Math.min(1, this.deadT / 0.7) : 0;
@@ -266,19 +304,19 @@ export class Player {
     const cam = this.ctx.camera;
     cam.position.set(
       this.pos.x + Math.cos(this.yaw) * this.lean * LEAN,
-      this.pos.y + (EYE + (helmet ? HELMET_UP : 0)) * (1 - fall) - 0.6 * fall + Math.sin(this.bob * 2) * bobAmp - 0.06 * Math.abs(this.lean),
+      this.pos.y + (EYE + (helmet ? HELMET_UP : 0)) * (1 - fall) - 0.6 * fall + Math.sin(this.bob * 2) * bobAmp - 0.06 * Math.abs(this.lean) + q * 0.05 * wave(61, 5.3, 97),
       this.pos.z - Math.sin(this.yaw) * this.lean * LEAN
     );
     cam.rotation.set(
-      this.camPitch * (1 - fall) + 0.25 * fall + (Math.random() - 0.5) * sh,
-      this.camYaw + (Math.random() - 0.5) * sh,
-      roll - 0.17 * this.lean + 1.25 * fall + (Math.random() - 0.5) * sh,
+      this.camPitch * (1 - fall) + 0.25 * fall + (Math.random() - 0.5) * sh + qP,
+      this.camYaw + (Math.random() - 0.5) * sh + qY,
+      roll - 0.17 * this.lean + 1.25 * fall + (Math.random() - 0.5) * sh + qR,
       'YXZ'
     );
     this.eye.set(this.pos.x, this.pos.y + EYE, this.pos.z);
 
     // eyes narrow in on the sights; a helmet camera has a fixed lens, so it barely changes
-    const fov = (helmet ? FOV_HELMET : this.ctx.settings?.fov ?? FOV) * (1 - (helmet && zoom < 0.5 ? 0.05 : zoom) * ads);
+    const fov = (helmet ? FOV_HELMET : this.ctx.settings?.fov ?? FOV) * (1 - (helmet && zoom < 0.5 ? 0.05 : zoom) * ads) + this.fovKick * ks;
     this.fov += (fov - this.fov) * Math.min(1, rdt * 14);
     if (Math.abs(cam.fov - this.fov) > 0.01) {
       cam.fov = this.fov;

@@ -42,6 +42,10 @@ export class Brain {
     // what the body should do this frame
     this.goal = { mode: 'wander', pos: new THREE.Vector3(), speed: 0, face: false };
     this.lookV = new THREE.Vector3();
+    this.texter = Math.random() < 0.2;     // walks along looking at their phone
+    this.partner = null;                   // whoever they have stopped to talk to
+    this.duckT = 0;                        // a round just went past: down out of the way
+    this.filmT = 0;
   }
 
   // ------------------------------------------------------------ senses
@@ -114,6 +118,9 @@ export class Brain {
       if ((type === 'death' || type === 'violence') && dist > 6 && !this.canSee(pos, radius)) return;
     }
     if (this.kind === 'zombie' || this.kind === 'swat') return; // zombies do not care, and the squad is here for this
+    this.endChat();
+    this.filmT = 0;
+    if (type !== 'hurt') { (this.incident ??= new THREE.Vector3()).set(pos.x, pos.y, pos.z); this.incidentAt = n.t; this.filmed = false; }
     this.threat.set(pos.x, pos.y, pos.z);
     if (this.kind === 'thug' && n.health > 35) {
       // deaths nearby make a thug wary, but only being shot at (or hit) starts a fight
@@ -132,6 +139,94 @@ export class Brain {
     } else if ((this.state === 'cower' || this.state === 'surrender' || this.state === 'hide' || this.state === 'check' || this.state === 'help') && type === 'hurt') {
       this.state = 'flee';   // being hit ends any thought of standing still
     }
+  }
+
+  /** A round went past my head (main.js nearMiss): a flinch down out of the way, and now it is clear where the danger is. */
+  nearMiss(from, dist) {
+    if (this.kind === 'zombie' || this.kind === 'swat' || this.npc.arrested) return;
+    this.duckT = Math.max(this.duckT, rnd(0.45, 0.75));
+    this.notice('shot', from, 60);
+  }
+
+  // ------------------------------------------------------------ everyday life
+  /** Calm, standing about, and someone else is too, close by: stop and talk for a while (taking turns). */
+  findChat() {
+    const n = this.npc;
+    for (const o of this.ctx.ragdolls) {
+      const b = o.brain;
+      if (o === n || o.dead || o.removed || o.mode !== 'anim' || !b || b.partner || b.state !== 'calm' || b.kind === 'zombie' || b.filmT > 0 || o.armed || o.spot?.dance) continue;
+      if (this.distTo(o.root) > 3.2 || !this.los({ x: o.root.x, y: o.root.y + 1.5, z: o.root.z })) continue;
+      this.partner = b; b.partner = this;
+      this.chatT = b.chatT = rnd(8, 18);
+      this.leads = true; b.leads = false;
+      this.speaking = true; b.speaking = false;
+      this.turnT = rnd(2, 4);
+      return true;
+    }
+    return false;
+  }
+
+  endChat() {
+    const p = this.partner;
+    this.partner = null;
+    if (p && p.partner === this) { p.partner = null; p.walking = false; p.t = rnd(1, 3); }
+  }
+
+  /** In a conversation: close enough to hear, facing them, hands going when it is my turn. False when it is over. */
+  chat(dt) {
+    const p = this.partner, o = p.npc, n = this.npc, g = this.goal;
+    if (o.dead || o.removed || o.mode !== 'anim' || p.state !== 'calm' || p.partner !== this || (this.chatT -= dt) <= 0) {
+      this.endChat();
+      this.walking = true; this.t = rnd(3, 6); this.wanderHeading = n.heading + rnd(-2.5, 2.5);
+      return false;
+    }
+    if (this.leads && (this.turnT -= dt) <= 0) { this.speaking = !this.speaking; p.speaking = !this.speaking; this.turnT = rnd(1.8, 4.5); }
+    const d = this.distTo(o.root);
+    if (d > 1.7 && this.blockedT < 1) { g.mode = 'to'; g.pos.copy(o.root); g.speed = WALK * 0.8; }
+    else { g.mode = 'stop'; g.face = true; g.pos.copy(o.root); if (this.speaking) n.gesture = 'talk'; }
+    n.look = this.lookV.set(o.root.x, o.root.y + 1.6, o.root.z);
+    return true;
+  }
+
+  /** The nearest body in sight within 25 m, for the phones to point at. */
+  bodyNear() {
+    let best = null, bd = 25;
+    for (const o of this.ctx.ragdolls) {
+      if (o === this.npc || o.removed || !o.dead) continue;
+      const p = o.center(_v), d = this.distTo(p);
+      if (d < bd && this.los({ x: p.x, y: p.y + 0.3, z: p.z })) { bd = d; best = p.clone(); }
+    }
+    return best;
+  }
+
+  /** Get it on the phone: from a few metres off (not too close), held up at it. */
+  film(dt) {
+    const n = this.npc, g = this.goal;
+    const at = (this.filmAt ??= this.bodyNear() || this.incident.clone());
+    const d = this.distTo(at);
+    if (d < 5) { g.mode = 'from'; g.pos.copy(at); g.speed = WALK; }
+    else if (d > 16 && this.blockedT < 1.5) { g.mode = 'to'; g.pos.copy(at); g.speed = WALK; }
+    else { g.mode = 'stop'; g.face = true; g.pos.copy(at); n.gesture = 'film'; this.filmT -= dt; }
+    if (this.blockedT >= 1.5) this.filmT -= dt;
+    n.look = this.lookV.set(at.x, at.y + 0.4, at.z);
+    if (this.filmT <= 0) this.filmAt = null;
+  }
+
+  /** Calm: what people do with themselves. Walk along on the phone, stop and look at it, talk to whoever is near, film what just happened. */
+  idle(dt, scan) {
+    const n = this.npc;
+    if (n.spot?.dance) return;
+    if (scan && this.incident && !this.filmed && n.t - this.incidentAt < 40) {
+      this.filmed = true;
+      if (Math.random() < 0.45) { this.filmT = rnd(5, 12); this.filmAt = null; return; }
+    }
+    if (this.walking !== this.wasWalking) { this.wasWalking = this.walking; this.onPhone = !this.walking && Math.random() < 0.3; }
+    if (this.walking) {
+      if (this.texter) { n.gesture = 'phone'; this.goal.speed = Math.min(this.goal.speed, 1.0); }
+      return;
+    }
+    if (scan && !this.onPhone && Math.random() < 0.035 && this.findChat()) return;
+    if (this.onPhone) n.gesture = 'phone';
   }
 
   /** The body could not go where I pointed it (ledge, step too high). */
@@ -410,9 +505,19 @@ export class Brain {
     switch (this.state) {
       case 'calm':
         this.decided = false;
+        if (this.aimed) { this.endChat(); this.filmT = 0; this.state = 'surrender'; this.t = 0; break; }
+        if (this.filmT > 0) { this.film(dt); break; }
+        if (this.partner && this.chat(dt)) break;
         this.wander(dt);
-        if (this.aimed) { this.state = 'surrender'; this.t = 0; }
-        else if (!pl.dead && this.distTo(pl.pos) < 7 && this.canSee(pl.pos, 7)) n.look = pl.eye; // glance at the player
+        this.idle(dt, scan);
+        if (n.gesture === 'none' && !pl.dead && this.distTo(pl.pos) < 7 && this.canSee(pl.pos, 7)) n.look = pl.eye; // glance at the player
+        break;
+
+      case 'retch':
+        // what they found there was too much: doubled over, being sick
+        g.mode = 'stop';
+        n.gesture = 'retch';
+        if ((this.t -= dt) <= 0) { this.state = 'flee'; this.decided = true; this.fear = 0.5; }
         break;
 
       case 'alert':
@@ -459,7 +564,13 @@ export class Brain {
         if (this.distTo(p) > 1.3) { g.mode = 'to'; g.pos.copy(p); g.speed = WALK * 1.5; break; }
         g.mode = 'stop'; g.face = true; g.pos.copy(p);
         n.gesture = 'kneel';
-        if ((this.t -= dt) <= 0) { this.state = 'flee'; this.decided = true; this.fear = 0.5; this.threat.copy(p); }
+        if ((this.t -= dt) <= 0) {
+          this.threat.copy(p);
+          // in pieces, or opened up: most people are sick
+          const gory = o.severed.size > 0 || o.pieces?.length > 0 || o.gutted || Object.values(o.parts).some((q) => q.gone);
+          if (gory && Math.random() < 0.6) { this.state = 'retch'; this.t = rnd(2.5, 4.5); break; }
+          this.state = 'flee'; this.decided = true; this.fear = 0.5;
+        }
         break;
       }
 
@@ -700,6 +811,13 @@ export class Brain {
     this.goal.speed = 0;
 
     if (n.gun) n.gun.visible = !this.gaveUp && !n.arrested;
+    if (this.duckT > 0) {                  // a round just went past: head down, for a moment nothing else
+      this.duckT -= dt;
+      this.goal.mode = 'stop';
+      n.gesture = 'cower';
+      this.steer(dt);
+      return;
+    }
     if (this.flashed > 0 && this.kind !== 'zombie' && !n.arrested) {
       // blinded and deafened by a flashbang: doubled over, hands to the face, no fight in them
       this.flashed -= dt;
@@ -713,6 +831,12 @@ export class Brain {
     else if (this.kind === 'thug') this.thug(dt, scan);
     else this.civilian(dt, scan);
 
+    // losing blood: slower and slower, and now and then the legs go (ragdoll.js lost: health bled away)
+    const shock = this.kind === 'zombie' ? 0 : Math.min(1, Math.max(0, ((n.lost || 0) - 15) / 30));
+    if (shock > 0) {
+      this.goal.speed *= 1 - 0.6 * shock;
+      if (this.goal.speed > 0.3 && Math.random() < dt * 0.35 * shock) n.stagger(Math.random() < shock * 0.5);
+    }
     this.steer(dt);
   }
 }
