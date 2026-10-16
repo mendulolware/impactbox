@@ -1,11 +1,14 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 
-// Traps for the sandbox (spawn menu, Traps):
+// Traps and machines for the sandbox (spawn menu, Traps):
 //   saw       a circular blade spinning on a post: it cuts whatever reaches its edge and flings the pieces
 //   spikes    a plate on the floor: stand on it and a moment later spikes come up through it
 //   launcher  a pad that throws whatever lands on it up and forward
 //   crusher   a heavy block that slams down between two posts and flattens what is under it
+//   grinder   a hopper on two toothed rollers: what goes in comes out of the chute
+//   wrecker   a wrecking ball swinging from a gantry
+//   tesla     a Tesla coil that throws a bolt at whoever is nearest
 // Each owns a fixed body for its frame and, where something moves, a kinematic body that update() drives
 // before the physics step. What they do to people is worked out from where body parts are, not from contact
 // events, so they only ever call into the world between steps (never from inside one).
@@ -345,11 +348,268 @@ class Crusher extends Trap {
   }
 }
 
-const TYPES = { saw: Saw, spikes: Spikes, launcher: Launcher, crusher: Crusher };
+// ------------------------------------------------------------------ meat grinder
+// A hopper on a drum: whatever goes in over the rim is drawn down onto two toothed rollers, a part at a time, and comes
+// out of the chute at the front as a spray. (People do not walk in: throw them in with the Grab Gun or the wand, or
+// point a launch pad at it.)
+const RIM = 1.25;
+class Grinder extends Trap {
+  constructor(ctx, pos, yaw) {
+    super(ctx, 'grinder', pos, yaw);
+    this.box(1.5, 0.35, 1.5, 0, 0.175, 0, dark);                                   // the drum (its top is the floor inside)
+    for (const s of [-1, 1]) {
+      this.box(0.08, RIM - 0.35, 1.5, s * 0.71, 0.35 + (RIM - 0.35) / 2, 0, steel);  // the hopper's walls
+      this.box(1.34, RIM - 0.35, 0.08, 0, 0.35 + (RIM - 0.35) / 2, s * 0.71, steel);
+      this.box(1.56, 0.1, 0.1, 0, RIM, s * 0.75, hazard(), null);                    // a striped lip
+    }
+    const chute = this.box(0.5, 0.05, 0.75, 0, 0.3, 1.05, steel, null);             // the chute, out of the front
+    chute.rotation.x = 0.35;
+    for (const s of [-1, 1]) { const side = this.box(0.04, 0.16, 0.75, s * 0.25, 0.37, 1.05, steel, null); side.rotation.x = 0.35; }
+    this.mouth = new THREE.Vector3(0, 0.2, 1.42).applyQuaternion(this.rot).add(this.pos);
+    this.out = new THREE.Vector3(0, -0.2, 1).normalize().applyQuaternion(this.rot);
+    // two toothed rollers turning in toward each other
+    this.rollers = [-0.2, 0.2].map((z) => {
+      const r = new THREE.Group();
+      r.position.set(0, 0.42, z);
+      r.add(new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 1.3, 16).rotateZ(Math.PI / 2), dark));
+      for (let k = 0; k < 8; k++) {
+        const tooth = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.05, 0.05), steel), a = k * Math.PI / 4;
+        tooth.position.set(0, Math.cos(a) * 0.18, Math.sin(a) * 0.18);
+        tooth.rotation.x = a;
+        r.add(tooth);
+      }
+      this.group.add(r);
+      return r;
+    });
+    this.spin = 0;
+    this.busy = 0;
+  }
+
+  inside(t) { this.local(t, _v); return Math.abs(_v.x) < 0.66 && Math.abs(_v.z) < 0.66 && _v.y > 0 && _v.y < RIM + 0.15; }
+  /** On it at all: inside, or lying across the rim (a body is longer than the hopper is wide). */
+  caught(t) { this.local(t, _v); return Math.abs(_v.x) < 0.95 && Math.abs(_v.z) < 0.95 && _v.y > 0 && _v.y < RIM + 0.8; }
+
+  get v() { return this.busy; }
+  set v(b) { this.busy = b; }
+
+  logic(dt) {
+    this.busy = Math.max(0, this.busy - dt);
+    // once any of someone is in, all of them is dragged in: toward the middle and down onto the rollers
+    const caught = new Set();
+    for (const [r, , , t] of this.parts()) if (this.caught(t)) caught.add(r);
+    for (const r of caught) {
+      if (r.mode !== 'ragdoll') r.goLimp(3);
+      for (const name in r.parts) {
+        const p = r.parts[name];
+        if (p.gone) continue;
+        const t = p.body.translation(), lv = p.body.linvel();
+        _w.set(this.pos.x - t.x, 0, this.pos.z - t.z);
+        p.body.setLinvel({ x: lv.x * 0.6 + _w.x * 2.5, y: Math.min(lv.y, -1.2), z: lv.z * 0.6 + _w.z * 2.5 }, true);
+        if (this.inside(t) && _v.y < 0.8 && this.ready(r, 0.14)) { r.gib(name, false); this.spray(); }   // (a part at a time)
+      }
+    }
+    for (const p of this.ctx.props) {
+      if (p.removed || !p.body.isDynamic() || !this.inside(p.body.translation())) continue;
+      const lv = p.body.linvel();
+      p.body.setLinvel({ x: lv.x * 0.6, y: Math.min(lv.y, -1.2), z: lv.z * 0.6 }, true);
+      if (_v.y < 0.8 && this.ready(p, 0.3)) { p.hit(60, p.body.translation(), new THREE.Vector3(0, -1, 0), 0, {}); this.ctx.gore.debris(this.mouth, p.def.debris || 0x777777, 8); this.ctx.sfx.grind(); this.busy = 0.6; }
+    }
+    for (const pl of players(this.ctx)) {
+      if (!pl.dead && this.inside({ x: pl.pos.x, y: pl.pos.y - 0.7, z: pl.pos.z }) && this.ready(pl, 0.3)) { pl.hurt(25, this.mouth); pl.shake = Math.min(1, (pl.shake || 0) + 0.4); this.spray(); }
+    }
+  }
+
+  /** What went in comes out of the chute. */
+  spray() {
+    const { gore, sfx } = this.ctx;
+    gore.blood(this.mouth, this.out, 22, 5.5, 0.35);
+    gore.chunks(this.mouth, 2, 3, { x: this.out.x * 3, y: this.out.y * 3, z: this.out.z * 3 }, 'any');
+    sfx.grind();
+    this.busy = 0.6;
+  }
+
+  pose(dt) {
+    this.spin += dt * (this.busy > 0 ? 16 : 5);
+    this.rollers[0].rotation.x = this.spin;
+    this.rollers[1].rotation.x = -this.spin;
+  }
+}
+
+// ------------------------------------------------------------------ wrecking ball
+// A tonne of iron on a chain from a gantry, swinging through the middle of it and back, forever. A walking person
+// it meets is knocked flying; a body it meets is broken by it.
+const BEAM = 6.0, CHAIN = 4.9, SWING = 1.05, BALL = 0.5;      // (at the bottom of its swing the ball is at chest height)
+class Wrecker extends Trap {
+  constructor(ctx, pos, yaw) {
+    super(ctx, 'wrecker', pos, yaw);
+    for (const s of [-1, 1]) this.box(0.24, BEAM, 0.24, s * 1.7, BEAM / 2, 0, dark);
+    this.box(3.64, 0.3, 0.3, 0, BEAM + 0.15, 0, hazard());
+    this.omega = Math.sqrt(9.81 / CHAIN);          // (a pendulum that long swings at its own pace)
+    this.theta = 0;
+    this.ball = ctx.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(pos.x, pos.y + BEAM - CHAIN, pos.z));
+    this.bodies.push(this.ball);
+    const c = ctx.world.createCollider(RAPIER.ColliderDesc.ball(BALL).setFriction(0.6), this.ball);
+    ctx.owners.set(c.handle, { kind: 'trap', trap: this });
+    const iron = new THREE.MeshStandardMaterial({ color: 0x2b2b2e, roughness: 0.45, metalness: 0.8 });
+    this.ballMesh = new THREE.Mesh(new THREE.SphereGeometry(BALL, 24, 16), iron);
+    this.ballMesh.castShadow = true;
+    this.chain = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, CHAIN, 6), steel);
+    this.chain.castShadow = true;
+    this.group.add(this.ballMesh, this.chain);
+    this.vel = new THREE.Vector3();
+  }
+
+  get v() { return this.theta; }
+  set v(a) { this.theta = a; }
+
+  /** Where the ball is (in the machine's own frame) at a swing angle. */
+  at(theta, out) { return out.set(0, BEAM - CHAIN * Math.cos(theta), CHAIN * Math.sin(theta)); }
+
+  logic() {
+    this.theta = SWING * Math.sin(this.t * this.omega);
+    const w = SWING * this.omega * Math.cos(this.t * this.omega);                    // how fast it is swinging now
+    this.vel.set(0, Math.sin(this.theta), Math.cos(this.theta)).multiplyScalar(CHAIN * w).applyQuaternion(this.rot);
+    const speed = this.vel.length();
+    if (speed < 1.2) return;
+    const c = this.at(this.theta, _w).applyQuaternion(this.rot).add(this.pos);
+    const dir = this.vel.clone().divideScalar(speed);
+    for (const [r, name, p, t] of this.parts()) {
+      _v.set(t.x - c.x, t.y - c.y, t.z - c.z);
+      if (_v.length() > BALL + 0.22 || !this.ready(r, 0.5)) continue;
+      const point = c.clone().addScaledVector(_v.normalize(), BALL);
+      if (r.mode !== 'ragdoll') r.knockBy(name, this.vel, speed, 1500);
+      r.hit(name, speed * 7, point, dir, speed * 35, { blunt: true });
+      this.ctx.sfx.thud(1.6);
+      if (speed > 4) this.ctx.sfx.crack();
+    }
+    for (const pl of players(this.ctx)) {
+      if (pl.dead || pl.pos.distanceTo(c) > BALL + 0.7 || !this.ready(pl, 0.6)) continue;
+      pl.hurt(speed * 6, c);
+      const v = { x: this.vel.x * 1.3, y: 3.5, z: this.vel.z * 1.3 };
+      if (pl.launch) pl.launch(v); else { pl.vel.set(v.x, v.y, v.z); pl.grounded = false; }
+      this.ctx.sfx.thud(1.8);
+    }
+  }
+
+  pose() {
+    const local = this.at(this.theta, _v);
+    this.ballMesh.position.copy(local);
+    this.chain.position.set(0, (BEAM + local.y) / 2, local.z / 2);
+    this.chain.rotation.x = this.theta;
+    this.ball.setNextKinematicTranslation(local.applyQuaternion(this.rot).add(this.pos));
+  }
+}
+
+// ------------------------------------------------------------------ tesla coil
+// It charges, and about once a second throws a bolt at whatever is nearest within 7 m: a person goes rigid and falls,
+// and it burns where it lands. Enough of them kill. (No lamp in it: adding a light to the scene makes every material
+// rebuild its shader, a stall. The bolt glows through the bloom.)
+const REACH = 7;
+class Tesla extends Trap {
+  constructor(ctx, pos, yaw) {
+    super(ctx, 'tesla', pos, yaw);
+    this.box(0.9, 0.2, 0.9, 0, 0.1, 0, dark);
+    const copper = new THREE.MeshStandardMaterial({ color: 0xb8733a, metalness: 0.9, roughness: 0.35 });
+    const coil = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.17, 1.7, 18), copper);
+    coil.position.y = 1.05;
+    coil.castShadow = true;
+    this.group.add(coil);
+    const cc = ctx.world.createCollider(RAPIER.ColliderDesc.cuboid(0.16, 0.85, 0.16).setTranslation(0, 1.05, 0).setFriction(0.8), this.fixed);   // (the coil's collider)
+    ctx.owners.set(cc.handle, { kind: 'trap', trap: this });
+    this.ringMat = new THREE.MeshStandardMaterial({ color: 0xc8ccd2, metalness: 0.95, roughness: 0.2, emissive: 0x6a9cff, emissiveIntensity: 0 });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.09, 10, 28).rotateX(Math.PI / 2), this.ringMat);
+    ring.position.y = 2.0;
+    this.group.add(ring);
+    this.top = new THREE.Vector3(0, 2.0, 0).applyQuaternion(this.rot).add(this.pos);
+    this.boltMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 3.2, 5.0), toneMapped: false });
+    this.boltMesh = new THREE.Mesh(new THREE.BufferGeometry(), this.boltMat);
+    this.boltMesh.visible = false;
+    this.boltMesh.frustumCulled = false;
+    ctx.scene.add(this.boltMesh);
+    this.target = new THREE.Vector3();
+    this.charge = 0;
+    this.boltT = 0;
+    this.zaps = 0;
+  }
+
+  get v() { return this.zaps; }
+  set v(n) {                       // (co-op: the other player's copy draws a bolt to whoever is nearest there when the count goes up)
+    if (n === this.zaps) return;
+    this.zaps = n;
+    const near = this.nearest();
+    if (near) this.strike(near.point);
+  }
+
+  /** The nearest body part or player within reach of the top. */
+  nearest() {
+    let best = null, bd = REACH;
+    for (const [r, name, p, t] of this.parts()) {
+      const d = Math.hypot(t.x - this.top.x, t.y - this.top.y, t.z - this.top.z);
+      if (d < bd) { bd = d; best = { r, name, point: new THREE.Vector3(t.x, t.y, t.z) }; }
+    }
+    for (const pl of players(this.ctx)) {
+      if (pl.dead) continue;
+      const d = Math.hypot(pl.pos.x - this.top.x, pl.pos.y - this.top.y, pl.pos.z - this.top.z);
+      if (d < bd) { bd = d; best = { pl, point: new THREE.Vector3(pl.pos.x, pl.pos.y, pl.pos.z) }; }
+    }
+    return best;
+  }
+
+  logic(dt) {
+    this.charge += dt;
+    if (this.charge < 0.9) return;
+    const n = this.nearest();
+    if (!n) return;
+    this.charge = 0;
+    this.zaps++;
+    this.strike(n.point);
+    this.ctx.sfx.zap();
+    const dir = n.point.clone().sub(this.top).normalize();
+    if (n.r) {
+      n.r.hit(n.name, 16, n.point, dir, 25, { tase: 2.2, daze: 3 });
+      n.r.scorch(n.name, 0.2, 4, this.top);
+    } else {
+      n.pl.hurt(14, this.top);
+      n.pl.shake = Math.min(1, (n.pl.shake || 0) + 0.4);
+    }
+  }
+
+  strike(point) { this.target.copy(point); this.boltT = 0.2; }
+
+  pose(dt) {
+    this.boltT -= dt;
+    const on = this.boltT > 0;
+    this.ringMat.emissiveIntensity = on ? 3 : 0.15 + 0.1 * Math.sin(this.t * 40);
+    this.boltMesh.visible = on;
+    if (!on) return;
+    // a new jagged path every frame it is there: that is what makes it crackle
+    const path = new THREE.CurvePath(), n = 12;
+    let prev = this.top.clone();
+    for (let i = 1; i <= n; i++) {
+      const k = i / n, p = this.top.clone().lerp(this.target, k);
+      if (i < n) p.add(_v.set(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)).multiplyScalar(0.3 * Math.sin(k * Math.PI)));
+      path.add(new THREE.LineCurve3(prev, p));
+      prev = p;
+    }
+    this.boltMesh.geometry.dispose();
+    this.boltMesh.geometry = new THREE.TubeGeometry(path, n * 2, 0.02, 5, false);
+  }
+
+  remove() {
+    super.remove();
+    this.ctx.scene.remove(this.boltMesh);
+    this.boltMesh.geometry.dispose();
+  }
+}
+
+const TYPES = { saw: Saw, spikes: Spikes, launcher: Launcher, crusher: Crusher, grinder: Grinder, wrecker: Wrecker, tesla: Tesla };
 export const TRAP_TYPES = {
   saw: { label: 'Saw Blade', icon: '🪚', small: 'cuts what touches it' },
   spikes: { label: 'Spike Trap', icon: '📌', small: 'step on it' },
   launcher: { label: 'Launch Pad', icon: '🚀', small: 'up and away' },
   crusher: { label: 'Crusher', icon: '🔨', small: 'flattens' },
+  grinder: { label: 'Meat Grinder', icon: '🥩', small: 'throw someone in' },
+  wrecker: { label: 'Wrecking Ball', icon: '⛓️', small: 'swings forever' },
+  tesla: { label: 'Tesla Coil', icon: '⚡', small: 'zaps the nearest' },
 };
 export function makeTrap(ctx, type, pos, yaw) { return new TYPES[type](ctx, pos, yaw); }

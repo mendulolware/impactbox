@@ -75,8 +75,9 @@ export class Player {
   }
 
   /** Something hit the player. `from` is where it came from. */
-  hurt(amount, from) {
+  hurt(amount, from, force = false) {
     if (this.dead) return;
+    if (this.indestructible && !force) { this.hurtFlash = Math.max(this.hurtFlash, 0.2); this.ctx.buzz?.(15); return; }   // (indestructible: you feel it, and nothing more)
     this.health -= amount;
     this.sinceHurt = 0;
     this.hurtFlash = 1;

@@ -52,6 +52,7 @@ export const WEAPONS = [
   { name: 'Pepper Spray', slot: 7, type: 'spray', range: 3.2, mag: 100, reload: 2.0 },
   { name: 'Rope Tool', slot: 7, type: 'tool', tool: 'rope' },      // tools.js: click one thing, then another
   { name: 'Weld Tool', slot: 7, type: 'tool', tool: 'weld' },
+  { name: 'Magic Wand', slot: 7, type: 'wand' },
 ];
 
 // How each weapon sits in first person, in the same order as WEAPONS. All positions are in the
@@ -124,6 +125,7 @@ const VIEW = [
     handR: [0, -0.088, 0.1, -0.25], handL: [0, -0.045, -0.075, 0] },
   { model: 'GrabGun', hip: [0.21, -0.22, -0.45], muzzle: [0, 0.005, -0.37], tint: 0xff9a2a,       // the weld tool: in orange
     handR: [0, -0.088, 0.1, -0.25], handL: [0, -0.045, -0.075, 0] },
+  { model: 'MagicWand', hip: [0.26, -0.28, -0.46], melee: true, tilt: 0.55, wand: true, muzzle: [0, 0.33, 0] },   // (the tip, once the melee hold stands it up)
 ];
 
 const SLEEVE_LEN = 0.3;                                    // length of the SleeveArm model
@@ -149,7 +151,10 @@ function hand(name, [x, y, z, pitch]) {
   return h;
 }
 
-/** The laser sword, built here: a steel hilt and a metre of blade brighter than white (the bloom takes it), glowing red on what is near. */
+/**
+ * The laser sword, built here: a steel hilt and a metre of blade brighter than white (the bloom takes it). (It had a red
+ * light of its own too, but a light coming and going makes every material rebuild its shader: a stall on drawing it.)
+ */
 function laserSword() {
   const g = new THREE.Group();
   const along = (geo) => geo.rotateX(Math.PI / 2);          // (melee models lie along -Z, handle at the origin)
@@ -158,9 +163,18 @@ function laserSword() {
   const glow = new THREE.Mesh(along(new THREE.CylinderGeometry(0.022, 0.026, 1.02, 12)),
     new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 0.12, 0.08), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false }));
   core.position.z = glow.position.z = -0.62;
-  const light = new THREE.PointLight(0xff3020, 1.6, 3.5, 2);
-  light.position.z = -0.6;
-  g.add(hilt, core, glow, light);
+  g.add(hilt, core, glow);
+  return g;
+}
+
+/** The magic wand, built here: a dark tapered stick with a glowing violet tip. */
+function magicWand() {
+  const g = new THREE.Group();
+  const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.011, 0.36, 10).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x3a2418, roughness: 0.6 }));
+  stick.position.z = -0.14;
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.0, 4.2), toneMapped: false }));
+  tip.position.z = -0.33;
+  g.add(stick, tip);
   return g;
 }
 
@@ -176,6 +190,7 @@ function buildViewmodel(v) {
     model.add(tin, cap);
   }
   if (!model && v.laser) model = laserSword();
+  if (!model && v.wand) model = magicWand();
   model ||= new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.3), new THREE.MeshStandardMaterial({ color: 0x4a4a52 }));
   if (v.tint) model.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.set(v.tint); } });
   if (v.knife) {
@@ -371,6 +386,7 @@ export class Weapons {
     i = (i + WEAPONS.length) % WEAPONS.length;
     if (i === this.index || (this.allowed && !this.allowed.has(i)) || this.selfT > 0) return;
     this.releaseGrab();
+    this.dropWand();
     this.index = i;
     this.last[WEAPONS[i].slot] = i;
     this.models.forEach((m, k) => (m.visible = k === i));
@@ -915,6 +931,104 @@ export class Weapons {
     sfx.slash();
   }
 
+  /**
+   * The magic wand: hold the left button on someone (or something) and they rise into the air in front of you and hang
+   * there, slowly turning, limbs loose, for as long as you hold it (where you look, they go); the right button makes
+   * them burst, from the inside out. (Co-op: the host's only, like the Grab Gun.)
+   */
+  updateWand(dt, input) {
+    const ctx = this.ctx;
+    this.aim();
+    if (ctx.net.role === 'guest') { if (input.leftDown || input.rightDown) ctx.toast("THE WAND IS THE HOST'S ONLY IN CO-OP"); return; }
+    let h = this.held;
+    if (h && (h.r ? h.r.removed || h.core.gone : h.p.removed)) h = this.held = null;
+    if (input.leftDown && !h) {
+      h = this.wandTarget();
+      if (h) {
+        if (h.r) { h.r.goLimp(1); h.core = h.r.parts.torso.gone ? h.r.parts.pelvis : h.r.parts.torso; }
+        h.rise = 0;
+        this.held = h;
+        this.weightless(h, 0.03);
+        sfx.wand();
+      }
+    }
+    if (h && !input.left) { this.dropWand(); h = null; }
+    if (h) {
+      if (h.r) h.r.goLimp(0.6);                                   // (held in the air: it does not get its feet back)
+      h.rise = Math.min(1, h.rise + dt * 1.2);
+      const body = h.r ? h.core.body : h.p.body, t = body.translation();
+      const target = _o.clone().addScaledVector(_d, h.dist);
+      target.y += 1.6 * h.rise;                                   // up off the ground as it rises
+      const v = target.sub(t).multiplyScalar(3.5);
+      if (v.length() > 7) v.setLength(7);
+      body.setLinvel(v, true);
+      const w = body.angvel();
+      body.setAngvel({ x: w.x * 0.9, y: 0.9, z: w.z * 0.9 }, true);      // turning slowly
+      const tip = this.muzzlePoint(_m);
+      for (let i = 0; i < 2; i++) {                              // violet sparks from the tip to it
+        const k = Math.random();
+        ctx.gore.fire.emit(tip.x + (t.x - tip.x) * k, tip.y + (t.y - tip.y) * k, tip.z + (t.z - tip.z) * k, rnd(-0.3, 0.3), rnd(-0.3, 0.3), rnd(-0.3, 0.3), rnd(0.02, 0.04), 0.3, -0.5, 0.7, 0.3, 1.0, 0, 1);
+      }
+    }
+    if (input.rightDown) {
+      const target = h || this.wandTarget();
+      if (target) this.burst(target);
+    }
+  }
+
+  /** Who (or what) the wand is pointing at: a person (not the other player) or a loose prop. */
+  wandTarget() {
+    const ctx = this.ctx, hit = ctx.raycast(_o, _d, 40), o = hit && ctx.owners.get(hit.collider.handle);
+    if (o?.kind === 'part' && !o.ragdoll.avatar && !o.ragdoll.removed) return { r: o.ragdoll, dist: Math.min(hit.timeOfImpact, 9) };
+    if (o?.kind === 'prop' && !o.prop.removed && o.prop.body.isDynamic()) return { p: o.prop, dist: Math.min(hit.timeOfImpact, 9) };
+    return null;
+  }
+
+  /** Gravity on what the wand holds: almost none while it floats, all of it again when let go. */
+  weightless(h, g) {
+    if (h.p) { if (!h.p.removed) h.p.body.setGravityScale(g, true); return; }
+    for (const n in h.r.parts) { const p = h.r.parts[n]; if (!p.gone) p.body.setGravityScale(g, true); }
+  }
+
+  dropWand() {
+    if (!this.held) return;
+    if (!(this.held.r ? this.held.r.removed : this.held.p.removed)) this.weightless(this.held, 1);
+    this.held = null;
+  }
+
+  /** It bursts: a person from the inside out (the trunk and the head go, what hung off them is thrown); a prop goes off. */
+  burst(h) {
+    const ctx = this.ctx;
+    this.weightless(h, 1);
+    if (this.held === h) this.held = null;
+    let c;
+    if (h.p) {
+      const t = h.p.body.translation();
+      c = new THREE.Vector3(t.x, t.y, t.z);
+      h.p.remove();
+      ctx.explode(c, 3, 0.5);
+    } else {
+      const r = h.r;
+      c = r.center(new THREE.Vector3());
+      for (const n of ['torso', 'head', 'pelvis']) if (!r.parts[n].gone) r.gib(n);
+      for (const n in r.parts) {
+        const p = r.parts[n];
+        if (p.gone) continue;
+        const t = p.body.translation(), m = p.body.mass();
+        _m.set(t.x - c.x, t.y - c.y + 0.3, t.z - c.z).normalize();
+        p.body.applyImpulse({ x: _m.x * m * 7, y: _m.y * m * 7, z: _m.z * m * 7 }, true);
+      }
+    }
+    for (let i = 0; i < 40; i++) {
+      const a = rnd(0, 6.283), e = rnd(-0.5, 1), s = rnd(2, 6);
+      ctx.gore.fire.emit(c.x, c.y, c.z, Math.cos(a) * Math.cos(e) * s, Math.sin(e) * s, Math.sin(a) * Math.cos(e) * s, rnd(0.04, 0.09), rnd(0.3, 0.7), -0.5, 0.75, 0.3, 1.0, 0, 1.5);
+    }
+    ctx.soundAt = c;
+    sfx.burst();
+    ctx.player.shake = Math.min(1, ctx.player.shake + 0.3);
+    ctx.alert('violence', ctx.player.pos, 20);
+  }
+
   updateGrab(dt, input) {
     const ctx = this.ctx;
     const crosshair = document.getElementById('crosshair');
@@ -1006,7 +1120,7 @@ export class Weapons {
     ctx.gore.mist(_o, left, 6, 1.3);
     ctx.gore.wallSplatter(_o, left, 4, true);
     ctx.feed('SUICIDE');
-    ctx.player.hurt(1e3);
+    ctx.player.hurt(1e3, null, true);
   }
 
   /** Position the rig between the hip pose and the aimed pose. */
@@ -1100,6 +1214,8 @@ export class Weapons {
       this.updateKnife(input, w);
     } else if (w.type === 'grab') {
       this.updateGrab(dt, input);
+    } else if (w.type === 'wand') {
+      this.updateWand(dt, input);
     } else if (w.type === 'tool') {
       this.aim();
       if (input.leftDown) this.ctx.tools.use(w.tool, _o, _d);

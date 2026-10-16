@@ -956,8 +956,8 @@ export class Ragdoll {
     if (dir) child.body.applyImpulse({ x: dir.x * 8, y: 5, z: dir.z * 8 }, true);     // (it comes away; it is not fired off)
   }
 
-  /** Blow a part to pieces. */
-  gib(name) {
+  /** Blow a part to pieces. pieces: throw the lumps of it about too (the grinder sends its own out of the chute instead). */
+  gib(name, pieces = true) {
     const p = this.parts[name];
     if (!p || p.gone) return;
     this.split();
@@ -967,7 +967,7 @@ export class Ragdoll {
     const at = { x: t.x, y: t.y, z: t.z };
     const core = name === 'torso' || name === 'pelvis';
     this.ctx.gore.gibs(at, core ? 70 : 45);
-    this.ctx.gore.chunks(at, core ? 11 : name === 'head' ? 9 : 5, 6, v, core ? 'torso' : name === 'head' ? 'head' : 'limb');
+    if (pieces) this.ctx.gore.chunks(at, core ? 11 : name === 'head' ? 9 : 5, 6, v, core ? 'torso' : name === 'head' ? 'head' : 'limb');
     for (const c of p.colliders) {
       this.ctx.owners.delete(c.handle);
       this.colHandles.delete(c.handle);

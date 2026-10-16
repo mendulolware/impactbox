@@ -29,7 +29,7 @@ const PARTS = Object.keys(RAGDOLL_PARTS);
 const GORE = ['blood', 'drip', 'mist', 'gush', 'gibs', 'sparks', 'debris', 'explosion', 'splat', 'bloodDecal', 'pool', 'run', 'smear',
   'footprint', 'handprint', 'wallSplatter', 'bulletHole', 'chunks'];
 const OWN_SFX = new Set(['step', 'tick', 'pop', 'playerHurt']);    // the host's own: not worth hearing on the other side
-const OWN_TOAST = /^(SUPPRESSOR|SEMI|AUTO|EMPTY|JAMMED|DRONE|RAIN|DRY|NIGHT|DAY|GRAPHICS|RECORDING|CLEARED|SANDBOX|SQUAD|LASER|ROPE|WELD|UNTIED|NOTHING TO TIE|YOU DIED|PLAYER 2)/;
+const OWN_TOAST = /^(INDESTRUCTIBLE|SUPPRESSOR|SEMI|AUTO|EMPTY|JAMMED|DRONE|RAIN|DRY|NIGHT|DAY|GRAPHICS|RECORDING|CLEARED|SANDBOX|SQUAD|LASER|ROPE|WELD|UNTIED|NOTHING TO TIE|YOU DIED|PLAYER 2)/;
 const UP = new THREE.Vector3(0, 1, 0);
 const V = (o) => new THREE.Vector3(o.x, o.y, o.z);
 const P = (v) => (v ? { x: +v.x.toFixed(4), y: +v.y.toFixed(4), z: +v.z.toFixed(4) } : null);

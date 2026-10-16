@@ -408,11 +408,17 @@ ctx.feed = feed;
  * Die on purpose and come back at the start: with a real gun in hand it goes to the head and off (weapons.selfShot);
  * otherwise (a knife, a taser, from the menu, driving) just the ordinary death. Then the ordinary respawn.
  */
+/** Indestructible (I, the spawn menu, GOD on a phone): nothing hurts you. Falling off the map and suicide still count. */
+ctx.toggleIndestructible = () => {
+  const on = ctx.player.indestructible = !ctx.player.indestructible;
+  document.body.classList.toggle('god', on);
+  toast(on ? 'INDESTRUCTIBLE' : 'INDESTRUCTIBLE OFF');
+};
 ctx.suicide = () => {
   if (ctx.player.dead || ctx.weapons.selfT > 0) return;
   const w = ctx.weapons.current;
   if (w.type === 'gun' && w.dmg >= 9 && gameActive() && !ctx.car && !ctx.drone) ctx.weapons.selfShot();
-  else { ctx.player.hurt(1e3); feed('SUICIDE'); }
+  else { ctx.player.hurt(1e3, null, true); feed('SUICIDE'); }
 };
 ctx.marker = marker;
 
@@ -570,6 +576,7 @@ const SPAWN_ITEMS = [
   { cat: 'World', label: 'Helmet Cam', icon: '📹', small: 'toggle (V)', local: true, run: () => toggleHelmet() },
   { cat: 'World', label: 'Graphics', icon: '✨', small: 'high / fast (G)', local: true, run: () => toggleGraphics() },
   { cat: 'World', label: 'Settings', icon: '⚙️', small: 'look, FOV, volume, graphics', local: true, run: () => setSettings(true) },
+  { cat: 'World', label: 'Indestructible', icon: '🛡️', small: 'nothing hurts you (I)', local: true, run: () => ctx.toggleIndestructible() },
   { cat: 'World', label: 'Suicide', icon: '💀', small: 'die and respawn (Backspace)', local: true, run: () => ctx.suicide() },
 ];
 
@@ -825,6 +832,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Enter' && ctx.survival.over) ctx.survival.start();
   if (e.code === 'KeyR') ctx.weapons.reload();
   if (e.code === 'KeyZ') quickSpawn();
+  if (e.code === 'KeyI') ctx.toggleIndestructible();
   if (e.code === 'Backspace') ctx.suicide();
   if (e.code === 'KeyF') {
     if (ctx.car) ctx.driving.exit();
@@ -869,6 +877,7 @@ function setMap(id, populate = true) {
   // some maps are only ever visited after dark; leaving one brings the day back (unless you put the night on yourself)
   if (ctx.map.def.night && !ctx.night) { toggleNight(); ctx.nightByMap = true; }
   else if (!ctx.map.def.night && ctx.night && ctx.nightByMap) toggleNight();
+  warmLights();
   toast(ctx.map.name.toUpperCase());
 }
 ctx.setMap = setMap;
@@ -1086,7 +1095,7 @@ function tick(now) {
 
   // health bar, red flash when hurt, and the death notice
   const pl = ctx.player;
-  if (!pl.dead && pl.pos.y < ctx.map.killY) pl.hurt(1000, null);      // fell off the map
+  if (!pl.dead && pl.pos.y < ctx.map.killY) pl.hurt(1000, null, true);      // fell off the map (indestructible or not)
   healthEl.style.width = pl.health + '%';
   healthBox.classList.toggle('low', pl.health < 35);
   if (Math.ceil(pl.health) !== shownHealth) healthNum.textContent = shownHealth = Math.ceil(pl.health);
@@ -1161,5 +1170,20 @@ async function prewarm() {
     r.destroy();
   }
   for (const s of stumps) scene.remove(s);
+  warmLights();
+}
+
+/**
+ * The flashlight is a shadow-casting light that comes and goes, and every material needs another version of its shader
+ * with it on: built at the moment it was first switched on, that was a stall of seconds. So after each map loads they are
+ * built in the background (compileAsync with the flashlight switched the other way for the purpose, then back).
+ */
+function warmLights() {
+  const was = torch.visible;
+  torch.visible = !was;
+  renderer.setRenderTarget(post.enabled ? post.target : null);
+  renderer.compileAsync(scene, camera).catch(() => {});
+  renderer.setRenderTarget(null);
+  torch.visible = was;
 }
 if (new URLSearchParams(location.search).has('trailer')) import('./trailer.js').then((m) => m.start(ctx));   // the launch trailer (trailer.js)
