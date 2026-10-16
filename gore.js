@@ -817,13 +817,13 @@ export class Gore {
 
   bloodDecal(p, normal, size = 0.25) { this.splat(p, normal, size); }
 
-  /** A pool that spreads out over a few seconds. */
+  /** A pool that spreads out, fast at first and then creeping on for half a minute, as blood does. */
   pool(p, normal, size = 0.9) {
     this._orient(p, normal, 0.014);
     size *= this._fit(size, size);
     const set = pick(this.sets.pool);
     const i = set.add(_p, _q, size * 0.12, size * 0.12, rnd(0.06, 0.09), 0.002, 0.002);     // collected blood is deep, nearly black red
-    this.growing.push({ set, i, pos: _p.clone(), quat: _q.clone(), from: size * 0.12, to: size, t: 0, dur: rnd(6, 11) });
+    this.growing.push({ set, i, pos: _p.clone(), quat: _q.clone(), from: size * 0.12, to: size, t: 0, dur: rnd(20, 40) });
     this.pools.push({ x: _p.x, y: _p.y, z: _p.z, r: size * 0.42 });
     if (this.pools.length > 40) this.pools.shift();
   }
@@ -1087,6 +1087,8 @@ export class Gore {
           this.smear({ x: t.x, y: t.y + 0.02 - hit.timeOfImpact, z: t.z }, hit.normal, { x: v.x, y: 0, z: v.z }, c.size * 2.2, Math.min(0.5, hs * 0.12));
         }
       }
+      // as good as still (one pinned under a body can spin on the spot for ever): asleep, and no longer keeping that body awake
+      if (!c.stuck && hs < 0.15 && Math.abs(v.y) < 0.15) { if ((c.rest = (c.rest || 0) + dt) > 1 && !c.body.isSleeping()) c.body.sleep(); } else c.rest = 0;
       if (c.drip > 0) { // freshly torn: leaves a trail
         c.drip -= dt;
         if (Math.random() < dt * (c.stuck ? 3 : 30)) {

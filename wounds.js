@@ -61,8 +61,8 @@ vec2 woundField(vec3 p) {
     float d = length(q) / r;
     best = min(best, d / uHoleScale);
     float age = uTime - uWoundB[i].w;
-    // the stain soaks outward for a few seconds...
-    float reach = 1.5 + 2.4 * (1.0 - exp(-age * 0.3));
+    // the stain soaks outward fast for a few seconds, then on through the cloth for a minute...
+    float reach = 1.5 + 2.4 * (1.0 - exp(-age * 0.3)) + 3.5 * (1.0 - exp(-age * 0.025));
     wet = max(wet, 1.0 - smoothstep(reach * 0.45, reach, d + rag));
     // ...and a trickle runs down the body from the hole (the model's rest pose stands upright)
     float len = r * (3.0 + 17.0 * (1.0 - exp(-age * 0.1)));
@@ -122,7 +122,7 @@ function woundMaterial(base, uniforms, { posScale = 1, holeScale = 1, look = 'sk
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\n' + WOUND_GLSL)
       .replace('#include <clipping_planes_fragment>',
-        '#include <clipping_planes_fragment>\nvec3 wp = vWPos * uPosScale;\nvec2 wf = woundField(wp);\nif (wf.x < 1.0) discard;')
+        '#include <clipping_planes_fragment>\nvec3 wp = vWPos * uPosScale;\nvec2 wf = woundField(wp);\n' + (look === 'innards' ? 'if (wf.x > 3.5) discard;' : 'if (wf.x < 1.0) discard;'))
       .replace('#include <color_fragment>', '#include <color_fragment>\n' + paint)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n' + gloss);
   };
@@ -276,7 +276,14 @@ function buildInside(part) {
   // a downloaded (skinned) body's arms and legs do not line up exactly with their physics capsules, so a bone rod
   // there can show beside the limb: those show meat through a hole, and no bone
   const limb = !['torso', 'pelvis', 'head'].includes(part.name);
-  if (!(limb && part.skin.some((s) => s.mesh.isSkinnedMesh))) { const inn = innards(part.name); inn.userData.inside = true; part.mesh.add(inn); }
+  if (!(limb && part.skin.some((s) => s.mesh.isSkinnedMesh))) {
+    // and they are only drawn near a hole: that is the only place they can be seen, and elsewhere a downloaded body's own
+    // shape can leave a rib or the spine poking out through its skin (their mesh is in the part's own space: no origin)
+    const inn = innards(part.name);
+    inn.material = woundMaterial(innardMat, { ...uniforms, origin: { value: new THREE.Vector3() } }, { look: 'innards' });
+    inn.userData.inside = true;
+    part.mesh.add(inn);
+  }
 }
 
 /**

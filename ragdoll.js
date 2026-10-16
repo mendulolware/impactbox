@@ -81,6 +81,9 @@ const MODEL_OF = {
 // REST is how a body lies when relaxed, BRACE is the protective curl of someone falling.
 const REST = { spine: 0, neck: 0, shoulderL: 0.25, shoulderR: 0.25, elbowL: 0.45, elbowR: 0.45, hipL: 0.2, hipR: 0.2, kneeL: -0.35, kneeR: -0.35 };
 const BRACE = { spine: -0.3, neck: -0.35, shoulderL: 1.35, shoulderR: 1.35, elbowL: 0.6, elbowR: 0.6, hipL: 0.7, hipR: 0.7, kneeL: -1.0, kneeR: -1.0 };
+// A body dropping where it stands: for a moment the legs are pulled into a fold, as the knees and ankles give. (The shin
+// and the foot are one body here, so without it the legs stand on like stilts and the trunk folds over them.)
+const BUCKLE = { hipL: 1.3, hipR: 1.3, kneeL: -2.1, kneeR: -2.1 };
 const TWIST = { spine: 0.5, neck: 0.9, shoulderL: 1.2, shoulderR: 1.2, hipL: 0.7, hipR: 0.7 };
 // Recorded motion (assets/<name>.json, made by models/import_anim.py from Mixamo clips): a rotation per joint per
 // frame. walk and run are loops that take over from the worked-out stride; die is a stagger and fall that a person
@@ -245,6 +248,7 @@ export class Ragdoll {
     this.tone = 0.3;
     this.fallT = 9;
     this.twitch = 0;
+    this.buckle = 0;
 
     const skin = this.kind === 'zombie' ? 0x8fbf6a : SKIN[Math.floor(Math.random() * SKIN.length)];
     const colors = {
@@ -276,7 +280,7 @@ export class Ragdoll {
           .setRotation({ x: qYaw.x, y: qYaw.y, z: qYaw.z, w: qYaw.w })
           .setLinearDamping(0.05)
           .setCcdEnabled(true)      // thrown bodies must not pass through walls
-          .setAngularDamping(0.7)   // joint friction in muscles() does the real damping
+          .setAngularDamping(0.3)   // (air hardly slows a body turning over: joint friction in muscles() does the real damping)
       );
       let cd, g, len;
       if (d.shape === 'box') {
@@ -494,6 +498,10 @@ export class Ragdoll {
         this.tone = 0.35;                      // (it fades over a second: a stiffer fall)
         const k = 22;
         this.parts.torso.body.applyImpulse({ x: Math.sin(this.heading) * k, y: 0, z: Math.cos(this.heading) * k }, true);
+      } else if (this.fallT < 0.2) {           // on its feet a moment ago: the legs go first, one more than the other
+        this.buckle = 0.3;
+        const A = rnd(0, 0.8);                 // (how far forward: see muscles(). Going forward the hips stay straighter, or it kneels folded over)
+        this.buckleK = { L: rnd(0.7, 1), R: rnd(0.7, 1), H: A > 0.12 ? rnd(0.1, 0.45) : rnd(0.4, 1), A };
       }
     }
     this.twitch = cause === 'headshot' ? 1.3 : 1.0;   // nerves fire for a moment after death
@@ -1419,6 +1427,7 @@ export class Ragdoll {
       settled = this.dead && this.deadT > 4;
     }
 
+    if (!limpOnly && this.buckle > 0) this.buckle -= dt;
     for (const j of JOINTS) {
       if (this.severed.has(j.b)) continue;
       const slack = this.limp.has(j.b);       // nothing works this joint any more
@@ -1426,20 +1435,28 @@ export class Ragdoll {
       const A = this.parts[j.a], B = this.parts[j.b];
       if (A.gone || B.gone) continue;
       if (!wake && B.body.isSleeping()) continue;
-      const kp = (slack ? Math.min(tone, 0.04) : tone) * 81, kd = slack ? 3.6 : tone * 14 + 2.2;
+      const fold = this.buckle > 0 && j.name in BUCKLE;
+      const kp = fold ? 40 : (slack ? Math.min(tone, 0.04) : tone) * 81, kd = fold ? 4 : slack ? 3.6 : tone * 14 + 2.2;
       const ra = A.body.rotation(), rb = B.body.rotation();
       _q.set(ra.x, ra.y, ra.z, ra.w);
       _q2.set(rb.x, rb.y, rb.z, rb.w);
       _a.copy(j.refAxis).applyQuaternion(_q);  // the middle of the joint's range, as the parent holds it now
       _b.set(0, 1, 0).applyQuaternion(_q2);    // child's long axis
+      if (fold && j.axis) {
+        // and the ankle gives (the foot is part of the shin here): the shin tips forward over it, by a different amount
+        // each time. None and they sit down and fall back, some and they go over sideways, all and onto the knees and on their face
+        _v.set(1, 0, 0).applyQuaternion(_q2).multiplyScalar(-130 * this.buckleK.A * dt);
+        B.body.applyTorqueImpulse(_v, true);
+      }
       // inertia is stored about the part's centre; a limb swings about its end, which is ~4x more.
       // Without that factor the muscles are too weak to lift a limb against gravity.
       const I = Math.min(A.inertia, B.inertia) * 4;
       const wa = A.body.angvel(), wb = B.body.angvel();
       const wx = wb.x - wa.x, wy = wb.y - wa.y, wz = wb.z - wa.z;
+      if (settled && wx * wx + wy * wy + wz * wz < 0.09) continue;   // (a corpse at rest gets no more nudges, or it never sleeps)
 
       // --- pose: rotation that would take the child to its target, as an axis * angle
-      let x = brace ? BRACE[j.name] : REST[j.name];
+      let x = fold ? BUCKLE[j.name] * this.buckleK[j.name[0] === 'h' ? 'H' : j.name.slice(-1)] : brace ? BRACE[j.name] : REST[j.name];
       if (crawl && !slack) {
         // arms take turns reaching out past the head and dragging back; the head is held up
         const side = j.name.slice(-1);
@@ -1773,6 +1790,20 @@ export class Ragdoll {
 
     if (this.dead) {
       this.deadT += dt;
+      // come to rest: put to sleep. Left alone a body can rock by a hair for good (an arm pinned under it jitters, or a scrap
+      // of it does), which keeps all of it awake, shows, and costs every frame. Anything that touches it wakes it again.
+      if (this.deadT > 5) {
+        let e = 0, awake = false;   // (e: twice the kinetic energy, J. An arm jittering is a few hundredths, a leg falling over or a body sliding more)
+        for (const n in this.parts) {
+          const p = this.parts[n];
+          if (p.gone || !p.body.isDynamic() || p.body.isSleeping()) continue;
+          const v = p.body.linvel(), w = p.body.angvel();
+          e += p.body.mass() * (v.x * v.x + v.y * v.y + v.z * v.z) + p.inertia * (w.x * w.x + w.y * w.y + w.z * w.z);
+          awake = true;
+        }
+        this.stillT = !awake ? 0 : e < 0.4 ? (this.stillT || 0) + dt : 0;
+        if (this.stillT > 0.5) for (const n in this.parts) { const p = this.parts[n]; if (!p.gone && p.body.isDynamic()) p.body.sleep(); }
+      }
       // bitten and still in one piece: it gets back up
       if (this.infected && this.deadT > 6 && !this.crippled && !this.parts.head.gone && !this.parts.torso.gone
         && !this.severed.has('head') && !this.severed.has('torso')) {

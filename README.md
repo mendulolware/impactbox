@@ -206,7 +206,11 @@ what it wants: a heading, a speed, a gesture and something to look at. Steering 
 **Active ragdoll (`muscles()` in `ragdoll.js`).** Every joint is pulled toward a target angle with a strength called tone, plus joint friction and
 swing/twist limits. Each limit is measured from the middle of that joint's real range (`ref` in `JOINTS`), so a hip swings far forward and
 hardly back, and a joint at its limit absorbs the motion instead of springing back. A living NPC braces for a moment as it falls and writhes
-when badly hurt; a dead one drops at once and goes limp, with a few twitches.
+when badly hurt; a dead one drops at once and goes limp, with a few twitches. Air hardly slows a body turning over, so the parts' own
+angular damping is low (0.3); the joints' friction is what calms a body down. A corpse that has settled gets no more pulls from its
+muscles, and once it has been still for half a second (five seconds or more after death, with all its parts together carrying less
+than 0.4 J) it is put to sleep: left alone, an arm pinned under it or a scrap of meat wedged against it could jitter for good, which
+showed and kept the whole body awake. Anything that touches it wakes it again. Scraps of meat lying still go to sleep the same way.
 Light hits make a standing NPC flinch and stagger instead of dropping; legs, heads, blades, blasts, repeated hits and low health put it down.
 Getting up goes through a crouch (`squat`) instead of sliding straight to standing.
 
@@ -238,7 +242,7 @@ Rapier must stay at 0.21 or newer: older builds crash when an NPC is deleted aft
 ## Realism pass
 
 - **Stumbling** (`ragdoll.js`, `stumbleT`): a hard hit that does not kill no longer always drops someone. Most reel backward with their arms out and feet scrabbling, and then either catch themselves or go down; leg hits always end on the ground.
-- **Rounds carry on** (`fireGun` in `weapons.js`, `ctx.exitPoint` in `main.js`): each gun has `pen`, the metres of wall, door or crate it goes through (0.1 for a pistol, 0.3 to 0.35 for rifles, 0.7 for the sniper). A round that comes out the far side keeps 60% of its damage; one that only grazes a surface skips off it at half strength.
+- **Rounds carry on** (`fireGun` in `weapons.js`, `ctx.exitPoint` in `main.js`): each gun has `pen`, the metres of wall, door or crate it goes through (0.1 for a pistol, 0.3 to 0.35 for rifles, 0.7 for the sniper). A round that comes out the far side keeps 60% of its damage; one that only grazes a surface skips off it at half strength. Rounds go through people as well (`pierce`, how many bodies): the rifle, the AR-15, the minigun and the revolver go through one person and into whoever is behind them with half their damage, the sniper through three, halving each time; pistols, SMGs and buckshot stop in the first.
 - **Armour**: the soldier's vest and helmet stop anything with `pen` under 0.25 (pistols, SMGs, buckshot, the revolver) as a bruise, until they have soaked up 120 damage. Rifles go through.
 - **Reloading** drops the old magazine, and it stays where it lands (the last twelve do).
 - **Ears** (`deafen()` in `audio.js`): a nearby blast, or gunfire in the warehouse and the kill house, dulls everything and leaves a ringing that fades over a few seconds.
@@ -361,6 +365,13 @@ spent cases landing, rounds hitting concrete (some whine off), footsteps, and th
 
 Where a round lands decides how someone still on their feet takes it (`react` in `ragdoll.js`, posed in `computePose`): a leg hit often puts them down on that knee with a hand on it, then up again limping (instead of always falling); an arm or a shoulder spins them round with the arm thrown back; the belly (pelvis, or the lower half of the torso) folds them over it with both hands on it; the chest is the old flinch. Deaths vary too (`die`): on their feet, about a third stagger a few steps and fall (the recorded Walking To Dying clip; the dead stop thinking), some go over backwards still half rigid, and the rest drop where they stand. Head shots, gibs and the like are always a drop.
 
+**The drop** (`buckle` in `ragdoll.js`): the legs go first. For 0.3 s the knees and hips are pulled into a fold (`BUCKLE`, one leg a little
+more than the other), and the shins are tipped forward over the feet as the ankles give (the foot is part of the shin's body here, so
+without that push the legs stood on like stilts and the trunk folded over them: shot from behind, someone stayed bent double for up to
+2.5 s before going down). How far the ankles give is different every time, so some sit down and fall back, some go over sideways, and
+some go down on their knees and onto their face, with their hips kept straighter so they do not end up kneeling folded over. Whichever
+way they were shot, they are down in about 0.4 s.
+
 ## Zombie Survival
 
 Start screen or spawn menu (Modes). The map is reset and emptied of people, then waves of zombies come: wave n sends 4 + 3n, never more than 14 on their feet at once (8 when a phone is hosting), each from somewhere out of sight 12-26 m from the nearest player and on the players' own floor (not a roof or a wall top). Clear a wave and the next comes 6 s later. Three lives, shared in co-op: every death costs one, and when they are gone you are overrun (Enter goes again). The best wave reached is kept in the browser. The panel top right shows the wave, what is left, the lives, the points and the best (`survival.js`).
@@ -394,17 +405,19 @@ On the start screen, one player presses **Host a game** and gets a four-letter c
 `gore.js` has three layers:
 
 - **Particles.** Blood droplets are small, glossy and drawn out into streaks by their speed; a fine red mist hangs for half a second where a round went through; fire and smoke are soft-edged puffs.
-- **Decals.** Five kinds of mark, each drawn once at start-up (`SHAPES`, `bakeDecal`) with a melted outline, darker where the blood is thick, and a raised lip so it catches the light: impact splats, fine directional spatter behind a victim, runs that creep down walls, pools that spread under bodies, and smears where a bleeding body was dragged. Drops that land at an angle leave a long mark pointing the way they were going. Big decals are kept from hanging off edges (`_fit`).
+- **Decals.** Five kinds of mark, each drawn once at start-up (`SHAPES`, `bakeDecal`) with a melted outline, darker where the blood is thick, and a raised lip so it catches the light: impact splats, fine directional spatter behind a victim, runs that creep down walls, pools that spread under bodies (fast at first, then creeping on for 20 to 40 seconds), and smears where a bleeding body was dragged. Drops that land at an angle leave a long mark pointing the way they were going. Big decals are kept from hanging off edges (`_fit`).
 - **Chunks.** Physical pieces that depend on what was destroyed (`CHUNK_MIX`): skull plates, brain and eyes from a head; ribs, gut and organs from a torso; meat, fat and snapped bone from limbs. Each leaves a wet mark where it lands.
 
 `wounds.js` opens real holes in bodies. Each wound is a short line with a radius in the body part's local space (a point for a bullet,
 longer for a blade's gash), and the part's materials get a shader that discards every pixel inside it. The wound remembers which way
 the bullet or blade went and bores along that, so the hole opens cleanly wherever the skin is. The same shader soaks the skin and
-clothes around a wound with blood that spreads and then runs down the body as the wound ages (`woundClock`), and chars whatever an
+clothes around a wound with blood that spreads (fast for a few seconds, then on through the cloth for about a minute) and runs down the body as the wound ages (`woundClock`), and chars whatever an
 explosion burned (`burn`). Behind the skin: the skin's own back faces painted as the far wall of the cavity, a layer of meat (the same
 skin pulled in along its normals, with narrower holes, so the wound has depth), and innards (ribs, spine, lungs, heart, liver, gut, brain,
 limb bones) as one mesh per body part (on the downloaded people, arms and legs show meat and no bone: their limbs do not line up exactly
-with the physics capsules, and a bone rod there stood out beside the arm). Bullets cut a small entry hole (half the weapon's `hole`) and a
+with the physics capsules, and a bone rod there stood out beside the arm). Innards are drawn only within a few wound widths of a hole,
+the only place they can be seen from (`look: 'innards'`): elsewhere a downloaded body's own shape could leave the top rib standing out
+across the chest, or the spine through the back. Bullets cut a small entry hole (half the weapon's `hole`) and a
 torn, wider exit (nine tenths of it); hits near an existing hole widen it. A part holds up to 12 wounds.
 Soaked cloth and skin go near black-red, as blood in cloth does; pools are deep dark red, splats a little brighter.
 
