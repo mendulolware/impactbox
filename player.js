@@ -58,6 +58,8 @@ export class Player {
     this.deadT = 0;
     this.sinceHurt = 99;
     this.hurtFlash = 0;
+    this.peak = null;          // the highest point since leaving the ground (fall damage)
+    this.limpT = 0;            // seconds left of slow legs after a hard landing
   }
 
   /** Put the player somewhere else (a new map), facing `yaw`. That becomes where they come back to life. */
@@ -72,6 +74,20 @@ export class Player {
     this.kickPitch = this.kickYaw = this.recV = this.recW = 0;
     this.health = 100;
     this.dead = false;
+    this.peak = null;
+  }
+
+  /**
+   * Landing from a fall of `drop` metres: from 3 m it hurts, from about 10 it kills (14 a metre over 3), the view
+   * jolts, and from 5 m the legs are slow for a few seconds. Indestructible only feels it.
+   */
+  landed(drop) {
+    const sfx = this.ctx.sfx;
+    sfx?.thud(Math.min(1.6, 0.6 + drop / 8));
+    if (drop > 5) sfx?.crack();
+    this.shake = Math.min(1, this.shake + drop * 0.08);
+    if (drop > 5 && !this.indestructible) this.limpT = Math.max(this.limpT, drop * 0.6);
+    this.hurt((drop - 3) * 14, null);
   }
 
   /** Something hit the player. `from` is where it came from. */
@@ -126,6 +142,8 @@ export class Player {
         this.pos.set(this.spawn.x, this.spawn.y, this.spawn.z);
         this.body.setTranslation(this.spawn, true);
         this.vel.set(0, 0, 0);
+        this.peak = null;
+        this.limpT = 0;
       }
     } else if (this.sinceHurt > 5) {
       this.health = Math.min(100, this.health + 9 * rdt);
@@ -150,7 +168,8 @@ export class Player {
     const wd = this.ctx.water?.depth(this.pos.x, this.pos.y - 0.4, this.pos.z);
     const swim = wd !== null && wd !== undefined && wd > 0;
     this.swimming = swim;
-    const speed = (sprint ? 9 : 5.2) * (1 - 0.45 * ads) * (swim ? 0.5 : 1);
+    if (this.limpT > 0) this.limpT -= rdt;
+    const speed = (sprint ? 9 : 5.2) * (1 - 0.45 * ads) * (swim ? 0.5 : 1) * (this.limpT > 0 ? 0.55 : 1);
     const accel = this.grounded ? 14 : swim ? 4 : 3.5;
     const a = Math.min(1, accel * dt);
     this.vel.x += (wx * speed - this.vel.x) * a;
@@ -170,9 +189,18 @@ export class Player {
     this.body.setNextKinematicTranslation({ x: this.pos.x, y: this.pos.y, z: this.pos.z });
 
     this.grounded = this.cc.computedGrounded();
+    // fall damage: measured from the highest point since leaving the ground (water takes a fall; in a car or flying the drone there is none)
+    if (swim || this.ctx.car || this.ctx.drone || this.dead || this.peak === null) this.peak = this.pos.y;
+    else if (!this.grounded) this.peak = Math.max(this.peak, this.pos.y);
+    else {
+      const drop = this.peak - this.pos.y;
+      this.peak = this.pos.y;
+      if (drop > 3) this.landed(drop);
+    }
     if (this.grounded && this.vel.y < 0) this.vel.y = 0;
     if (mv.y < desired.y - 1e-4 && this.vel.y > 0) this.vel.y = 0; // bumped head
     if (this.pos.y < -25) {
+      this.peak = null;
       this.pos.set(this.spawn.x, this.spawn.y, this.spawn.z);
       this.body.setTranslation(this.spawn, true);
       this.body.setNextKinematicTranslation(this.spawn);

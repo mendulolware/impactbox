@@ -69,6 +69,7 @@ const SPACES = {
   house:     { wet: 0.45, bed: 'hum', indoor: 1 },
   pool:      { wet: 0.3,  bed: 'wind' },
   office:    { wet: 0.35, bed: 'hum', indoor: 1 },
+  nattklubb: { wet: 0.4,  bed: 'club', indoor: 1 },
 };
 
 let volume = 1;
@@ -195,6 +196,31 @@ export function setSpace(id) {
   bed = ambience(s.bed);
 }
 
+/** One bar of four-to-the-floor at 124 bpm: a kick on every beat, and a bass note and a hat between them. */
+let clubBar = null, clubAt = 0;
+/** Beats since the club's music started, as heard (the nightclub's lights and dancers keep time to it). */
+export function clubBeat() {
+  if (!ac) return performance.now() / 1000 * 124 / 60;
+  return (ac.currentTime - clubAt - (ac.outputLatency || ac.baseLatency || 0)) * 124 / 60;
+}
+function makeClubBar() {
+  const sr = ac.sampleRate, beat = 60 / 124, n = Math.round(sr * beat * 4), buf = ac.createBuffer(1, n, sr), d = buf.getChannelData(0);
+  const bass = [55, 55, 65.4, 49];        // A, A, C, G
+  for (let b = 0; b < 4; b++) {
+    const k0 = Math.round(b * beat * sr), h0 = k0 + Math.round(beat * sr / 2);
+    for (let i = 0; i < sr * 0.3 && k0 + i < n; i++) {           // the kick: a thump falling from 120 Hz to 45
+      const t = i / sr;
+      d[k0 + i] += Math.sin(2 * Math.PI * (45 * t + 2.5 * (1 - Math.exp(-t * 30)))) * Math.exp(-t * 9) * 0.9;
+    }
+    for (let i = 0; i < sr * 0.22 && h0 + i < n; i++) {
+      const t = i / sr, f = bass[b];
+      d[h0 + i] += (Math.sin(2 * Math.PI * f * t) + 0.35 * Math.sin(4 * Math.PI * f * t)) * Math.min(1, t * 200) * Math.exp(-t * 7) * 0.45;
+      if (t < 0.05) d[h0 + i] += (Math.random() * 2 - 1) * Math.exp(-t * 90) * 0.16;
+    }
+  }
+  return buf;
+}
+
 /** A looping background. Returns { gain, stop }. */
 function ambience(kind) {
   const g = ac.createGain();
@@ -227,6 +253,16 @@ function ambience(kind) {
   else if (kind === 'hum') { hum(60, 0.01); loop(260, 0.5, 0.02); }
   else if (kind === 'city') { loop(210, 0.5, 0.045); }
   else if (kind === 'rain') { loop(2600, 0.3, 0.07, 'bandpass'); loop(700, 0.5, 0.03); }
+  else if (kind === 'club') {            // the club's music: one bar, made once, round and round (and the crowd under it)
+    const src = ac.createBufferSource(), lv = ac.createGain();
+    src.buffer = clubBar ??= makeClubBar();
+    src.loop = true;
+    lv.gain.value = 0.17;
+    src.connect(lv); lv.connect(g); src.start();
+    clubAt = ac.currentTime;
+    nodes.push(src);
+    loop(330, 0.5, 0.014);
+  }
   g.gain.setTargetAtTime(1, ac.currentTime, 0.8);
   return { gain: g, stop: () => { for (const n of nodes) { try { n.stop(); } catch (e) { /* already stopped */ } } g.disconnect(); } };
 }

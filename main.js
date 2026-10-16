@@ -1015,6 +1015,7 @@ function tick(now) {
   hum(active && !ctx.car && ctx.weapons.current.laser ? Math.min(1, ctx.weapons.swing * 3.5) : null);   // (the laser sword, while it is out)
   flyDrone(now);
   for (const d of ctx.doors) d.update(sdt);
+  ctx.map.builder.tick?.(sdt);          // (a map's own moving parts: the nightclub's lights)
   // footsteps: one for every half turn of the walk cycle
   const stepN = Math.floor(ctx.player.bob / Math.PI);
   if (stepN !== lastStep) {

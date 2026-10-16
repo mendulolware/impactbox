@@ -214,7 +214,7 @@ class Timeline {
       for (const e of s.events || []) if (!e.done && lt >= e[0]) { e.done = true; e[1](ctx, this.state); }
       ctx.timeScale = s.slow && lt >= s.slow[0] && lt < s.slow[1] ? s.slow[2] : 1;
       s.each?.(ctx, this.state, lt);
-      if (!s.player) { const pl = ctx.player; pl.body.setTranslation(FAR, true); pl.body.setNextKinematicTranslation(FAR); pl.vel.set(0, 0, 0); }
+      if (!s.player) { const pl = ctx.player; pl.body.setTranslation(FAR, true); pl.body.setNextKinematicTranslation(FAR); pl.vel.set(0, 0, 0); pl.peak = null; }   // (peak: no fall damage from up there)
       ctx.debugStep(1);
     }
     this.t += STEP;

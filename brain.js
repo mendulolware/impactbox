@@ -204,6 +204,11 @@ export class Brain {
       if (this.walking) this.wanderHeading = this.npc.heading + rnd(-2.2, 2.2);
     }
     const r = this.npc.root;
+    const spot = this.npc.spot;          // somewhere they belong (a clubber on the dance floor, someone at the bar): they stay, or go back
+    if (spot) {
+      this.walking = Math.hypot(spot.x - r.x, spot.z - r.z) > 1.2;
+      if (this.walking) this.wanderHeading = headingTo(spot.x - r.x, spot.z - r.z);
+    }
     const b = this.ctx.map.bounds;       // strayed off the map: head back in
     if (r.x < b.x0 || r.x > b.x1 || r.z < b.z0 || r.z > b.z1) this.wanderHeading = headingTo((b.x0 + b.x1) / 2 - r.x, (b.z0 + b.z1) / 2 - r.z);
     this.goal.mode = 'wander';

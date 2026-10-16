@@ -1,4 +1,5 @@
 import { PROP_TYPES } from './props.js';
+import { clubBeat } from './audio.js';
 
 // The maps. Each one is a description:
 //   sky       time of day (SKIES in world.js)
@@ -38,6 +39,46 @@ function windows(b, axis, a0, a1, fixed, out, h, glass, lit, opts = {}) {
       else b.box(fixed + out * 0.03, y, a, 0.08, wh, w, m, { solid: false });
     }
   }
+}
+
+/** The club's name in pink neon, for nattklubb's sign() calls: a soft glow round a hot white core. */
+function neonName(g, W, H) {
+  const text = 'TYRS NATTKLUBB';
+  let size = Math.round(H * 0.62);
+  g.font = `italic 800 ${size}px "Barlow Condensed", Impact, "Arial Narrow", sans-serif`;
+  const fit = (W * 0.94) / g.measureText(text).width;
+  if (fit < 1) { size = Math.floor(size * fit); g.font = `italic 800 ${size}px "Barlow Condensed", Impact, "Arial Narrow", sans-serif`; }
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.shadowColor = '#ff2bd6'; g.shadowBlur = H * 0.22; g.fillStyle = '#ff6ae4';
+  g.fillText(text, W / 2, H * 0.52);
+  g.shadowBlur = 0; g.fillStyle = '#ffe9fb';
+  g.fillText(text, W / 2, H * 0.52);
+}
+
+/** The Wall of Fame: a gold-framed board, a star, and the one name on it. */
+function wallOfFame(g, W, H) {
+  const bg = g.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, '#2c0a18'); bg.addColorStop(1, '#13040b');
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  g.strokeStyle = '#d4a64a'; g.lineWidth = 16; g.strokeRect(12, 12, W - 24, H - 24);
+  g.lineWidth = 3; g.strokeRect(38, 38, W - 76, H - 76);
+  const star = (cx, cy, R) => {
+    g.beginPath();
+    for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, k = i % 2 ? R * 0.42 : R; g.lineTo(cx + Math.cos(a) * k, cy + Math.sin(a) * k); }
+    g.closePath(); g.fill();
+  };
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = '#e8c46a';
+  g.font = '700 64px "Barlow Condensed", "Arial Narrow", sans-serif';
+  if ('letterSpacing' in g) g.letterSpacing = '14px';
+  g.fillText('WALL OF FAME', W / 2, H * 0.16);
+  if ('letterSpacing' in g) g.letterSpacing = '0px';
+  g.shadowColor = '#ffcf6a'; g.shadowBlur = 26;
+  star(W / 2, H * 0.41, H * 0.15);
+  for (const s of [-1, 1]) star(W / 2 + s * W * 0.3, H * 0.44, H * 0.06);
+  g.font = '900 196px "Barlow Condensed", Impact, sans-serif';
+  g.fillStyle = '#f2cf72';
+  g.fillText('ANTON', W / 2, H * 0.75);
 }
 
 export const MAPS = {
@@ -766,6 +807,151 @@ export const MAPS = {
       at('table', 14.5, 9, 0); at('chair', 13.6, 9.4, 1.4); at('chair', 15.4, 8.6, -1.6);
       at('chair', 14, -8.6, Math.PI); at('crate', -12, 5, 0.2); at('crate', -12.6, 5.2, 0.6); at('propane', 16.9, 6);
       at('car', -12, 21.5, Math.PI / 2); at('car', 9, 26, -Math.PI / 2); at('cone', 3, 19.8); at('cone', -3, 19.8);
+    },
+  },
+  // ------------------------------------------------------------------------------------ nightclub
+  nattklubb: {
+    id: 'nattklubb', name: 'Tyrs Nattklubb', icon: '🪩', blurb: 'a nightclub: dance floor, bar, DJ, VIP balcony, the Wall of Fame',
+    sky: 'night', spawn: { x: 0, y: 1.0, z: 15 }, yaw: 0, bounds: { x0: -15, x1: 15, z0: -11, z1: 13 },     // (a night sky, but not night mode: the club has its own lights, no flashlight needed)
+
+    build(b) {
+      const H = 5, T = 0.3, H2 = Math.PI / 2, D = 1.3, V = 2.4;            // V: the VIP balcony's floor
+      const wall = b.mat('concrete', 0x23212b, { roughness: 0.9 });
+      const floor = b.mat('plain', 0x111115, { roughness: 0.3, metalness: 0.2 });
+      const black = b.mat('plain', 0x131317, { roughness: 0.5 });
+      const ceil = b.mat('plain', 0x0a0a0d, { roughness: 1 });
+      const velvet = b.mat('plain', 0x6a0e28, { roughness: 1 });
+      const wood = b.mat('planks', 0x4a2c18);
+      const top = b.mat('plain', 0x18181d, { roughness: 0.12, metalness: 0.6 });
+      const brass = b.mat('metal', 0xc9a25a, { metalness: 0.9, roughness: 0.3 });
+      const chrome = b.mat('plain', 0xe0e0e0, { metalness: 1, roughness: 0.04 });
+      const tilew = b.mat('concrete', 0xe6e6e2, { roughness: 0.6 });
+      const mirror = b.mat('plain', 0x9aa8b2, { metalness: 1, roughness: 0.05 });
+      const glass = b.mat('plain', 0xa8c8ff, { transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.4 });
+      const con = b.mat('concrete', 0x8c8e90);
+      const road = b.mat('asphalt', 0x4a4c50);
+      const neon = (c, k = 2.5) => b.mat('plain', 0x111111, { emissive: c, emissiveIntensity: k, roughness: 0.4 });
+      const PINK = 0xff2bd6, CYAN = 0x2be8ff, VIOLET = 0x8a4dff, GOLD = 0xffb030;
+      const bottles = [0x2f7a3a, 0x8a5a1a, 0xa8c8d8, 0x6a1a2a].map((c) => b.mat('plain', c, { emissive: c, emissiveIntensity: 0.6, roughness: 0.1, transparent: true, opacity: 0.85 }));
+      const dr = (x, z, yaw, locked = false) => b.door(x, z, yaw, { wallH: H, wallT: T, gap: D, locked });
+
+      b.ground();
+      b.box(0, 0.01, -1, 32, 0.02, 22, floor);
+      b.box(0, H + 0.1, -1, 32.6, 0.2, 22.6, ceil);                         // the ceiling, and the roof over it
+      b.box(0, H + 0.4, -1, 33, 0.4, 23, con);
+      b.box(0, 0.01, 18, 70, 0.02, 8, road, { solid: false });             // the street out front, and its pavement
+      b.box(0, 0.06, 12.1, 70, 0.12, 3.8, con);
+
+      // the shell: one way in, from the street, through a short hall past the cloakroom
+      b.wall(-16, -12, 16, -12, H, T, wall);
+      b.wall(-16, -12, -16, 10, H, T, wall);
+      b.wall(16, -12, 16, 10, H, T, wall);
+      b.wall(-16, 10, 16, 10, H, T, wall, [[0.5, 2.6]]);
+      dr(-0.65, 10, 0); dr(0.65, 10, 0);
+      b.box(0, 3.0, 10.9, 4.2, 0.12, 1.5, black);                           // the canopy over the door
+      for (let x = 3.2; x <= 9.2; x += 1.5) b.cyl(x, 0.6, 11.2, 0.05, 0.96, brass);   // the queue, behind a rope
+      b.box(6.2, 0.95, 11.2, 6, 0.05, 0.05, velvet, { solid: false });
+      b.wall(-2.6, 6, -2.6, 10, H, 0.2, wall);
+      b.wall(2.6, 6, 2.6, 10, H, 0.2, wall);
+      b.box(2.0, 0.55, 8.2, 0.7, 1.1, 2.4, wood); b.box(2.0, 1.12, 8.2, 0.8, 0.05, 2.5, top);
+      b.light(0, 3.4, 8, 0xff5ab0, 7, 7);
+      b.light(0, 4.4, 13, 0xffc070, 10, 12);                                // the street lamp
+
+      // the toilets (south-west): three stalls, a row of sinks under a mirror
+      b.wall(-16, 5, -9, 5, H, 0.2, tilew, [[5 / 7, D]]);
+      dr(-11, 5, 0);
+      b.wall(-9, 5, -9, 10, H, 0.2, tilew);
+      for (const z of [6.75, 8.35]) b.box(-15.1, 1.0, z, 1.8, 2.0, 0.06, black);
+      b.box(-9.45, 0.85, 7.6, 0.55, 0.12, 3.0, tilew); b.box(-9.13, 1.75, 7.6, 0.03, 1.0, 3.0, mirror, { solid: false });
+      b.light(-12.5, 3.2, 7.5, 0xdfe8ff, 6, 8);
+
+      // the manager's office (south-east): locked
+      b.wall(9, 5, 16, 5, H, 0.2, wall, [[2 / 7, D]]);
+      dr(11, 5, 0, true);
+      b.wall(9, 5, 9, 10, H, 0.2, wall);
+      b.box(13.5, 0.38, 8.6, 2.0, 0.76, 0.9, wood); b.box(15.4, 0.6, 6.2, 0.8, 1.2, 0.8, black);   // a desk, the safe
+      b.light(12.5, 3.2, 7.5, 0xffe2b0, 5, 7);
+
+      // the bar (west): the counter, the back bar with its shelves of bottles in front of a mirror, stools
+      b.box(-11.8, 0.55, -2, 0.7, 1.1, 9, wood); b.box(-11.8, 1.12, -2, 0.9, 0.05, 9.2, top);
+      b.box(-11.44, 0.08, -2, 0.02, 0.06, 9, neon(GOLD, 1.5), { solid: false });
+      b.box(-15.45, 0.5, -2, 0.8, 1.0, 10, wood); b.box(-15.45, 1.02, -2, 0.85, 0.04, 10, top);
+      b.box(-15.83, 2.1, -2, 0.02, 1.6, 10, mirror, { solid: false });
+      for (const y of [1.5, 2.05, 2.6]) {
+        b.box(-15.6, y, -2, 0.4, 0.03, 10, chrome, { solid: false });
+        for (let z = -6.7; z <= 2.7; z += 0.4) b.cyl(-15.6, y + 0.15, z + b.rnd(-0.08, 0.08), 0.035, 0.26 + b.rnd(-0.04, 0.06), bottles[(b.rnd() * 4) | 0], { solid: false, sides: 8 });
+      }
+      for (let z = -6; z <= 2; z += 1.15) { b.cyl(-10.9, 0.38, z, 0.05, 0.76, brass); b.cyl(-10.9, 0.78, z, 0.2, 0.06, velvet); }
+      b.light(-13.6, 4.2, -2, 0xffa850, 20, 11);
+
+      // the DJ (north): a stage with a lit edge and steps up, the booth, speaker stacks, and the club's name in neon
+      b.box(0, 0.4, -10.25, 12, 0.8, 3.5, black);
+      b.box(0, 0.79, -8.49, 12, 0.03, 0.06, neon(VIOLET, 2), { solid: false });
+      b.stairs(-4.5, -7.5, 0, -1, 1.6, 3, 0.8 / 3, 0.33, black);
+      b.box(0, 1.35, -9.6, 3.4, 1.1, 0.8, black); b.box(0, 1.92, -9.6, 3.5, 0.04, 0.9, top);
+      for (const x of [-1, 1]) b.cyl(x, 1.96, -9.6, 0.17, 0.03, chrome, { solid: false });
+      b.box(0, 1.96, -9.6, 0.5, 0.04, 0.35, neon(CYAN, 1.2), { solid: false });
+      b.box(0, 1.35, -9.19, 3.3, 0.05, 0.02, neon(PINK, 2.2), { solid: false });
+      for (const x of [-7.6, 7.6]) {
+        b.box(x, 1.5, -10.6, 1.4, 3.0, 1.2, black);
+        for (const y of [0.7, 1.6, 2.5]) b.cyl(x, y, -9.99, 0.38, 0.04, chrome, { rx: H2, solid: false });
+      }
+      b.sign(0, 3.6, -11.83, 9, 1.6, neonName, { glow: 2.2 });
+      b.sign(0, 3.9, 10.17, 7.5, 1.35, neonName, { glow: 2.4 });                    // and outside, over the door
+
+      // the dance floor: lit tiles in four colours, a mirror ball over it on a truss
+      const tiles = [PINK, CYAN, VIOLET, GOLD].map((c) => b.mat('plain', 0x0c0c10, { emissive: c, emissiveIntensity: 0.4, roughness: 0.15 }));
+      for (let i = 0; i < 12; i++) for (let j = 0; j < 9; j++) b.box(-5.5 + i, 0.025, -7 + j, 0.94, 0.03, 0.94, tiles[(i + 2 * j + ((i * j) % 3)) % 4], { solid: false });
+      b.ball(0, 4.1, -3, 0.45, chrome);
+      b.box(0, 4.78, -3, 0.03, 0.45, 0.03, chrome, { solid: false });
+      b.box(0, 4.6, -3, 12, 0.12, 0.12, chrome, { solid: false }); b.box(0, 4.6, -3, 0.12, 0.12, 9, chrome, { solid: false });
+      for (const z of [-6.5, 1.5]) { b.cyl(-8.5, H / 2, z, 0.3, H, black); b.cyl(-8.5, 2.6, z, 0.32, 0.06, neon(PINK, 2), { solid: false }); }
+      const lamps = [b.light(-3.5, 4.3, -5, PINK, 26, 12), b.light(3.5, 4.3, -5, CYAN, 26, 12), b.light(0, 4.3, 0.5, VIOLET, 26, 12), b.light(0, 3.8, -10.6, 0x4060ff, 12, 8)];
+      for (const l of lamps) l.base = l.light.intensity;
+
+      // the VIP balcony (east), up its own stairs, behind glass: sofas, a lounge under it, and the Wall of Fame
+      b.box(13, V - 0.125, -6, 6, 0.25, 12, floor);
+      for (const z of [-11.5, -6, -0.6]) b.box(10.3, (V - 0.25) / 2, z, 0.35, V - 0.25, 0.35, black);
+      b.stairs(10.8, 3.4, 0, -1, 1.4, 8, V / 8, 3.4 / 8, black);
+      for (let i = 0; i < 6; i++) b.pane(10.1, V + 0.5, -11 + 2 * i, 1.9, 1.0, 0.03, glass, { ry: H2 });
+      for (let i = 0; i <= 6; i++) b.box(10.1, V + 0.55, -12 + 2 * i, 0.06, 1.1, 0.06, brass);
+      b.box(10.1, V + 1.08, -6, 0.07, 0.05, 12, brass, { solid: false });
+      for (const x of [12.7, 14.9]) b.pane(x, V + 0.5, 0.05, 2.1, 1.0, 0.03, glass);
+      for (const x of [11.6, 13.8, 15.9]) b.box(x, V + 0.55, 0.05, 0.06, 1.1, 0.06, brass);
+      b.box(13.75, V + 1.08, 0.05, 4.3, 0.05, 0.07, brass, { solid: false });
+      for (const [y, z] of [[0, -9], [0, -3], [V, -10], [V, -2.2]]) {                // sofas along the east wall, down and up
+        b.box(15.45, y + 0.25, z, 0.8, 0.5, 2.6, velvet); b.box(15.8, y + 0.7, z, 0.2, 0.9, 2.6, velvet);
+      }
+      b.light(13, 1.9, -6, 0xff4060, 5, 6);
+      b.light(12.5, 4.5, -6, 0xff3a70, 10, 9);
+      b.box(15.86, V + 1.55, -6.1, 0.04, 2.2, 4.0, brass, { solid: false });          // the Wall of Fame: gold frame...
+      b.sign(15.83, V + 1.55, -6.1, 3.8, 2.0, wallOfFame, { ry: -H2, glow: 0.3 });   // ...and what is on it (kept clear: nobody stands in front of it)
+
+      // the lights keep time with the music: each beat the next colour of tiles flares, and the lights over the floor pulse
+      b.tick = () => {
+        const bt = clubBeat(), n = Math.floor(bt), flash = Math.exp(-(bt - n) * 4);
+        b.ctx.beat = bt;                                                    // (the dancers: ragdoll.js)
+        tiles.forEach((m, i) => { m.emissiveIntensity = 0.3 + (i === ((n % 4) + 4) % 4 ? 1.5 * flash : 0.1); });
+        lamps.forEach((l, i) => { if (!l.off) l.light.intensity = l.base * (0.45 + ((n + i) % 3 === 0 ? 1.1 * flash : 0.25)); });
+      };
+    },
+
+    populate(ctx) {
+      const { at, npc } = crew(ctx);
+      const put = (x, z, kind, dance, base = 0, yaw = Math.random() * TAU) => { const r = npc(x, z, kind, base, yaw); if (r) r.spot = { x, z, dance }; return r; };
+      // (phones keep the last 18 made: the dance floor goes last, so it is never the one left empty)
+      put(-1.6, 7.4, 'thug', false, 0, Math.PI); put(9.6, 2.6, 'thug', false, 0, Math.PI);   // the door, and the VIP stairs
+      put(-13.5, -2, null, false, 0, -Math.PI / 2);                                        // behind the bar
+      for (const z of [-5.4, -2.6, 0.6]) put(-10.4, z, null, false, 0, Math.PI / 2);         // at it
+      put(12.2, -9.6, 'thug', false, 2.4); put(12.0, -10.9, null, true, 2.4); put(12.2, -3.2, null, false, 2.4);
+      put(14.2, -6, null, false);                                                          // in the lounge under the balcony
+      put(-12.4, 7.6, null, false);                                                        // in the toilets
+      put(0, -10.3, null, true, 0.8, Math.PI);                                             // the DJ
+      for (let i = 0; i < 11; i++) put(-5 + Math.random() * 10, -6.5 + Math.random() * 7.5, null, true, 0, (Math.random() - 0.5) * 1.2);
+      at('table', 13.6, -9, 0); at('table', 13.6, -3, 0); at('table', 13.4, -10, 0, 2.4); at('table', 13.4, -2.2, 0, 2.4);
+      for (const z of [5.9, 7.55, 9.2]) at('toilet', -15.55, z, Math.PI / 2);
+      at('barrel', 14.6, 9.2); at('barrel', 15.3, 9.2); at('crate', 10, 9.3); at('crate', 10.1, 9.3, 0.3, 0.62);
+      at('car', -9, 16.6, Math.PI / 2); at('car', 10, 20.2, -Math.PI / 2); at('cone', -3.4, 14.2); at('cone', 3.4, 14.2);
     },
   },
 };

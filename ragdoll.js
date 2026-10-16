@@ -1188,6 +1188,21 @@ export class Ragdoll {
         shLy = mix(shLy, 0.5, rk); shRy = mix(shRy, -0.5, rk);
       }
     }
+    // dancing: a clubber on their spot, in time with the music (ctx.beat counts beats: maps.js, the nightclub)
+    this.danceW = (this.danceW || 0) + ((this.spot?.dance && this.brain?.state === 'calm' ? 1 : 0) - (this.danceW || 0)) * Math.min(1, dt * 3);
+    const dw = this.danceW * idle;
+    if (dw > 0.01) {
+      const bt = (this.ctx.beat ?? t * 124 / 60) + pv * 0.12;           // (not all of them quite on it)
+      const bounce = Math.pow(Math.abs(Math.cos(Math.PI * bt)), 3), sway = Math.sin(Math.PI * bt / 2);   // down on every beat, side to side over two
+      hipL += 0.3 * bounce * dw; hipR += 0.3 * bounce * dw;
+      kneeL -= 0.45 * bounce * dw; kneeR -= 0.45 * bounce * dw;
+      spX -= 0.08 * bounce * dw; spY += 0.25 * sway * dw; spZ += 0.12 * sway * dw;
+      nkX += 0.18 * bounce * dw;
+      const air = pv > 0.5;                                                // half have their hands in the air
+      shLx = mix(shLx, air ? 2.6 + 0.3 * sway : 0.9 + 0.5 * sway, dw); shRx = mix(shRx, air ? 2.6 - 0.3 * sway : 0.9 - 0.5 * sway, dw);
+      shLz = mix(shLz, air ? 0.35 : 0.2, dw); shRz = mix(shRz, air ? -0.35 : -0.2, dw);
+      elL = mix(elL, air ? 0.4 : 1.5 + 0.3 * bounce, dw); elR = mix(elR, air ? 0.4 : 1.5 + 0.3 * bounce, dw);
+    }
     // getting up: folded forward, hands leaving the ground
     spX = mix(spX, -0.6, sq);
     shLx = mix(shLx, 0.7, sq); shRx = mix(shRx, 0.7, sq);
@@ -1612,6 +1627,24 @@ export class Ragdoll {
     // pv trails the real velocity by a few frames, so a stop spread over several steps (legs
     // crumpling under a long fall) counts the same as one that happens in a single step
     const lag = 1 - Math.exp(-this.lastDt / 0.06);
+    // feet first from about 4 m up: the legs take it, and break (then the limp, or the crawl if both went)
+    for (const s of ['L', 'R']) {
+      const p = this.parts['shin' + s];
+      if (p.gone || this.isFree(p.name)) continue;
+      const v = p.body.linvel();
+      if (!this.dead && this.lame[s] < 1 && this.impactMute <= 0 && Math.hypot(v.x - p.pv.x, v.y - p.pv.y, v.z - p.pv.z) > 8.2) {
+        if (touching === null) touching = this.touching();
+        if (touching) {
+          p.hp = Math.min(p.hp, 1);
+          this.lame[s] = 1;
+          if (this.lame.L >= 1 && this.lame.R >= 1) this.crippled = true;
+          this.ctx.soundAt = p.body.translation();
+          this.ctx.sfx.crack();
+          this.damage(15, 'impact');
+        }
+      }
+      p.pv.x += (v.x - p.pv.x) * lag; p.pv.y += (v.y - p.pv.y) * lag; p.pv.z += (v.z - p.pv.z) * lag;
+    }
     for (const n of CORE) {
       const p = this.parts[n];
       if (p.gone) continue;
@@ -1648,7 +1681,7 @@ export class Ragdoll {
     const { gore, sfx } = this.ctx;
     this.impactMute = 0.2;                    // one landing, one injury
     const head = p.name === 'head';
-    const dmg = over * 10 * (this.kind === 'zombie' ? 0.4 : 1);
+    const dmg = over * 13 * (this.kind === 'zombie' ? 0.4 : 1);
     const t = p.body.translation();
     this.ctx.soundAt = t;
     const sp = p.pv.length() || 1;

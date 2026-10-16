@@ -403,6 +403,39 @@ export class MapBuilder {
     return p;
   }
 
+  /**
+   * A flat picture: words on a wall, a sign. paint(g, W, H) draws it on a 2D canvas (W is 1024; H keeps the shape).
+   * Scenery: nothing touches it. o: ry (radians, 0 faces +z), glow (lit from within, like neon, by this much;
+   * what is left clear on the canvas is see-through then).
+   */
+  sign(x, y, z, w, h, paint, o = {}) {
+    const c = document.createElement('canvas');
+    c.width = 1024; c.height = Math.round(1024 * h / w);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    const draw = () => { const g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height); paint(g, c.width, c.height); tex.needsUpdate = true; };
+    draw();
+    document.fonts?.ready.then(() => { if (!this.gone) draw(); });      // (again once the page's fonts are in)
+    const mat = new THREE.MeshStandardMaterial(o.glow
+      ? { map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: o.glow, transparent: true, alphaTest: 0.05, roughness: 0.9 }
+      : { map: tex, roughness: 0.9 });          // (matte: a lamp in front would wash a sheen over it)
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+    mesh.position.set(x, y, z);
+    mesh.rotation.y = o.ry || 0;
+    mesh.receiveShadow = !o.glow;
+    this.group.add(mesh);
+    this.trash.push(tex, mat, mesh.geometry);
+    return mesh;
+  }
+
+  /** A ball (scenery: a mirror ball, a lamp globe). */
+  ball(x, y, z, r, material) {
+    const g = new THREE.SphereGeometry(r, 20, 14);
+    g.translate(x, y, z);
+    this._add(g, material);
+  }
+
   /** Water from x0..x1, z0..z1 with its surface at y (water.js does the floating, the swimming and the rest). */
   water(x0, x1, z0, z1, y, bottom) { this.ctx.water.add(this.group, x0, x1, z0, z1, y, bottom); }
 
@@ -429,6 +462,7 @@ export class MapBuilder {
   }
 
   dispose() {
+    this.gone = true;
     this.ctx.water?.clear();
     for (const p of this.panes) p.dispose();
     for (const l of this.lamps) l.dispose();
