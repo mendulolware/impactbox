@@ -5,7 +5,8 @@ import { woundHooks, openWound, burn } from './wounds.js';
 import { sfx, farAway } from './audio.js';
 import { makeTrap } from './traps.js';
 import { WEAPONS } from './weapons.js';
-import { Link } from './net.js';
+import { Link, Lobbies } from './net.js';
+import { MAPS } from './maps.js';
 
 // Co-op for two (net.js does the connecting).
 //
@@ -31,6 +32,7 @@ const GORE = ['blood', 'drip', 'mist', 'gush', 'gibs', 'sparks', 'debris', 'expl
 const OWN_SFX = new Set(['step', 'tick', 'pop', 'playerHurt']);    // the host's own: not worth hearing on the other side
 const OWN_TOAST = /^(INDESTRUCTIBLE|SUPPRESSOR|SEMI|AUTO|EMPTY|JAMMED|DRONE|RAIN|DRY|NIGHT|DAY|GRAPHICS|RECORDING|CLEARED|SANDBOX|SQUAD|LASER|ROPE|WELD|UNTIED|NOTHING TO TIE|YOU DIED|PLAYER 2)/;
 const UP = new THREE.Vector3(0, 1, 0);
+const OPTS = { night: 'Night', rain: 'Rain', swat: 'Ready or Not', surv: 'Zombie Survival' };   // what a listed game is playing
 const V = (o) => new THREE.Vector3(o.x, o.y, o.z);
 const P = (v) => (v ? { x: +v.x.toFixed(4), y: +v.y.toFixed(4), z: +v.z.toFixed(4) } : null);
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -95,19 +97,55 @@ export class Coop {
     this.ui();
   }
 
-  // ---------------------------------------------------------------- the start screen's co-op row
+  // ---------------------------------------------------------------- the start screen's co-op section
   ui() {
     const $ = (id) => document.getElementById(id);
     this.statusEl = $('mp-status');
     this.badge = $('mp-badge');
-    $('mp-host').addEventListener('click', () => this.host().catch((e) => this.status(`Could not host: ${e.message}`)));
-    const join = () => {
-      const code = $('mp-code').value.trim().toUpperCase();
-      if (code.length !== 4) { this.status('Type the 4-letter code the host sees'); return; }
-      this.join(code).catch((e) => this.status(`Could not join: ${e.message}`));
-    };
-    $('mp-join').addEventListener('click', join);
-    $('mp-code').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') join(); });
+    this.listEl = $('mp-list');
+    this.busy = false;         // hosting or joining under way
+    $('mp-host').addEventListener('click', () => this.host().catch((e) => { this.busy = false; this.browse(); this.status(`Could not host: ${e.message}`); }));
+    // the open games, kept up to date while the start screen is up and this player is in none
+    this.lobbies = new Lobbies(() => this.showLobbies());
+    this.startEl = $('start');
+    new MutationObserver(() => this.browse()).observe(this.startEl, { attributes: true, attributeFilter: ['class'] });
+    this.browse();
+  }
+
+  browse() {
+    if (this.startEl.classList.contains('hidden') || this.role || this.busy) this.lobbies.stop(); else this.lobbies.start();
+    this.showLobbies();
+  }
+
+  showLobbies() {
+    const el = this.listEl;
+    el.replaceChildren();
+    if (this.role || this.busy) return;                    // (in a game, or getting into one: the status line says how it goes)
+    const games = this.lobbies.list;
+    if (!games.length) {
+      const p = document.createElement('p');
+      p.textContent = 'No open games right now. Host one and it shows up here for everyone.';
+      el.append(p);
+      return;
+    }
+    for (const g of games) {        // (what the server says is only ever text here, never markup)
+      const m = MAPS[g.map], b = document.createElement('button');
+      const ico = document.createElement('span'), name = document.createElement('b'), opts = document.createElement('small'), go = document.createElement('span');
+      ico.className = 'ico'; go.className = 'go';
+      ico.textContent = m?.icon || '🎮';
+      name.textContent = m?.name || 'Unknown map';
+      opts.textContent = g.opts.map((o) => OPTS[o]).filter(Boolean).join(' · ') || 'Sandbox';
+      go.textContent = 'Join';
+      b.append(ico, name, opts, go);
+      b.addEventListener('click', () => this.join(g.code).catch((e) => { this.busy = false; this.browse(); this.status(`Could not join: ${e.message}`); }));
+      el.append(b);
+    }
+  }
+
+  /** What the open list shows of this game: the map and what is on. */
+  lobbyInfo() {
+    const ctx = this.ctx;
+    return { map: ctx.map.id, opts: [ctx.night && 'night', ctx.rain && 'rain', ctx.mission?.on && 'swat', ctx.survival?.on && 'surv'].filter(Boolean) };
   }
 
   status(text = this.statusEl?.textContent || '') {
@@ -115,7 +153,7 @@ export class Coop {
     if (this.badge) {
       const relay = this.via === 'relay' ? ' · RELAY' : '', score = ` · P1 ${this.kills.P1} · P2 ${this.kills.P2}`;
       this.badge.textContent = !this.role ? '' : this.role === 'host'
-        ? (this.link?.open ? `CO-OP · ${this.link.code}${score}${relay}` : `CO-OP · CODE ${this.link?.code || ''} · WAITING`)
+        ? (this.link?.open ? `CO-OP${score}${relay}` : 'CO-OP · OPEN · WAITING')
         : `CO-OP${score}${relay}`;
     }
   }
@@ -136,13 +174,16 @@ export class Coop {
 
   // ================================================================ HOST
   async host() {
-    if (this.role) return;
-    this.status('Getting a code…');
+    if (this.role || this.busy) return;
+    this.busy = true;
+    this.browse();
+    this.status('Opening your game…');
     this.link = this.newLink();
-    await this.link.host();
+    await this.link.host(() => this.lobbyInfo());
     this.role = 'host';
+    this.busy = false;
     this.setupHost();
-    this.status(`Your code: ${this.link.code} - tell the other player to type it in and press Join`);
+    this.status('Your game is open: anyone can join it from their list of open games. Waiting for player 2…');
   }
 
   setupHost() {
@@ -253,7 +294,7 @@ export class Coop {
     ctx.remotes = [];
     this.remote = null;
     ctx.toast('PLAYER 2 LEFT');
-    this.status(`Your code: ${this.link.code} - waiting for player 2`);
+    this.status('Player 2 left. Your game is open again: waiting for player 2…');
   }
 
   /** Who and what exists, and the state of the world: sent every couple of seconds and on every change. */
@@ -435,12 +476,15 @@ export class Coop {
 
   // ================================================================ GUEST
   async join(code) {
-    if (this.role) return;
+    if (this.role || this.busy) return;
+    this.busy = true;
+    this.browse();
     this.status('Connecting…');
     this.link = this.newLink();
     this.early = [];                      // (through the relay, the host's first message is what tells us we are in)
     await this.link.join(code, (t) => this.status(t));
     this.role = 'guest';
+    this.busy = false;
     this.setupGuest();
     for (const m of this.early) this.onMessage(m);
     this.early = null;

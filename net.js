@@ -1,6 +1,10 @@
 // Two players over the internet, with no server of our own.
 //
-// The host gets a four-letter code; the other player types it in. Two ways to reach each other:
+// Games are open lobbies: a host's game is listed for everyone on the start screen, and anyone can join it from
+// there. The listing is a retained message on the relay servers below (LOBBY + the game's four letters, which are
+// only ever used to find each other, never shown), sent again every 10 s while the game has room, taken back when
+// someone joins or the host leaves, and cleared by the server by itself if the host drops without a word (the
+// connection's last will). Two ways to reach each other:
 //   direct  PeerJS's free public broker (0.peerjs.com) introduces the two browsers and they talk straight to
 //           each other (WebRTC). Fastest, but many networks will not allow it (phones on mobile data, some home
 //           routers even between two devices on the same wifi), and there is no free relay left for WebRTC.
@@ -18,6 +22,8 @@ const BROKERS = ['wss://broker.hivemq.com:8884/mqtt', 'wss://broker.emqx.io:8084
 const DIRECT_WAIT = 6000;                       // ms to wait for the direct line before going through the relay
 const SILENCE = 10000;                          // ms without a word from the other side: they are gone
 const MSG = 0, STATE = 1, HELLO = 2, BYE = 3, PING = 4;   // relay packet kinds (the first byte)
+const LOBBY = 'impactbox/v1/lobby/';            // + the code: an open game, { map, opts, t }; empty when it is not open
+const BEAT = 10000, STALE = 25000;               // ms between a host's announcements, and after which a listing has gone
 
 let loading = null;
 function loadPeer() {
@@ -46,9 +52,12 @@ function mqPacket(type, head, body = null) {
   return out;
 }
 
-/** connect(), subscribe(topic), publish(topic, bytes), onmessage(topic, bytes): QoS 0 only, and a keep-alive. */
+/**
+ * connect(), subscribe(topic), publish(topic, bytes, retain), onmessage(topic, bytes, retained): QoS 0 only, and a
+ * keep-alive. will: a topic whose retained message the server clears if this connection drops without a goodbye.
+ */
 class Mqtt {
-  constructor(url) { this.url = url; this.buf = new Uint8Array(0); this.onmessage = null; this.onclose = null; }
+  constructor(url, will = null) { this.url = url; this.will = will; this.buf = new Uint8Array(0); this.onmessage = null; this.onclose = null; }
 
   connect() {
     return new Promise((res, rej) => {
@@ -57,7 +66,8 @@ class Mqtt {
       const timer = setTimeout(() => { ws.close(); rej(new Error('relay timeout')); }, 7000);
       ws.onerror = () => { clearTimeout(timer); rej(new Error('relay unreachable')); };
       ws.onclose = () => { clearInterval(this.ping); this.onclose?.(); };
-      ws.onopen = () => ws.send(mqPacket(0x10, [...mqStr('MQTT'), 4, 2, 0, 60, ...mqStr('ibx' + Math.random().toString(36).slice(2, 12))]));
+      const w = this.will;     // (flags: a clean session, plus a retained will with an empty message)
+      ws.onopen = () => ws.send(mqPacket(0x10, [...mqStr('MQTT'), 4, w ? 0x26 : 2, 0, 60, ...mqStr('ibx' + Math.random().toString(36).slice(2, 12)), ...(w ? [...mqStr(w), 0, 0] : [])]));
       ws.onmessage = (e) => {
         // packets can arrive split across or packed into WebSocket messages: read from a running buffer
         const add = new Uint8Array(e.data), b = new Uint8Array(this.buf.length + add.length);
@@ -72,7 +82,7 @@ class Mqtt {
           if (type === 0x20) { clearTimeout(timer); this.ping = setInterval(() => this.raw(new Uint8Array([0xc0, 0])), 30000); res(); }
           else if (type === 0x30) {
             const tl = (body[0] << 8) | body[1], skip = 2 + tl + ((b[o] & 6) ? 2 : 0);
-            this.onmessage?.(dec.decode(body.subarray(2, 2 + tl)), body.slice(skip));
+            this.onmessage?.(dec.decode(body.subarray(2, 2 + tl)), body.slice(skip), (b[o] & 1) === 1);
           }
           o = i + n;
         }
@@ -83,7 +93,7 @@ class Mqtt {
 
   raw(bytes) { if (this.ws?.readyState === 1) this.ws.send(bytes); }
   subscribe(t) { this.raw(mqPacket(0x82, [0, 1, ...mqStr(t), 0])); }
-  publish(t, bytes) { this.raw(mqPacket(0x30, mqStr(t), bytes)); }
+  publish(t, bytes, retain = false) { this.raw(mqPacket(retain ? 0x31 : 0x30, mqStr(t), bytes)); }
   close() { clearInterval(this.ping); try { this.ws?.close(); } catch (e) { /* already gone */ } }
 }
 
@@ -130,14 +140,23 @@ export class Link {
     if (this.mode) return;
     this.mode = mode;
     this.heard = performance.now();
-    // through the relay nothing says when they go, so a silence that long means they have
-    // (and a ping every 2 s, which a tab in the background still sends, so switching away for a moment is not leaving)
-    if (mode === 'relay') {
-      this.watch = setInterval(() => { if (performance.now() - this.heard > SILENCE) this.lost(); }, 1000);
-      this.keep = setInterval(() => this.relay?.publish(this.out, relayPacket(PING)), 2000);
-    }
+    // nothing says when they go if their tab or their connection just dies (through the relay, and directly too: WebRTC
+    // can report the line failed while the channel still says it is open, for good), so a silence that long means they
+    // have (and a ping every 2 s, which a tab in the background still sends, so switching away for a moment is not leaving)
+    this.watch = setInterval(() => { if (performance.now() - this.heard > SILENCE) this.lost(); }, 1000);
+    this.keep = setInterval(() => {
+      if (this.mode === 'direct') { if (this.r?.open) this.r.send('ping'); } else this.relay?.publish(this.out, relayPacket(PING));
+    }, 2000);
+    if (this.info) this.list(false);                        // (host) full: off the list
     this.on.via?.(mode);
     this.on.open?.();
+  }
+
+  /** Host: put the game on the list of open ones (again every 10 s, and after every reconnect), or take it off. */
+  list(open, only = null) {
+    this.listed = open;
+    const bytes = open ? enc.encode(JSON.stringify({ ...this.info(), t: Date.now() })) : new Uint8Array(0);
+    for (const mq of only ? [only] : this.relays) mq.publish(LOBBY + this.code, bytes, true);
   }
 
   lost() {
@@ -146,6 +165,7 @@ export class Link {
     clearInterval(this.keep);
     this.mode = null;
     this.r = this.u = null;
+    if (this.info) this.list(true);                         // (host) room again
     this.on.close?.();
   }
 
@@ -173,13 +193,14 @@ export class Link {
       if (conn.label === 'u') this.u = conn;
       else { this.r = conn; this.opened('direct'); }
     });
-    conn.on('data', (d) => { this.heard = performance.now(); if (conn.label === 'u') this.on.state?.(d); else this.on.message?.(d); });
+    conn.on('data', (d) => { this.heard = performance.now(); if (d === 'ping') return; if (conn.label === 'u') this.on.state?.(d); else this.on.message?.(d); });
     conn.on('close', () => { if (conn === this.r) this.lost(); });
     conn.on('error', (e) => this.on.error?.(String(e?.message || e)));
   }
 
-  /** Host: claim a code, listen on both routes, and wait. Resolves with the code. */
-  async host() {
+  /** Host: claim a code, listen on both routes, put the game on the open list, and wait. info() says what to list. */
+  async host(info) {
+    this.info = info;
     // the direct route needs the matchmaking server; if it cannot be had, the relay alone will do
     let code = null;
     try {
@@ -204,7 +225,9 @@ export class Link {
     } catch (e) { /* no direct route from here */ }
     this.code = code ?? newCode();
     this.out = topic(this.code, 'down');
+    this.listed = true;
     for (const url of BROKERS) this.listen(url, topic(this.code, 'up'));
+    this.beat = setInterval(() => { if (this.listed) this.list(true); }, BEAT);
     return this.code;
   }
 
@@ -214,7 +237,7 @@ export class Link {
    */
   listen(url, sub) {
     if (this.closed) return;
-    const mq = new Mqtt(url);
+    const mq = new Mqtt(url, this.info ? LOBBY + this.code : null);
     mq.onmessage = (t, b) => this.fromRelay(mq, b);
     mq.onclose = () => {
       this.relays = this.relays.filter((m) => m !== mq);
@@ -223,6 +246,7 @@ export class Link {
     mq.connect().then(() => {
       mq.subscribe(sub);
       this.relays.push(mq);
+      if (this.info && this.listed) this.list(true, mq);
       if (this.mode === 'relay' && this.relay?.url === url) this.relay = mq;
     }).catch(() => {});
   }
@@ -259,7 +283,7 @@ export class Link {
       this.relay = null;
       mq.close();
     }
-    throw new Error('no answer - check the code, and that the host still has the game open');
+    throw new Error('no answer: that game may have just closed or filled up');
   }
 
   /** The direct line: true if it opened. Any failure (no matchmaker, no such code there, blocked) is just false. */
@@ -286,8 +310,59 @@ export class Link {
     this.closed = true;
     clearInterval(this.watch);
     clearInterval(this.keep);
+    clearInterval(this.beat);
+    if (this.info) this.list(false);
     if (this.mode === 'relay') this.relay?.publish(this.out, relayPacket(BYE));
     this.peer?.destroy();
     for (const mq of [...this.relays, this.relay]) mq?.close();
+  }
+}
+
+/**
+ * The open games, for the start screen: every host's listing on both relay servers, kept while it keeps coming. A
+ * retained one (handed over on subscribing) may be old, so it only counts if its own clock says it is recent; an empty
+ * one means that game is gone. Anyone can write to a public server, so what is shown is checked and kept short.
+ */
+export class Lobbies {
+  constructor(onchange) { this.onchange = onchange; this.games = new Map(); this.conns = new Map(); this.on = false; }
+
+  get list() { return [...this.games.values()].sort((a, b) => a.since - b.since); }
+
+  start() {
+    if (this.on) return;
+    this.on = true;
+    for (const url of BROKERS) this.connect(url);
+    this.prune = setInterval(() => {
+      for (const [code, g] of this.games) if (performance.now() - g.seen > STALE) { this.games.delete(code); this.onchange(); }
+    }, 2000);
+  }
+
+  connect(url) {
+    if (!this.on) return;
+    const mq = new Mqtt(url);
+    this.conns.set(url, mq);
+    mq.onmessage = (t, b, retained) => this.heard(t.slice(LOBBY.length), b, retained);
+    mq.onclose = () => { if (this.on && this.conns.get(url) === mq) setTimeout(() => this.connect(url), 3000); };
+    mq.connect().then(() => mq.subscribe(LOBBY + '+')).catch(() => {});
+  }
+
+  heard(code, bytes, retained) {
+    if (!/^[A-Z]{4}$/.test(code)) return;
+    let g = null;
+    try { g = bytes.length ? JSON.parse(dec.decode(bytes)) : null; } catch (e) { return; }
+    if (!g) { if (this.games.delete(code)) this.onchange(); return; }
+    if (typeof g.map !== 'string' || (retained && !(Math.abs(Date.now() - g.t) < STALE))) return;
+    const opts = Array.isArray(g.opts) ? g.opts.filter((o) => typeof o === 'string').slice(0, 4) : [];
+    this.games.set(code, { code, map: g.map.slice(0, 20), opts, seen: performance.now(), since: this.games.get(code)?.since ?? performance.now() });
+    this.onchange();
+  }
+
+  stop() {
+    if (!this.on) return;
+    this.on = false;
+    clearInterval(this.prune);
+    for (const mq of this.conns.values()) mq.close();
+    this.conns.clear();
+    this.games.clear();
   }
 }
