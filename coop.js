@@ -726,7 +726,7 @@ export class Coop {
     } else if (t === 'split') this.rags.get(e[1])?.split();
     else if (t === 'sever') { const r = this.rags.get(e[1]); if (r && !r.removed) r.sever(e[2], e[3] && V(e[3])); }
     else if (t === 'gib') { const r = this.rags.get(e[1]); if (r && !r.removed && !r.parts[e[2]].gone) r.gib(e[2]); }
-    else if (t === 'slice') { const r = this.rags.get(e[1]); if (r && !r.removed) r.slice(e[2], e[3], e[4] && V(e[4]), e[5]); }
+    else if (t === 'slice') { const r = this.rags.get(e[1]); if (r && !r.removed) r.slice(e[2], e[3], e[4] && V(e[4]), e[5], e[6], e[7]); }
     else if (t === 'gclear') ctx.gore.clear();
     else if (t === 'toast') ctx.toast(e[1]);
     else if (t === 'feed') ctx.feed(e[1]);

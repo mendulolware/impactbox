@@ -377,6 +377,17 @@ Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of
   the head and both arms on the upper half. Each piece has its own body, its own collider and its own share of the skin, a torn end on
   both faces, and can be cut again (`hitPiece`: a blade, a laser or a hit of 90+), down to pieces about 6 cm long. The laser sword,
   the Laser Grid and the Guillotine cut the same way, and keep cutting the pieces that cross them; a blast throws them.
+- **The cut follows the blade** (`cutNormal`): a blade moves in its own plane, so the cut holds the way it was going and is
+  as square across the part as that allows, give or take the angle of the edge (up to 30°, never more than 50° off square).
+  A diagonal cut through the chest can take the head and one arm and leave the other. The skin is cut exactly on that plane
+  (`splitGeometry` cuts the triangles across it in two), and the face of the cut is fitted to the outline it left
+  (`makeSection` in `wounds.js`): skin at the edge, a band of yellow fat, muscle in bundles with pale sheets between them, and
+  the bone with marrow in it (two in a forearm or a shin; the spine, the ribs and the body cavity in a trunk; skull and brain
+  in a head). A laser's is the same, burnt black. Only a heavy round tearing a piece in two leaves a torn end.
+- **The heart** (`beat`, `lost` in `ragdoll.js`): cut ends and torn arteries spurt in time with it. It beats faster the more
+  blood is gone (70 a minute up to about 155) and when they are frightened, and pushes weaker as there is less left to push.
+  It stops when they die: a dead body's cuts, and anything cut off, only drain, fastest when the cut faces down.
+- **Cut-off limbs and pieces twitch** for a few seconds (`jerk`), less and less, and they no longer roll away like logs.
 - **Knife**: left button slices (a quick sideways cut that opens a gash running the way the blade travelled), right button
   stabs (a thrust: slower, shorter reach, twice the damage, a puncture). Both are in `updateKnife`; numbers are on the Knife's
   line in `WEAPONS`.
