@@ -224,6 +224,8 @@ body.touch #play { margin-top: 18px; padding: 14px 60px; }
 #t-reload { right: calc(4% + 104px); bottom: calc(15% + 74px); }
 #t-swap { right: calc(4% + 12px); bottom: calc(24% + 100px); }
 #t-use { right: calc(4% + 186px); bottom: 7%; }
+#t-throw { right: calc(4% + 186px); bottom: calc(7% + 66px); display: none; }
+body.can-throw #t-throw { display: block; }
 #t-leanL { left: 3%; bottom: 46%; width: 54px !important; height: 54px !important; font-size: 20px !important; }
 #t-leanR { left: calc(3% + 62px); bottom: 46%; width: 54px !important; height: 54px !important; font-size: 20px !important; }
 #touch .row { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; width: 62%; }

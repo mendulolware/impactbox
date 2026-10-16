@@ -823,7 +823,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyT') toggleSlowmo();
   if (e.code === 'KeyY') ctx.survival.shop(true);
   if (e.code === 'KeyV') toggleHelmet();
-  if (e.code === 'KeyG') toggleGraphics();
+  if (e.code === 'KeyG' && !(gameActive() && ctx.weapons.throwBlade())) toggleGraphics();   // G: throw the blade in hand; otherwise graphics
   if (e.code === 'KeyN') toggleNight();
   if (e.code === 'KeyO') toggleRain();
   if (e.code === 'KeyP') toggleRecording();

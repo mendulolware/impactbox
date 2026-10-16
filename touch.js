@@ -31,6 +31,7 @@ export function initTouch(ctx, input) {
     <button class="b" id="t-reload">R</button>
     <button class="b" id="t-swap">&#8635;</button>
     <button class="b" id="t-use">USE</button>
+    <button class="b" id="t-throw">THROW</button>
     <button class="b" id="t-leanL">&#8656;</button>
     <button class="b" id="t-leanR">&#8658;</button>`;
   document.body.appendChild(root);
@@ -45,6 +46,7 @@ export function initTouch(ctx, input) {
   tap($('#t-reload'), () => ctx.weapons.reload());
   tap($('#t-swap'), () => { input.wheel += 1; });
   tap($('#t-use'), () => { key('KeyF'); key('KeyF', 'keyup'); });
+  tap($('#t-throw'), () => ctx.weapons.throwBlade());
   tap($('#t-aim'), () => { input.right = !input.right; if (input.right) input.rightDown = true; $('#t-aim').classList.toggle('on', input.right); });
   const hold = (el, on, off) => {
     el.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); on(); }, { passive: false });

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { getModel, bodyPieces, bodyWhole, isCap, looks, tintedMaterial } from './models.js';
-import { openWound, burn, makeStump } from './wounds.js';
+import { openWound, burn, makeStump, boneShard } from './wounds.js';
 import { Brain } from './brain.js';
 
 // An NPC has two lives:
@@ -123,6 +123,7 @@ const CORE = ['head', 'torso', 'pelvis'];
 const IMPACT = { head: 4.8, torso: 4.5, pelvis: 4.5 };
 const LIMBS = new Set(['uarmL', 'farmL', 'uarmR', 'farmR', 'thighL', 'shinL', 'thighR', 'shinR']);
 const KNOCK_PARTS = ['torso', 'head', 'pelvis', 'thighL', 'thighR'];
+const HEAD_POP = 60;       // how far past dead a head can be shot before it comes apart (a gun with `pop`: not the sidearms)
 
 // The body model (models/character.py) is one skinned figure cut into a piece per ragdoll body.
 // Each rigid body is a bone; these are the bones' places in the rest pose the model was built in.
@@ -672,6 +673,7 @@ export class Ragdoll {
           const out = lp.clone().addScaledVector(ld, k);
           openWound(p, out, hole * 0.9, maxR, null, ld);
           this.bleed(p, out, 3, 0);
+          if (dmg >= 24 && Math.random() < 0.5) gore.chunks(this.localToWorld(p, out), 1, 3.5, { x: dir.x * 2, y: 0.5, z: dir.z * 2 }, big ? 'torso' : 'limb');   // a heavy round blows a piece out of the back
         }
         // the exit spray: a fine one a metre or two past the body, by how hard the round hit
         // (a pistol round 6 drops, a shotgun pellet or an SMG round 2 or 3, a sniper round 14)
@@ -723,7 +725,7 @@ export class Ragdoll {
         if (ARMS.has(name)) this.dangle(name);
       } else if (name === 'head') {
         if (opts.blade || opts.explosion) this.sever('head', dir);
-        else if (dmg >= 120) this.gib('head');   // a sniper round: the head comes apart
+        else if (dmg >= 120 || (opts.pop && p.hp <= -HEAD_POP)) this.gib('head', true, dir);   // a sniper round, or enough of anything heavier than a sidearm: the head comes apart
         else {
           if (!opts.blunt && !this.skullOpen) {
             // some of the back of the skull goes with the round (once: more rounds into it just go through)
@@ -740,10 +742,11 @@ export class Ragdoll {
           p.hp = 1;
           if (ARMS.has(name)) this.dangle(name); else this.lame[name.slice(-1)] = 1;
           if (opts.blunt) sfx.crack();
+          else if (!p.fractured) this.fracture(p, lp, ld);     // a round: open, the bone through the skin
         } else this.sever(opts.blade ? this.cutAt(name, lp) || name : name, dir);
       } else if (name === 'torso') {
         if (opts.blade) this.sever(this.cutAt('torso', lp) || 'torso', dir);       // (where it landed: the waist, a shoulder, the neck)
-        else if (opts.explosion) this.sever('torso', dir);
+        else if (opts.explosion || opts.rail) this.sever('torso', dir);     // (a blast, or a railgun slug: in half)
         if (!zombie || this.severed.has('torso')) this.die(opts.blunt ? 'beaten' : 'torso');
       } else if (name === 'pelvis') {
         if (opts.blade) { const c = this.cutAt('pelvis', lp); if (c) this.sever(c, dir); }   // a leg off at the hip, or in half at the waist
@@ -965,7 +968,7 @@ export class Ragdoll {
   }
 
   /** Blow a part to pieces. pieces: throw the lumps of it about too (the grinder sends its own out of the chute instead). */
-  gib(name, pieces = true) {
+  gib(name, pieces = true, dir = null) {
     const p = this.parts[name];
     if (!p || p.gone) return;
     this.split();
@@ -973,6 +976,15 @@ export class Ragdoll {
     if (name !== 'torso') this.sever(name, null);
     const t = p.body.translation(), v = p.body.linvel();
     const at = { x: t.x, y: t.y, z: t.z };
+    if (name === 'head') {
+      // a head coming apart: brain and bone on whatever is behind it, a red cloud where it was, and the neck fountains
+      const gore = this.ctx.gore, d = dir ? new THREE.Vector3(dir.x, dir.y, dir.z) : UP.clone();
+      gore.wallSplatter(at, d, 7, true);
+      gore.mist(at, d, 14, 3.2);
+      gore.gush(at, d.clone().add(UP), 50, 5);
+      gore.blood(at, UP, 30, 5, 1.2);
+      this.ctx.sfx.crack();
+    }
     const core = name === 'torso' || name === 'pelvis';
     this.ctx.gore.gibs(at, core ? 70 : 45);
     if (pieces) this.ctx.gore.chunks(at, core ? 11 : name === 'head' ? 9 : 5, 6, v, core ? 'torso' : name === 'head' ? 'head' : 'limb');
@@ -1016,6 +1028,20 @@ export class Ragdoll {
       p.mesh.add(standIn);
       p.skeleton.bones[BONE_INDEX[other]] = standIn;
     }
+  }
+
+  /** A round broke the bone: a jagged end of it stands out where the round came out, and it bleeds. */
+  fracture(p, lp, ld) {
+    p.fractured = true;
+    let k = 0.6;
+    for (let i = 0; i < 3; i++) { const c = ld.getComponent(i); if (Math.abs(c) > 1e-4) k = Math.min(k, (Math.sign(c) * p.ext[i] - lp.getComponent(i)) / c); }
+    const out = lp.clone().addScaledVector(ld, Math.max(0, k) * 0.85);
+    const shard = boneShard();
+    shard.position.copy(out);
+    shard.quaternion.setFromUnitVectors(UP, ld);
+    p.mesh.add(shard);
+    this.ctx.sfx.crack();
+    this.bleed(p, out, 5, 0.5);
   }
 
   addStump(part, local, out, def, sealed = false) {

@@ -481,6 +481,16 @@ const stumpCache = new Map();
  * Mesh for the wound left where a limb came off. +Y points out of the wound.
  * rx, rz = half-widths of the cut; kind = 'limb' (one bone), 'limb2' (two), 'neck', 'gut' (torso cut in half).
  */
+/** A broken bone's jagged end, standing up out of a wound along +y (the base sits under the skin). */
+export function boneShard() {
+  const g = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.012, 0.07, 6).translate(0, 0.012, 0), boneMat);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.009, 0.026, 5).translate(0, 0.058, 0).rotateZ(0.35), boneMat);
+  const meat = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6).scale(1, 0.5, 1), new THREE.MeshStandardMaterial({ color: 0x5a0a0c, roughness: 0.25 }));
+  for (const m of [shaft, tip, meat]) { m.castShadow = true; g.add(m); }
+  return g;
+}
+
 export function makeStump(rx, rz, kind = 'limb', sealed = false) {
   const key = kind + ((Math.random() * 4) | 0);
   let g = stumpCache.get(key);

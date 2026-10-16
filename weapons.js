@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import RAPIER from '@dimforge/rapier3d-compat';
 import { sfx, deafen } from './audio.js';
 import { getModel } from './models.js';
 
@@ -16,25 +17,32 @@ export const SLOTS = ['Sidearms', 'SMGs', 'Shotguns', 'Rifles', 'Heavy', 'Blades
 //   stops (F clears it). Automatic guns switch between auto and single shots with B.
 //   pen = metres of wall, door or crate a round goes through (and whether body armour stops it),
 //   spin = seconds of wind-up, bolt = leaves a bolt where it hits,
-//   quiet = nobody hears it.
+//   quiet = nobody hears it, harpoon = pins who it goes through to a wall close behind them, rail = through everything
+//   in its path at full strength (bodies, and pen metres of wall) and cuts bodies in half, pop = enough of its rounds in a head take it apart (all but the sidearms and the less-lethal).
 // Melee is weak on purpose: a hit staggers, it takes several to bring someone down, and a limb only
 // comes off once its health is gone. blunt = breaks instead of cuts.
 export const WEAPONS = [
   { name: 'Pistol',   slot: 0, type: 'gun', auto: false, rate: 0.20,  dmg: 34,  impulse: 140, pellets: 1,  spread: 0.003, sound: 'pistol',   kick: 0.07,  hole: 0.034, rec: [0.020, 0.006], shell: true, mag: 17, reload: 1.5, jam: 0.004 },
   { name: 'Revolver', slot: 0, type: 'gun', auto: false, rate: 0.50,  dmg: 70,  impulse: 260, pellets: 1,  spread: 0.002, sound: 'revolver', kick: 0.17,  hole: 0.046, pierce: 2, rec: [0.055, 0.012], mag: 6, reload: 2.6, pen: 0.2 },
+  { name: 'Desert Eagle', slot: 0, type: 'gun', auto: false, rate: 0.32, dmg: 58, impulse: 240, pellets: 1, spread: 0.004, sound: 'deagle', kick: 0.22, hole: 0.044, pierce: 2, rec: [0.07, 0.016], shell: true, mag: 7, reload: 1.9, jam: 0.006, pen: 0.3, pop: true },
   { name: 'Taser',    slot: 0, type: 'gun', auto: false, rate: 0.6,   dmg: 2,   impulse: 0,   pellets: 1,  spread: 0.004, sound: 'taser',    kick: 0.03,  rec: [0.012, 0.003], mag: 1, reload: 3.2, pen: 0, range: 7, daze: 6, tase: 5 },
-  { name: 'SMG',      slot: 1, type: 'gun', auto: true,  rate: 0.055, dmg: 11,  impulse: 60,  pellets: 1,  spread: 0.020, sound: 'smg',      kick: 0.022, hole: 0.022, rec: [0.0075, 0.004], shell: true, mag: 30, reload: 1.9, jam: 0.007 },
-  { name: 'Uzi',      slot: 1, type: 'gun', auto: true,  rate: 0.048, dmg: 9,   impulse: 50,  pellets: 1,  spread: 0.034, sound: 'uzi',      kick: 0.026, hole: 0.022, rec: [0.0095, 0.0065], shell: true, mag: 32, reload: 1.8, jam: 0.011 },
-  { name: 'Shotgun',  slot: 2, type: 'gun', auto: false, rate: 0.85,  dmg: 15,  impulse: 110, pellets: 10, spread: 0.055, sound: 'shotgun',  kick: 0.16,  hole: 0.027, rec: [0.065, 0.015], shell: true, mag: 6, reload: 0.5, shells: true, jam: 0.006 },
-  { name: 'Double Barrel', slot: 2, type: 'gun', auto: false, rate: 0.22, dmg: 16, impulse: 120, pellets: 12, spread: 0.075, sound: 'dbarrel', kick: 0.2, hole: 0.028, mag: 2, reload: 1.5, selfLoad: true, rec: [0.085, 0.02] },
+  { name: 'SMG',      slot: 1, type: 'gun', auto: true,  rate: 0.055, dmg: 11,  impulse: 60,  pellets: 1,  spread: 0.020, sound: 'smg',      kick: 0.022, hole: 0.022, rec: [0.0075, 0.004], shell: true, mag: 30, reload: 1.9, jam: 0.007, pop: true },
+  { name: 'Uzi',      slot: 1, type: 'gun', auto: true,  rate: 0.048, dmg: 9,   impulse: 50,  pellets: 1,  spread: 0.034, sound: 'uzi',      kick: 0.026, hole: 0.022, rec: [0.0095, 0.0065], shell: true, mag: 32, reload: 1.8, jam: 0.011, pop: true },
+  { name: 'Shotgun',  slot: 2, type: 'gun', auto: false, rate: 0.85,  dmg: 15,  impulse: 110, pellets: 10, spread: 0.055, sound: 'shotgun',  kick: 0.16,  hole: 0.027, rec: [0.065, 0.015], shell: true, mag: 6, reload: 0.5, shells: true, jam: 0.006, pop: true },
+  { name: 'Double Barrel', slot: 2, type: 'gun', auto: false, rate: 0.22, dmg: 16, impulse: 120, pellets: 12, spread: 0.075, sound: 'dbarrel', kick: 0.2, hole: 0.028, mag: 2, reload: 1.5, selfLoad: true, rec: [0.085, 0.02], pop: true },
+  { name: 'Auto Shotgun', slot: 2, type: 'gun', auto: true, rate: 0.19, dmg: 13, impulse: 100, pellets: 9, spread: 0.062, sound: 'autoshotgun', kick: 0.13, hole: 0.026, rec: [0.05, 0.016], shell: true, mag: 20, reload: 2.7, jam: 0.004, pop: true },
   { name: 'Beanbag',  slot: 2, type: 'gun', auto: false, rate: 0.9,   dmg: 6,   impulse: 280, pellets: 1,  spread: 0.012, sound: 'beanbag',  kick: 0.14,  rec: [0.055, 0.012], shell: true, mag: 5, reload: 0.6, shells: true, pen: 0, range: 18, blunt: true, daze: 3 },
-  { name: 'Rifle',    slot: 3, type: 'gun', auto: true,  rate: 0.075, dmg: 17,  impulse: 95,  pellets: 1,  spread: 0.010, sound: 'rifle',    kick: 0.035, hole: 0.03, pierce: 2, rec: [0.015, 0.007], drift: 0.25, shell: true, mag: 30, reload: 2.2, jam: 0.004, pen: 0.35 },
-  { name: 'AR-15',    slot: 3, type: 'gun', auto: true,  rate: 0.072, dmg: 15,  impulse: 80,  pellets: 1,  spread: 0.006, sound: 'ar15',     kick: 0.03,  hole: 0.027, pierce: 2, rec: [0.011, 0.0045], shell: true, mag: 30, reload: 2.0, jam: 0.008, pen: 0.3 },
-  { name: 'Sniper',   slot: 3, type: 'gun', auto: false, rate: 1.30,  dmg: 150, impulse: 420, pellets: 1,  spread: 0,     sound: 'sniper',   kick: 0.22,  hole: 0.05, pierce: 3, zoom: 0.82, rec: [0.085, 0.01], shell: true, mag: 5, reload: 2.8, pen: 0.7 },
+  { name: 'Rifle',    slot: 3, type: 'gun', auto: true,  rate: 0.075, dmg: 17,  impulse: 95,  pellets: 1,  spread: 0.010, sound: 'rifle',    kick: 0.035, hole: 0.03, pierce: 2, rec: [0.015, 0.007], drift: 0.25, shell: true, mag: 30, reload: 2.2, jam: 0.004, pen: 0.35, pop: true },
+  { name: 'AR-15',    slot: 3, type: 'gun', auto: true,  rate: 0.072, dmg: 15,  impulse: 80,  pellets: 1,  spread: 0.006, sound: 'ar15',     kick: 0.03,  hole: 0.027, pierce: 2, rec: [0.011, 0.0045], shell: true, mag: 30, reload: 2.0, jam: 0.008, pen: 0.3, pop: true },
+  { name: 'AK-47',    slot: 3, type: 'gun', auto: true,  rate: 0.1,   dmg: 24,  impulse: 120, pellets: 1,  spread: 0.013, sound: 'ak',       kick: 0.045, hole: 0.034, pierce: 2, rec: [0.022, 0.011], drift: 0.35, shell: true, mag: 30, reload: 2.5, jam: 0.002, pen: 0.45, pop: true },
+  { name: 'Sniper',   slot: 3, type: 'gun', auto: false, rate: 1.30,  dmg: 150, impulse: 420, pellets: 1,  spread: 0,     sound: 'sniper',   kick: 0.22,  hole: 0.05, pierce: 3, zoom: 0.82, rec: [0.085, 0.01], shell: true, mag: 5, reload: 2.8, pen: 0.7, pop: true },
   { name: 'Crossbow', slot: 3, type: 'gun', auto: false, rate: 1.25,  dmg: 85,  impulse: 180, pellets: 1,  spread: 0.001, sound: 'twang',    kick: 0.05,  hole: 0.02, bolt: true, quiet: true, zoom: 0.45, rec: [0.01, 0.002], mag: 1, reload: 1.1, selfLoad: true },
+  { name: 'Harpoon Gun', slot: 3, type: 'gun', auto: false, rate: 1.4, dmg: 70, impulse: 300, pellets: 1, spread: 0.001, sound: 'harpoon', kick: 0.12, hole: 0.03, harpoon: true, zoom: 0.3, rec: [0.03, 0.005], mag: 1, reload: 1.6, selfLoad: true },
   { name: 'Rocket',   slot: 4, type: 'rocket', auto: false, rate: 0.3, sound: 'rocket', kick: 0.13, mag: 1, reload: 1.4, selfLoad: true },
   { name: 'Grenade Launcher', slot: 4, type: 'rocket', bomb: true, auto: false, rate: 0.6, sound: 'launcher', kick: 0.09, mag: 6, reload: 2.4 },
-  { name: 'Minigun',  slot: 4, type: 'gun', auto: true,  rate: 0.028, dmg: 12,  impulse: 70,  pellets: 1,  spread: 0.030, sound: 'minigun',  kick: 0.018, hole: 0.026, pierce: 2, spin: 0.7, hipOnly: true, rec: [0.0045, 0.004], shell: true, mag: 200, reload: 4.5, jam: 0.002, pen: 0.3 },
+  { name: 'Minigun',  slot: 4, type: 'gun', auto: true,  rate: 0.028, dmg: 12,  impulse: 70,  pellets: 1,  spread: 0.030, sound: 'minigun',  kick: 0.018, hole: 0.026, pierce: 2, spin: 0.7, hipOnly: true, rec: [0.0045, 0.004], shell: true, mag: 200, reload: 4.5, jam: 0.002, pen: 0.3, pop: true },
+  { name: 'LMG',      slot: 4, type: 'gun', auto: true,  rate: 0.068, dmg: 21,  impulse: 100, pellets: 1,  spread: 0.02,  sound: 'lmg',      kick: 0.03,  hole: 0.03, pierce: 2, rec: [0.012, 0.009], drift: 0.3, shell: true, mag: 100, reload: 5.2, jam: 0.003, pen: 0.4, pop: true },
+  { name: 'Railgun',  slot: 4, type: 'gun', auto: false, rate: 1.5,   dmg: 260, impulse: 800, pellets: 1,  spread: 0,     sound: 'railgun',  kick: 0.25,  hole: 0.06, pierce: 8, rail: true, zoom: 0.5, rec: [0.09, 0.01], mag: 4, reload: 3.2, pen: 4, pop: true },
   { name: 'Flamethrower', slot: 4, type: 'flame', range: 7.5, dmg: 5, heat: 0.13, mag: 100, reload: 3.0 },
   { name: 'Knife',    slot: 5, type: 'knife', slice: { rate: 0.32, dmg: 8, impulse: 15, range: 1.9 }, stab: { rate: 0.55, dmg: 16, impulse: 25, range: 1.8 } },
   { name: 'Machete',  slot: 5, type: 'melee', rate: 0.60, dmg: 14, impulse: 60,  range: 1.7 },
@@ -77,6 +85,8 @@ const VIEW = [
     handR: [0, -0.046, 0.0625, -0.226], handS: [0, -0.046, 0.0625, -0.226] },
   { model: 'Revolver', hip: [0.19, -0.19, -0.50], sight: 0.058, adsZ: -0.42, muzzle: [0, 0.038, -0.181],
     handR: [0, -0.048, 0.062, -0.35], handS: [0, -0.048, 0.062, -0.35] },
+  { model: 'Pistol',  hip: [0.19, -0.19, -0.50], sight: 0.0319, adsZ: -0.42, muzzle: [0, 0.0201, -0.081], tint: 0xc9ccd1,   // the Desert Eagle: a pistol in bright steel
+    handR: [0, -0.046, 0.0625, -0.226], handS: [0, -0.046, 0.0625, -0.226] },
   { model: 'Pistol',  hip: [0.19, -0.19, -0.50], sight: 0.0319, adsZ: -0.42, muzzle: [0, 0.0201, -0.081], tint: 0xe0c020,   // the taser: a pistol in police yellow
     handR: [0, -0.046, 0.0625, -0.226], handS: [0, -0.046, 0.0625, -0.226] },
   { model: 'SMG',     hip: [0.19, -0.2, -0.42], sight: 0.0594, adsZ: -0.40, muzzle: [0, 0.0301, -0.438],
@@ -87,15 +97,21 @@ const VIEW = [
     handR: [0, -0.038, 0.135, -0.3], handL: [0, -0.0369, -0.27, 0] },
   { model: 'DoubleBarrel', hip: [0.19, -0.2, -0.42], sight: 0.0378, adsZ: -0.44, muzzle: [0, 0.018, -0.58],
     handR: [0, -0.045, 0.115, -0.7], handL: [0, -0.036, -0.18, 0] },
+  { model: 'Shotgun', hip: [0.19, -0.2, -0.42], sight: 0.0521, adsZ: -0.44, muzzle: [0, 0.03, -0.759], tint: 0x2a2b2e,   // the auto shotgun: the pump gun in black
+    handR: [0, -0.038, 0.135, -0.3], handL: [0, -0.0369, -0.27, 0] },
   { model: 'Shotgun', hip: [0.19, -0.2, -0.42], sight: 0.0521, adsZ: -0.44, muzzle: [0, 0.03, -0.759], tint: 0xe06a10,   // the beanbag gun: the pump gun in orange
     handR: [0, -0.038, 0.135, -0.3], handL: [0, -0.0369, -0.27, 0] },
   { model: 'Rifle',   hip: [0.19, -0.2, -0.42], sight: 0.0562, adsZ: -0.44, muzzle: [0, 0.0011, -0.526],
     handR: [0, -0.072, 0.095, -0.3], handL: [0, -0.034, -0.235, 0] },
   { model: 'AR15',    hip: [0.19, -0.21, -0.40], sight: 0.1002, adsZ: -0.40, muzzle: [0, 0.0331, -0.569],
     handR: [0, -0.066, 0.045, -0.3], handL: [0, -0.002, -0.255, 0] },
+  { model: 'Rifle',   hip: [0.19, -0.2, -0.42], sight: 0.0562, adsZ: -0.44, muzzle: [0, 0.0011, -0.526], tint: 0x6a4a2c,   // the AK-47: the rifle in wood and blued steel
+    handR: [0, -0.072, 0.095, -0.3], handL: [0, -0.034, -0.235, 0] },
   { model: 'Sniper',  hip: [0.19, -0.2, -0.42], sight: 0.072, adsZ: -0.30, muzzle: [0, -0.0078, -0.721], scope: true,
     handR: [0, -0.050, 0.128, -0.6], handL: [0, -0.048, -0.2, 0] },
   { model: 'Crossbow', hip: [0.19, -0.21, -0.42], sight: 0.082, adsZ: -0.40, muzzle: [0, 0.0405, -0.43],
+    handR: [0, -0.070, 0.094, -0.3], handL: [0, -0.020, -0.18, 0] },
+  { model: 'Crossbow', hip: [0.19, -0.21, -0.42], sight: 0.082, adsZ: -0.40, muzzle: [0, 0.0405, -0.43], tint: 0x3e4a56,   // the harpoon gun: a crossbow in gunmetal
     handR: [0, -0.070, 0.094, -0.3], handL: [0, -0.020, -0.18, 0] },
   { model: 'RocketLauncher', hip: [0.22, -0.13, -0.26], sight: 0.14, adsZ: -0.24, muzzle: [0, 0.07, -0.84],
     handR: [0, -0.03, 0.010, -0.15], handL: [0, 0.0445, -0.27, 0] },
@@ -103,6 +119,10 @@ const VIEW = [
     handR: [0, -0.038, 0.135, -0.3], handL: [0, -0.0369, -0.27, 0] },
   { model: 'Minigun', hip: [0.24, -0.3, -0.32], muzzle: [0, 0, -0.76],
     handR: [0, -0.060, 0.068, -0.2], handL: [0, 0.107, -0.10, 0] },
+  { model: 'AR15',    hip: [0.19, -0.21, -0.40], sight: 0.1002, adsZ: -0.40, muzzle: [0, 0.0331, -0.569], tint: 0x4b5234,   // the LMG: the AR-15 in olive drab
+    handR: [0, -0.066, 0.045, -0.3], handL: [0, -0.002, -0.255, 0] },
+  { model: 'Sniper',  hip: [0.19, -0.2, -0.42], sight: 0.072, adsZ: -0.30, muzzle: [0, -0.0078, -0.721], tint: 0x2f6fd0,   // the railgun: the rifle in electric blue, no scope
+    handR: [0, -0.050, 0.128, -0.6], handL: [0, -0.048, -0.2, 0] },
   { model: 'Flamethrower', hip: [0.22, -0.26, -0.3], muzzle: [0, 0.03, -0.69],
     handR: [0, -0.040, 0.014, -0.2], handL: [0, -0.030, -0.414, 0] },
   { model: 'Knife',   hip: [0.2, -0.2, -0.42], knife: true },
@@ -142,6 +162,13 @@ const _q = new THREE.Quaternion();
 const TEMPLE = new THREE.Vector3(0.12, -0.11, -0.17);
 const TEMPLE_Q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), TEMPLE.clone().negate().normalize());
 const FWD = new THREE.Vector3(0, 0, -1);
+const XAXIS = new THREE.Vector3(1, 0, 0);
+const BLOOD_RED = new THREE.Color(0x4a0204);
+// Blades you can throw (G): damage, speed (m/s), spin (rad/s), and whether it goes in point first (a stab) or chops.
+const THROWN = {
+  Knife: { dmg: 40, speed: 26, spin: 15, stab: true }, Machete: { dmg: 60, speed: 22, spin: 11 },
+  Katana: { dmg: 75, speed: 21, spin: 9 }, Axe: { dmg: 85, speed: 20, spin: 10 },
+};
 
 function hand(name, [x, y, z, pitch]) {
   const h = getModel(name, null, false);
@@ -318,6 +345,20 @@ export class Weapons {
     this.ray.visible = false;
     ctx.scene.add(this.ray);
 
+    this.thrown = [];      // blades thrown (G): in the air, or stuck in whatever they hit
+    this.pins = [];        // harpooned bodies on their way to the wall they will hang on
+    this.harpoons = [];    // the shafts left in walls
+    const hg = new THREE.CylinderGeometry(0.009, 0.009, 1.1, 6).rotateX(Math.PI / 2), hm = new THREE.MeshStandardMaterial({ color: 0x3a3e44, metalness: 0.8, roughness: 0.35 });
+    for (let i = 0; i < 8; i++) { const m = new THREE.Mesh(hg, hm); m.castShadow = true; this.harpoons.push(m); }
+    this.harpoonI = 0;
+    // the railgun's beam: a line of light that hangs in the air for a moment
+    this.railLight = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 1, 8, 1, true).rotateX(Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(1.2, 3.2, 6.5), transparent: true, toneMapped: false, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.railLight.visible = false;
+    this.railLight.frustumCulled = false;
+    ctx.scene.add(this.railLight);
+    this.beamT = 0;
+
     // crossbow bolts left standing in whatever they hit
     this.bolts = [];
     const bg = new THREE.CylinderGeometry(0.006, 0.006, 0.44, 6).rotateX(Math.PI / 2);
@@ -390,6 +431,7 @@ export class Weapons {
     this.index = i;
     this.last[WEAPONS[i].slot] = i;
     this.models.forEach((m, k) => (m.visible = k === i));
+    document.body.classList.toggle('can-throw', !!THROWN[WEAPONS[i].name]);     // (the THROW button on a phone)
     this.cool = 0.12;
     this.ads = 0;
     this.reloadT = this.clearT = 0;       // putting it away abandons whatever you were doing to it
@@ -574,9 +616,164 @@ export class Weapons {
     parent.attach(b);                                       // ...then hand it over without it moving
   }
 
-  /** Take every bolt back (the sandbox was cleared, or the map changed). */
+  /** Take every bolt and thrown blade back (the sandbox was cleared, or the map changed). */
   clearBolts() {
     for (const b of this.bolts) { b.removeFromParent(); b.visible = false; }
+    for (const b of this.thrown) b.mesh.removeFromParent();
+    this.thrown.length = 0;
+    for (const h of this.harpoons) h.removeFromParent();
+    this.pins.length = 0;
+  }
+
+  /**
+   * The harpoon gun: through whoever it hits and, if there is a wall within 2.5 m behind them, carried back onto it and
+   * left hanging there from the shaft (a joint to the map). Nothing behind them: it stays in them, like a bolt.
+   */
+  harpoon(hit, point, dir) {
+    const ctx = this.ctx, owner = ctx.owners.get(hit.collider.handle);
+    const part = owner?.kind === 'part' ? owner.ragdoll.parts[owner.name] : null;
+    const from = point.clone().addScaledVector(dir, 0.3);
+    const wall = part && !part.gone && ctx.gore.castFixed(from.x, from.y, from.z, dir.x, dir.y, dir.z, 2.5);
+    if (!wall) { this.stickBolt(hit, point, dir); return; }
+    const at = from.addScaledVector(dir, wall.timeOfImpact);
+    owner.ragdoll.goLimp(5);
+    part.body.setLinvel({ x: dir.x * 15, y: dir.y * 15 + 1, z: dir.z * 15 }, true);
+    this.pins.push({ r: owner.ragdoll, part, at, dir: dir.clone(), t: 0 });
+    const h = this.harpoons[this.harpoonI++ % this.harpoons.length];
+    h.position.copy(at).addScaledVector(dir, -0.4);               // most of it standing out of the wall, through them
+    h.quaternion.setFromUnitVectors(FWD, dir);
+    ctx.scene.add(h);
+    sfx.chop();
+  }
+
+  /** Every frame, whether or not the weapons are in use: blades in flight, bodies being pinned, the railgun's beam. */
+  everyFrame(dt) {
+    this.flyThrown(dt);
+    for (let i = this.pins.length - 1; i >= 0; i--) {
+      const p = this.pins[i];
+      if (p.r.removed || p.part.gone) { this.pins.splice(i, 1); continue; }
+      const t = p.part.body.translation();
+      if ((p.t += dt) < 0.45 && Math.hypot(t.x - p.at.x, t.y - p.at.y, t.z - p.at.z) > 0.35) continue;
+      // there (or as near as it gets): it hangs from the shaft, a hand's width off the wall
+      const a = { x: p.at.x - p.dir.x * 0.12, y: p.at.y - p.dir.y * 0.12, z: p.at.z - p.dir.z * 0.12 };
+      this.ctx.world.createImpulseJoint(RAPIER.JointData.spherical({ x: 0, y: 0, z: 0 }, a), p.part.body, this.ctx.map.builder.body, true);
+      this.ctx.gore.splat(p.at, this.ctx.gore.castFixed(t.x, t.y, t.z, p.dir.x, p.dir.y, p.dir.z, 1)?.normal || { x: -p.dir.x, y: -p.dir.y, z: -p.dir.z }, 0.5);
+      this.pins.splice(i, 1);
+    }
+    if (this.beamT > 0) {
+      this.beamT -= dt;
+      const k = Math.max(0, this.beamT / 0.7);
+      this.railLight.material.opacity = k;
+      this.railLight.scale.x = this.railLight.scale.y = 0.3 + 0.7 * k;
+      this.railLight.visible = k > 0;
+    }
+  }
+
+  /** The railgun's line of light from the muzzle to where it stopped, with smoke along it. */
+  railBeam(a, b) {
+    const len = a.distanceTo(b);
+    this.railLight.position.copy(a).lerp(b, 0.5);
+    this.railLight.lookAt(b);
+    this.railLight.scale.set(1, 1, len);
+    this.railLight.visible = true;
+    this.beamT = 0.7;
+    const smoke = this.ctx.gore.smoke;
+    for (let s = 0.5; s < len; s += 0.6) {
+      const p = _p.copy(a).lerp(b, s / len);
+      smoke.emit(p.x, p.y, p.z, rnd(-0.1, 0.1), rnd(0, 0.2), rnd(-0.1, 0.1), rnd(0.04, 0.08), rnd(0.6, 1.2), -0.1, 0.5, 0.6, 0.75, 0, 2);
+    }
+  }
+
+  /** Blood on a weapon: each hit on someone leaves more, and it stays (its materials are its own from the first drop). */
+  bloodyMesh(model, k) {
+    if (!model) return;
+    const b = (model.userData.blood = Math.min(1, (model.userData.blood || 0) + k));
+    model.traverse((o) => {
+      if (!o.isMesh) return;
+      if (!o.userData.clean) { o.material = o.material.clone(); o.userData.clean = o.material.color.clone(); o.userData.rough = o.material.roughness; }
+      o.material.color.copy(o.userData.clean).lerp(BLOOD_RED, b * 0.75);
+      o.material.roughness = o.userData.rough * (1 - 0.6 * b);       // wet
+    });
+  }
+
+  /** The weapon in hand drew blood. */
+  bloody(hit, k = 0.15) {
+    if (this.ctx.owners.get(hit.collider.handle)?.kind === 'part') this.bloodyMesh(this.models[this.index].children[0], k);
+  }
+
+  /**
+   * G with a blade in hand (THROWN): it goes end over end, sticks point first in whatever it meets (and stays in a body,
+   * whatever happens to it next), and another is drawn. Returns false when what is in hand cannot be thrown.
+   */
+  throwBlade() {
+    const w = this.current, t = THROWN[w.name];
+    if (!t) return false;
+    if (this.cool > 0 || this.selfT > 0 || this.ctx.drone) return true;
+    const model = getModel(VIEW[this.index].model, null, false);
+    if (!model) return true;
+    this.aim();
+    if (this.models[this.index].children[0].userData.blood) this.bloodyMesh(model, this.models[this.index].children[0].userData.blood);
+    const mesh = new THREE.Group();                // the model's blade runs along -z from the grip at its origin
+    mesh.add(model);
+    const len = Math.max(0.15, -new THREE.Box3().setFromObject(model).min.z);
+    mesh.position.copy(_o).addScaledVector(_d, 0.45).addScaledVector(_r, 0.12);
+    mesh.quaternion.setFromUnitVectors(FWD, _d);
+    this.ctx.scene.add(mesh);
+    const pv = this.ctx.player.vel;
+    this.thrown.push({ mesh, v: _d.clone().multiplyScalar(t.speed).add(_m.set(pv.x, pv.y * 0.5, pv.z)), spin: 0, t, len, flying: true, life: 0 });
+    this.cool = 0.55;
+    this.swing = 0.28;
+    sfx.slash();
+    return true;
+  }
+
+  /** Thrown blades in the air: a little drop, end over end, and what they reach first is where they stop. */
+  flyThrown(dt) {
+    for (let i = this.thrown.length - 1; i >= 0; i--) {
+      const b = this.thrown[i];
+      if (!b.flying) continue;
+      if ((b.life += dt) > 4) { b.mesh.removeFromParent(); this.thrown.splice(i, 1); continue; }
+      b.v.y -= 9.81 * dt;
+      const sp = b.v.length(), dir = _m.copy(b.v).multiplyScalar(1 / sp);
+      const hit = this.ctx.raycast(b.mesh.position, dir, sp * dt + b.len * 0.5);
+      if (hit && this.landThrown(b, hit, dir.clone())) continue;
+      b.mesh.position.addScaledVector(b.v, dt);
+      b.spin += b.t.spin * dt;
+      b.mesh.quaternion.setFromUnitVectors(FWD, dir).multiply(_q.setFromAxisAngle(XAXIS, -b.spin));
+    }
+  }
+
+  /** A thrown blade reached something. Returns true if it stopped there (glass and lamps it goes through). */
+  landThrown(b, hit, dir) {
+    const ctx = this.ctx, owner = ctx.owners.get(hit.collider.handle), kind = owner?.kind;
+    const pt = b.mesh.position.clone().addScaledVector(dir, hit.timeOfImpact);
+    if (kind === 'glass' || kind === 'lamp') {
+      ctx.applyHit(hit, pt, dir, 10, 0, {});
+      b.mesh.position.copy(pt).addScaledVector(dir, 0.06);
+      b.v.multiplyScalar(0.8);
+      return false;
+    }
+    if (kind === 'part' || kind === 'prop' || kind === 'chunk') {
+      ctx.applyHit(hit, pt, dir, b.t.dmg, 60, b.t.stab ? { stab: true, melee: true } : { blade: true, chop: true });
+      if (kind === 'part') { sfx.chop(); this.bloodyMesh(b.mesh, 0.5); ctx.alert('violence', ctx.player.pos, 14); }
+    } else {
+      sfx.impact(ctx.surfaces.get(hit.collider.handle) || 'concrete');
+      if (kind === 'trap' || ctx.surfaces.get(hit.collider.handle) === 'metal') ctx.gore.sparks(pt, dir.clone().negate(), 5);
+    }
+    // it stops, point in along the way it was going, and from now on goes wherever that thing goes
+    const part = kind === 'part' ? owner.ragdoll.parts[owner.name] : null;
+    const parent = part ? (part.gone ? null : part.mesh) : kind === 'prop' ? owner.prop.mesh : kind === 'chunk' ? null : ctx.scene;
+    const i = this.thrown.indexOf(b);
+    if (!parent) { b.mesh.removeFromParent(); this.thrown.splice(i, 1); return true; }
+    b.flying = false;
+    b.mesh.quaternion.setFromUnitVectors(FWD, dir);
+    b.mesh.position.copy(pt).addScaledVector(dir, (part ? 0.1 : 0.04) - b.len);
+    b.mesh.updateMatrixWorld(true);
+    parent.updateMatrixWorld(true);
+    parent.attach(b.mesh);
+    const stuck = this.thrown.filter((x) => !x.flying);                  // only so many stay
+    if (stuck.length > 16) { stuck[0].mesh.removeFromParent(); this.thrown.splice(this.thrown.indexOf(stuck[0]), 1); }
+    return true;
   }
 
   releaseGrab() {
@@ -650,20 +847,21 @@ export class Weapons {
       // punch through (pen, metres), or skipping off a surface it only grazes. Each of those costs it some force.
       const pen = w.pen ?? (w.pellets > 1 ? 0.03 : 0.1);
       let from = origin, end = null, first = null, dmg = w.dmg, bodies = w.pierce || 1;
-      for (let leg = 0; leg < 5; leg++) {
+      for (let leg = 0; leg < (w.rail ? 14 : 5); leg++) {
         const hit = ctx.raycast(from, d, w.range || 300);
         if (!hit) { end = from.clone().addScaledVector(d, w.range || 120); break; }
         end = from.clone().addScaledVector(d, hit.timeOfImpact);
         const glass = ctx.owners.get(hit.collider.handle)?.kind === 'glass';
         dmg *= ctx.water.through(from, end);           // (a splash where it goes in, and water soaks up a round fast)
-        ctx.applyHit(hit, end, d, dmg, w.impulse * dmg / w.dmg, w.bolt ? { hole: w.hole, stab: true } : { hole: w.hole, pen, blunt: w.blunt, daze: w.daze, tase: w.tase });
+        ctx.applyHit(hit, end, d, dmg, w.impulse * dmg / w.dmg, w.bolt ? { hole: w.hole, stab: true } : { hole: w.hole, pen, blunt: w.blunt, daze: w.daze, tase: w.tase, pop: w.pop, rail: w.rail });
         if (w.bolt) { this.stickBolt(hit, end, d); break; }
+        if (w.harpoon) { this.harpoon(hit, end, d); break; }
         first ??= end;
         if (glass) { from = end.clone().addScaledVector(d, 0.05); continue; }     // through the window, and on
         if (ctx.owners.get(hit.collider.handle)?.kind === 'part') {
           if (--bodies <= 0) break;
           from = end.clone().addScaledVector(d, 0.45);
-          dmg *= 0.5;                                    // (out the other side with half of it: still enough to hurt whoever is behind)
+          if (!w.rail) dmg *= 0.5;                       // (out the other side with half of it: still enough to hurt whoever is behind)
           continue;
         }
         const n = hit.normal, graze = -(d.x * n.x + d.y * n.y + d.z * n.z);
@@ -679,9 +877,10 @@ export class Weapons {
         ctx.gore.bulletHole(out, d);
         ctx.gore.sparks(out, d, 3);
         from = out;
-        dmg *= 0.6;
+        if (!w.rail) dmg *= 0.6;
       }
-      if (!w.bolt && (i < 3 || w.pellets === 1)) this.tracer(muzzle, first || end);
+      if (w.rail) this.railBeam(muzzle, end);
+      else if (!w.bolt && (i < 3 || w.pellets === 1)) this.tracer(muzzle, first || end);
     }
     const can = this.can[this.index];
     ctx.soundAt = null;                   // (the shot is heard from the gun, not from where the round landed)
@@ -769,6 +968,7 @@ export class Weapons {
       if (!hit) continue;
       const pt = origin.clone().addScaledVector(d, hit.timeOfImpact);
       ctx.applyHit(hit, pt, travel, k.dmg, k.impulse, stab ? { stab: true, melee: true } : { blade: true, light: true });
+      this.bloody(hit, 0.12);
       if (ctx.owners.get(hit.collider.handle)?.kind === 'part') { sfx.chop(); ctx.alert('violence', ctx.player.pos, 12); }
       break;
     }
@@ -812,6 +1012,7 @@ export class Weapons {
       seen.add(h);
       const pt = origin.clone().addScaledVector(d, hit.timeOfImpact);
       ctx.applyHit(hit, pt, d, w.dmg, w.impulse, w.blunt ? { blunt: true } : { blade: true, light: true, chop: true });
+      this.bloody(hit, w.blunt ? 0.08 : 0.15);
       hitSomething = true;
       break;                                   // one swing, one thing hit
     }
@@ -839,6 +1040,7 @@ export class Weapons {
       if (!hit) continue;
       const pt = origin.clone().addScaledVector(d, hit.timeOfImpact);
       ctx.applyHit(hit, pt, d, w.dmg, w.impulse, { blade: true, light: true });
+      this.bloody(hit, 0.03);
       if (ctx.owners.get(hit.collider.handle)?.kind === 'part') ctx.alert('violence', ctx.player.pos, 16);
       break;
     }
@@ -1181,6 +1383,7 @@ export class Weapons {
   }
 
   update(dt, input) {
+    this.everyFrame(dt);
     this.ctx.soundAt = null;              // (co-op: what this player's weapons sound like comes from where they stand)
     const w = this.current;
     const pl = this.ctx.player;
@@ -1266,6 +1469,7 @@ export class Weapons {
 
   /** The muzzle flash and the tracers die away (main.js runs this even while nobody is using the weapons: NPCs fire tracers too). */
   fade(dt) {
+    this.everyFrame(dt);
     if (this.muzzleT > 0) {
       if (this.flashFollow) {
         const m = this.models[this.index];

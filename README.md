@@ -19,7 +19,7 @@ Then open http://localhost:8123. (ES modules need http://, opening `index.html` 
 | LMB | fire / swing / throw / grab |
 | RMB | aim down the sights (guns); throw the held object (Grab Gun) |
 | V | bodycam on/off |
-| G | graphics: high / fast (turns the effects off on slow machines) |
+| G | with a knife, machete, katana or axe in hand: throw it (THROW on a phone). Otherwise graphics: high / fast (turns the effects off on slow machines) |
 | 1-8 or wheel | pick a weapon group; press the same number again for the next weapon in it (table under Weapons) |
 | R / F / B | reload / clear a jam / switch auto and semi |
 | F | open or close the door in front of you; get into (or out of) a car beside you; otherwise Ready or Not mode: shout for compliance, or arrest whoever has given up in front of you |
@@ -309,15 +309,15 @@ the pipeline off.
 
 ## Weapons
 
-Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of `weapons.js`. There are 23, in eight groups:
+Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of `weapons.js` (one entry each, in the same order). There are 39, in eight groups:
 
 | Key | Group | Weapons |
 | --- | --- | --- |
-| 1 | Sidearms | Pistol, Revolver, Taser (7 m, one cartridge: 5 s on the floor locked up, 6 s dazed after) |
+| 1 | Sidearms | Pistol, Revolver, Desert Eagle, Taser (7 m, one cartridge: 5 s on the floor locked up, 6 s dazed after) |
 | 2 | SMGs | SMG, Uzi |
-| 3 | Shotguns | Shotgun, Double Barrel, Beanbag (a bag, not a shot: a bruise, knocked flat, 3 s dazed; stops at the first thing it hits) |
-| 4 | Rifles | Rifle, AR-15, Sniper, Crossbow |
-| 5 | Heavy | Rocket, Grenade Launcher, Minigun, Flamethrower |
+| 3 | Shotguns | Shotgun, Double Barrel, Auto Shotgun, Beanbag (a bag, not a shot: a bruise, knocked flat, 3 s dazed; stops at the first thing it hits) |
+| 4 | Rifles | Rifle, AR-15, AK-47, Sniper, Crossbow, Harpoon Gun |
+| 5 | Heavy | Rocket, Grenade Launcher, Minigun, LMG, Railgun, Flamethrower |
 | 6 | Blades | Knife, Machete, Katana, Laser Sword, Axe, Chainsaw |
 | 7 | Blunt | Bat, Crowbar, Sledgehammer |
 | 8 | Gear | Pepper Spray (a 3 m cone: anyone in it is 3.5 s dazed, a can lasts 8 s), Grenade, Flashbang (1.5 s fuse: whites out your screen if you look at it and rings your ears; anyone within 13 m who can see it doubles over for 2 to 6 s, stops fighting, gives up far more easily when shouted at, and can be cuffed), Grab Gun, Rope Tool and Weld Tool (below), **Magic Wand** (hold the left button on someone and they rise into the air in front of you and hang there, slowly turning, limbs loose, following where you look; the right button bursts them from the inside out: the trunk and the head go and the limbs are thrown off, in violet sparks; on a prop it sets it off. The host's only in co-op. `updateWand` in `weapons.js`), Drone (flies where you look from its own camera, Shift = fast, click or a crash sets it off; it is a slow steered rocket, `flyDrone()` in `main.js`) |
@@ -326,6 +326,23 @@ Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of
   view springs back from, and leaves the rest where it landed, so a burst climbs and has to be pulled back down. Sustained
   fire also opens the spread up (`bloom`). Aiming down sights takes 30% off. `RECOIL` in `weapons.js` scales every gun at once.
 - **AR-15**: faster, flatter and more accurate than the Rifle, a little less damage per round.
+- **New guns** (the models are the existing ones, recoloured): the **Desert Eagle** (a hand cannon: 58 a round, 7 in the
+  magazine, a big kick, through one body), the **Auto Shotgun** (full auto, 9 pellets a shot, 20 shells), the **AK-47** (24 a
+  round, wilder than the rifle, through one body and 45 cm of wall), the **LMG** (a 100-round belt and a 5 s reload), the
+  **Railgun** (one slug every 1.5 s through every body in its path and 4 m of wall at full strength, a blue line of light left
+  hanging in the air; whoever it goes through the middle of is cut in half) and the **Harpoon Gun** (through whoever it hits
+  and, if there is a wall within 2.5 m behind them, carries them back onto it and leaves them hanging from the shaft: a joint
+  to the map, `harpoon()` and `everyFrame()` in `weapons.js`).
+- **Heads.** Every gun but the sidearms and the less-lethal (`pop`) takes a head apart with enough rounds: once it has had
+  about 90 (a head has 32, so 6 rifle rounds, 4 from the AK, one close shotgun blast), it bursts like a sniper hit, and the
+  pistol and revolver never do (they open the back of the skull, once).
+- **Throwing blades (G).** The knife, the machete, the katana and the axe can be thrown: end over end, a little drop, and
+  they go in point first and stay in whatever they hit (a body, a severed limb, a prop, a wall; they go through glass).
+  Thrown, the knife does 40 (a stab), the machete 60, the katana 75 and the axe 85 (chops: they can take a limb or a head off
+  the way a swing does). Another is in your hand half a second later; the last 16 stay where they stuck (`throwBlade`,
+  `flyThrown`, `landThrown` in `weapons.js`).
+- **Blood on blades.** Every hit on someone leaves more blood on the weapon in your hand (and on a thrown one), darker and
+  wetter each time, and it stays (`bloodyMesh`).
 - **Ammunition.** Guns hold `mag` rounds. **R** reloads (`reload` seconds); the shotgun loads one shell at a time and firing
   interrupts it. An empty gun clicks. Each shot has a small chance (`jam`) of stopping the action: **F** racks it clear, losing
   the stuck round. **B** switches automatic weapons between auto and one shot per pull. The double barrel, crossbow and rocket
@@ -430,6 +447,8 @@ spills from a hit of 60 or more, or once it has taken one and a half times its h
 (about one drop per 6 points: a pistol round 6, a shotgun pellet or an SMG round 2 or 3, the sniper 14), drops are finer, the finest leave
 no mark, and only the odd shotgun pellet throws spatter onto the wall behind, so a body is marked mostly by its wounds and the pool that
 spreads under it rather than by blood thrown metres round it.
+
+**More gore:** a limb broken by a round is an open fracture: the jagged end of the bone stands out of the exit wound and bleeds (`fracture()` in `ragdoll.js`, `boneShard()` in `wounds.js`). Heavy rounds (24 a hit or more) blow a piece out of the back half the time. A head taken apart throws brain and bone at whatever is behind it, leaves a red cloud where it was, and the neck fountains.
 
 **How a hit feels:** every round into a person is heard (`sfx.flesh`: a wet slap and a thump, with the crack of bone for a head) and
 seen from where you stand (a short, bright puff of blood mist thrown back out of the entry toward the shooter, `mist(..., puff)`, bigger

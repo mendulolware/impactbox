@@ -392,6 +392,12 @@ export const sfx = {
   minigun()   { play('minigun', { gain: 0.5, send: 0.05, rate: 1.12 }) || shot({ crack: 0.6, crackHz: 5000, body: 0.55, bodyHz: [3000, 400], bodyDur: 0.05, thump: 0.4, thumpHz: [200, 80], thumpDur: 0.04, tail: 0.16 }); },
   sniper()    { play('sniper', { gain: 1.1, send: 0.3 }) || shot({ crack: 1.3, crackHz: 3600, body: 1.3, bodyHz: [2600, 90], bodyDur: 0.5, thump: 1.1, thumpHz: [150, 26], thumpDur: 0.45, tail: 0.8 }); },
   rocket()    { noise({ dur: 1.1, f0: 500, f1: 3500, q: 0.8, gain: 0.8, type: 'bandpass', send: 0.3 }); tone({ f0: 80, f1: 40, dur: 0.4, gain: 0.7 }); },
+  deagle()    { play('revolver', { gain: 1.05, send: 0.2, rate: 0.82 }) || sfx.revolver(); tone({ f0: 95, f1: 35, dur: 0.18, gain: 0.35 }); },
+  ak()        { play('rifle', { gain: 0.9, send: 0.12, rate: 0.84 }) || sfx.rifle(); },
+  lmg()       { play('ar15', { gain: 0.85, send: 0.12, rate: 0.9 }) || sfx.ar15(); },
+  autoshotgun() { play('shotgun', { gain: 0.9, send: 0.18, rate: 1.12 }) || sfx.shotgun(); },
+  railgun()   { tone({ f0: 400, f1: 3200, dur: 0.1, gain: 0.22, type: 'sawtooth' }); noise({ dur: 0.3, f0: 7000, f1: 300, gain: 0.9 }); tone({ f0: 85, f1: 28, dur: 0.5, gain: 0.7 }); },
+  harpoon()   { sfx.twang(); tone({ f0: 160, f1: 60, dur: 0.12, gain: 0.35 }); },
   twang()     { tone({ f0: 520, f1: 140, dur: 0.16, gain: 0.3, type: 'triangle' }); noise({ dur: 0.06, f0: 3000, f1: 800, gain: 0.25 }); },
   /** A spent case hitting the ground a moment after the shot. */
   shell()     { const d = rnd(0.42, 0.6); play('click', { delay: d, gain: 0.1, rate: 2.3, jitter: 0.12 }); play('click', { delay: d + 0.09, gain: 0.05, rate: 2.6, jitter: 0.12 }); },
