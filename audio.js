@@ -70,6 +70,10 @@ const SPACES = {
   pool:      { wet: 0.3,  bed: 'wind' },
   office:    { wet: 0.35, bed: 'hum', indoor: 1 },
   nattklubb: { wet: 0.4,  bed: 'club', indoor: 1 },
+  simons:    { wet: 0.32, bed: 'hum', indoor: 1 },
+  viggos:    { wet: 0.4,  bed: 'hum', indoor: 1 },
+  leos:      { wet: 0.3,  bed: 'hum', indoor: 1 },
+  gustavs:   { wet: 0.22, bed: 'hum', indoor: 1 },
 };
 
 let volume = 1;

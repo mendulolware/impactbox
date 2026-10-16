@@ -429,9 +429,9 @@ export class MapBuilder {
     return mesh;
   }
 
-  /** A ball (scenery: a mirror ball, a lamp globe). */
-  ball(x, y, z, r, material) {
-    const g = new THREE.SphereGeometry(r, 20, 14);
+  /** A ball (scenery: a mirror ball, a lamp globe, a ball in a ball pit). seg: how round (fewer for lots of small ones). */
+  ball(x, y, z, r, material, seg = 20) {
+    const g = new THREE.SphereGeometry(r, seg, Math.max(4, Math.round(seg * 0.7)));
     g.translate(x, y, z);
     this._add(g, material);
   }

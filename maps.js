@@ -23,7 +23,9 @@ function crew(ctx) {
     const d = PROP_TYPES[type], h = (d.half ? d.half[1] : d.h) * 2 + 0.02;
     for (let i = 0; i < n; i++) at(type, x, z, yaw + i * 0.2, base + i * h);
   };
-  return { at, npc, stack };
+  // someone who stays put (and goes back there once things calm down): staff, a queue, a shopper in an aisle
+  const stay = (x, z, kind, yaw = Math.random() * TAU, base = 0, dance = false) => { const r = npc(x, z, kind, base, yaw); if (r) r.spot = { x, z, dance }; return r; };
+  return { at, npc, stack, stay };
 }
 
 /** Rows of windows on one face of a building. The face runs from a to b along x (or z), at height 0..h. */
@@ -53,6 +55,57 @@ function neonName(g, W, H) {
   g.fillText(text, W / 2, H * 0.52);
   g.shadowBlur = 0; g.fillStyle = '#ffe9fb';
   g.fillText(text, W / 2, H * 0.52);
+}
+
+/**
+ * A painted sign for sign(): text centred on a colour (or on nothing, with a glow round it), an optional border and a
+ * smaller second line under it. Returns the painter.
+ */
+function textSign({ text, sub = '', fg = '#ffffff', bg = null, glow = null, border = null, italic = false, weight = 800 }) {
+  return (g, W, H) => {
+    const font = (size) => `${italic ? 'italic ' : ''}${weight} ${size}px "Barlow Condensed", Impact, "Arial Narrow", sans-serif`;
+    const fit = (t, size) => { g.font = font(size); const k = (W * 0.88) / g.measureText(t).width; if (k < 1) g.font = font(Math.floor(size * k)); };
+    if (bg) { g.fillStyle = bg; g.fillRect(0, 0, W, H); }
+    if (border) { g.strokeStyle = border; g.lineWidth = Math.max(4, H * 0.05); g.strokeRect(H * 0.06, H * 0.06, W - H * 0.12, H - H * 0.12); }
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    const y = sub ? H * 0.4 : H * 0.53;
+    fit(text, Math.round(H * (sub ? 0.46 : 0.6)));
+    if (glow) { g.shadowColor = glow; g.shadowBlur = H * 0.18; }
+    g.fillStyle = fg;
+    g.fillText(text, W / 2, y);
+    g.shadowBlur = 0;
+    if (sub) { fit(sub, Math.round(H * 0.2)); g.fillText(sub, W / 2, H * 0.77); }
+  };
+}
+
+/** Simons McDonalds' menu board: what there is and what it costs. */
+function menuBoard(g, W, H) {
+  g.fillStyle = '#1b1b1d'; g.fillRect(0, 0, W, H);
+  const items = [['BIG SIMON', '59:-'], ['SIMONBURGARE', '35:-'], ['CHEESE SIMON', '39:-'], ['POMMES FRITES', '25:-'], ['NUGGETS 6 ST', '45:-'], ['MILKSHAKE', '29:-'], ['GLASS', '15:-'], ['LÄSK', '22:-']];
+  const rh = H / 5.2, cw = W / 2;
+  g.textBaseline = 'middle'; g.textAlign = 'center';
+  g.fillStyle = '#ffc72c'; g.font = `800 ${Math.round(rh * 0.62)}px "Barlow Condensed", Impact, sans-serif`;
+  g.fillText('MENY', W / 2, rh * 0.6);
+  items.forEach(([name, price], i) => {
+    const c = i % 2, y = rh * (1.6 + Math.floor(i / 2));
+    g.font = `700 ${Math.round(rh * 0.44)}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+    g.textAlign = 'left'; g.fillStyle = '#ffffff'; g.fillText(name, c * cw + cw * 0.07, y);
+    g.textAlign = 'right'; g.fillStyle = '#ffc72c'; g.fillText(price, c * cw + cw * 0.93, y);
+  });
+}
+
+/** A dartboard: the black and cream segments, the red and green rings, the bull. */
+function dartboard(g, W, H) {
+  const cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.48;
+  g.fillStyle = '#111'; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.fill();
+  for (let i = 0; i < 20; i++) {
+    const a0 = (i - 0.5) * Math.PI / 10 - Math.PI / 2, a1 = a0 + Math.PI / 10;
+    for (const [r0, r1, col] of [[0.1, 0.62, i % 2 ? '#e8dcc0' : '#151515'], [0.62, 0.68, i % 2 ? '#1f8a3a' : '#c8202a'], [0.68, 0.92, i % 2 ? '#e8dcc0' : '#151515'], [0.92, 0.98, i % 2 ? '#1f8a3a' : '#c8202a']]) {
+      g.fillStyle = col; g.beginPath(); g.arc(cx, cy, R * r1, a0, a1); g.arc(cx, cy, R * r0, a1, a0, true); g.fill();
+    }
+  }
+  g.fillStyle = '#1f8a3a'; g.beginPath(); g.arc(cx, cy, R * 0.1, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#c8202a'; g.beginPath(); g.arc(cx, cy, R * 0.045, 0, Math.PI * 2); g.fill();
 }
 
 /** The Wall of Fame: a gold-framed board, a star, and the one name on it. */
@@ -952,6 +1005,413 @@ export const MAPS = {
       for (const z of [5.9, 7.55, 9.2]) at('toilet', -15.55, z, Math.PI / 2);
       at('barrel', 14.6, 9.2); at('barrel', 15.3, 9.2); at('crate', 10, 9.3); at('crate', 10.1, 9.3, 0.3, 0.62);
       at('car', -9, 16.6, Math.PI / 2); at('car', 10, 20.2, -Math.PI / 2); at('cone', -3.4, 14.2); at('cone', 3.4, 14.2);
+    },
+  },
+  // ---------------------------------------------------------------------------------- simons
+  simons: {
+    id: 'simons', name: 'Simons McDonalds', icon: '🍔', blurb: 'a burger place: the counter, the kitchen, booths, a ball pit, the car park',
+    sky: 'day', spawn: { x: 0, y: 1.0, z: 17 }, yaw: 0, bounds: { x0: -14, x1: 14, z0: -8, z1: 20 },
+
+    build(b) {
+      const H = 4, T = 0.25, D = 1.3, H2 = Math.PI / 2;
+      const red = b.mat('plain', 0xc8102e, { roughness: 0.5 });
+      const yellow = b.mat('plain', 0xffc72c, { roughness: 0.45 });
+      const white = b.mat('concrete', 0xf1efe9, { roughness: 0.7 });
+      const tileA = b.mat('plain', 0xeee9df, { roughness: 0.3 }), tileB = b.mat('plain', 0xb3222b, { roughness: 0.3 });
+      const kfloor = b.mat('concrete', 0x8e9296, { roughness: 0.5 });
+      const steel = b.mat('metal', 0xb8bec4, { metalness: 0.8, roughness: 0.3 });
+      const black = b.mat('plain', 0x1d1d20, { roughness: 0.4 });
+      const glass = b.mat('plain', 0xbfdcec, { transparent: true, opacity: 0.25, roughness: 0.05, metalness: 0.3 });
+      const screen = b.mat('plain', 0x101418, { emissive: 0x3a6a9a, emissiveIntensity: 0.6 });
+      const hot = b.mat('plain', 0x2a1408, { emissive: 0xff7a1a, emissiveIntensity: 0.8, roughness: 0.2 });
+      const oil = b.mat('plain', 0x8a5a10, { emissive: 0xffa020, emissiveIntensity: 0.35, roughness: 0.1 });
+      const road = b.mat('asphalt', 0x55575a), con = b.mat('concrete', 0x9a9c9e);
+      const pit = [0xe8322e, 0x2e7de8, 0xf2c41a, 0x38b24a].map((c) => b.mat('plain', c, { roughness: 0.35 }));
+      const dr = (x, z, yaw, locked = false) => b.door(x, z, yaw, { wallH: H, wallT: T, gap: D, locked });
+
+      b.ground();
+      b.box(0, 0.006, 0, 20, 0.012, 14, kfloor);
+      for (let i = 0; i < 20; i++) for (let j = 0; j < 8; j++) b.box(-9.5 + i, 0.016, -0.5 + j, 1, 0.01, 1, (i + j) % 2 ? tileA : tileB, { solid: false });
+      b.box(0, H + 0.1, 0, 20.4, 0.2, 14.4, white);
+      b.box(0, H + 0.45, 0, 21, 0.5, 15, red);
+
+      // outside: the car park, the pole sign, the drive-through
+      b.box(0, 0.01, 14.5, 44, 0.02, 15, road, { solid: false });
+      b.box(0, 0.06, 7.85, 22, 0.12, 1.4, con);
+      for (let x = -12; x <= 8; x += 3) b.stripe(x, 15, 4.5);
+      b.cyl(9.5, 3.6, 13, 0.18, 7.2, steel);
+      b.box(9.5, 7.8, 13, 3.4, 1.7, 0.3, red);
+      const pole = textSign({ text: 'SIMONS', sub: 'ÖPPET DYGNET RUNT', fg: '#ffc72c', bg: '#c8102e' });
+      b.sign(9.5, 7.8, 13.16, 3.2, 1.5, pole, { glow: 0.5 });
+      b.sign(9.5, 7.8, 12.84, 3.2, 1.5, pole, { ry: Math.PI, glow: 0.5 });
+      for (let z = 10; z >= -6; z -= 4) b.stripe(12.5, z, 2, 0, 0.3);
+      b.box(13.2, 1.1, 2.5, 0.15, 2.2, 1.2, black);
+      b.sign(13.11, 1.35, 2.5, 1.1, 1.4, menuBoard, { ry: -H2, glow: 0.6 });
+
+      // the front: glass either side of the doors, the yellow band and the name over it
+      const front = (x0, x1, z) => {
+        const n = Math.round((x1 - x0) / 2.5), w = (x1 - x0) / n;
+        b.box((x0 + x1) / 2, 0.4, z, x1 - x0, 0.8, T, white);
+        b.box((x0 + x1) / 2, H - 0.6, z, x1 - x0, 1.2, T, yellow);
+        for (let i = 0; i <= n; i++) b.box(x0 + i * w, H / 2, z, 0.12, H, T, black);
+        for (let i = 0; i < n; i++) b.pane(x0 + (i + 0.5) * w, 1.8, z, w - 0.12, 2.0, 0.02, glass);
+      };
+      front(-10, -1.3, 7); front(1.3, 10, 7);
+      dr(-0.65, 7, 0); dr(0.65, 7, 0);
+      b.sign(0, H + 1.25, 7.56, 9, 1.3, textSign({ text: 'SIMONS MCDONALDS', fg: '#ffc72c', bg: '#c8102e', border: '#ffc72c' }), { glow: 0.5 });
+      b.wall(-10, -7, 10, -7, H, T, white);
+      b.wall(-10, -7, -10, 7, H, T, white, [[2 / 14, D]]);
+      dr(-10, -5, H2);                                                         // the back door, out of the kitchen
+      b.wall(10, -7, 10, 7, H, T, white, [[5 / 14, 1.4]]);
+      b.box(10, 0.5, -2, T, 1.0, 1.4, white); b.box(10, (H + 2.2) / 2, -2, T, H - 2.2, 1.4, white);   // the drive-through window
+      b.box(10.3, 1.0, -2, 0.5, 0.06, 1.4, steel);
+
+      // the counter with its tills, the menu over it; behind it the drinks machine and the fries
+      b.box(-1, 0.55, -0.6, 10, 1.1, 0.7, red); b.box(-1, 1.12, -0.6, 10.2, 0.05, 0.85, steel);
+      b.box(-1, 0.1, -0.24, 10, 0.2, 0.02, yellow, { solid: false });
+      for (const x of [-4.5, -2, 0.5, 3]) { b.box(x, 1.28, -0.75, 0.42, 0.26, 0.36, black); b.box(x, 1.44, -0.57, 0.36, 0.22, 0.02, screen, { solid: false }); }
+      b.wall(-10, -3, 10, -3, H, T, white, [[0.75, D]]);
+      dr(5, -3, 0);
+      b.sign(-1, 2.95, -2.86, 9, 1.5, menuBoard, { glow: 0.8 });
+      b.box(-6.5, 1.0, -2.55, 1.2, 2.0, 0.6, steel); b.box(-6.5, 1.3, -2.24, 1.0, 0.5, 0.02, screen, { solid: false });
+      b.box(2.5, 0.5, -2.55, 2.0, 1.0, 0.6, steel); b.box(2.5, 1.02, -2.55, 1.8, 0.04, 0.5, oil, { solid: false });
+
+      // the kitchen: grill, fryers, prep tables, and the walk-in freezer (locked)
+      b.box(-6.5, 0.45, -6.3, 3, 0.9, 1.1, black); b.box(-6.5, 0.92, -6.3, 2.9, 0.04, 1.0, hot, { solid: false });
+      for (const x of [-3.5, -2.3]) { b.box(x, 0.45, -6.4, 1.0, 0.9, 0.9, steel); b.box(x, 0.92, -6.4, 0.8, 0.04, 0.7, oil, { solid: false }); }
+      for (const x of [-1, 2]) b.box(x, 0.45, -4.8, 2.2, 0.9, 1.0, steel);
+      b.wall(6, -7, 6, -4, H, T, steel);
+      b.wall(6, -4, 10, -4, H, T, white, [[0.5, D]]);
+      dr(8, -4, 0, true);
+
+      // the dining room: booths down the west wall, a ball pit in the south-east corner
+      for (const z of [0.6, 3.2, 5.8]) {
+        b.box(-9.3, 0.25, z - 0.75, 1.0, 0.5, 0.5, red); b.box(-9.3, 0.25, z + 0.75, 1.0, 0.5, 0.5, red);
+        b.box(-9.3, 0.8, z - 1.04, 1.0, 0.7, 0.1, red); b.box(-9.3, 0.8, z + 1.04, 1.0, 0.7, 0.1, red);
+        b.box(-9.35, 0.74, z, 0.9, 0.05, 0.8, white); b.cyl(-9.35, 0.36, z, 0.05, 0.72, steel);
+      }
+      b.box(7.9, 0.3, 3.6, 3.9, 0.6, 0.12, yellow); b.box(6.0, 0.3, 5.25, 0.12, 0.6, 3.4, yellow);
+      for (let i = 0; i < 260; i++) b.ball(b.rnd(6.2, 9.7), b.rnd(0.08, 0.38), b.rnd(3.75, 6.75), 0.07, pit[(b.rnd() * 4) | 0], 7);
+      b.box(-3.2, 0.55, 6.5, 1.2, 1.1, 0.5, black);                            // the bins by the door
+
+      for (const [x, z] of [[-5, 1.5], [0, 3.5], [5, 1.5], [-1, -1.6], [-3, -5]]) b.light(x, 3.75, z, 0xfff4e0, 13, 10);
+      b.light(8, 3.5, -5.5, 0xbfe6ff, 4, 5);
+    },
+
+    populate(ctx) {
+      const { at, npc, stay } = crew(ctx);
+      for (const x of [-4.5, -2, 0.5]) stay(x, -1.5, null, Math.PI);              // at the tills
+      stay(-6.4, -5.4, null, 0); stay(-2.9, -5.5, null, Math.PI);                 // in the kitchen
+      for (let i = 0; i < 4; i++) stay(-2.1 + (i % 2) * 0.25, 0.6 + i * 0.85, null, 0);   // the queue
+      stay(0.4, 0.6, null, 0);
+      stay(-8.3, 0.6, null, -Math.PI / 2); stay(-8.3, 3.2, null, -Math.PI / 2);   // eating in the booths
+      stay(7.8, 5.2, null);                                                        // a child in the ball pit
+      npc(3, 5, 'thug'); npc(-6, 12, 'thug');
+      for (const [x, z] of [[-4.5, 3.6], [-1, 5.2], [3, 3.2]]) { at('table', x, z, 0); at('chair', x - 0.95, z, Math.PI / 2); at('chair', x + 0.95, z, -Math.PI / 2); }
+      at('car', -9, 15.2, 0); at('car', -3, 15.2, 0); at('car', 6, 15.5, Math.PI); at('car', 12.5, -4, 0);
+      at('cone', 12.5, 9); at('cone', 11.6, 9);
+    },
+  },
+
+  // ------------------------------------------------------------------------------------- viggos
+  viggos: {
+    id: 'viggos', name: 'Viggos Bar', icon: '🍺', blurb: 'a pub at night: the bar and its taps, booths, a pool table, darts, the cellar door',
+    sky: 'night', spawn: { x: 0, y: 1.0, z: 13 }, yaw: 0, bounds: { x0: -12, x1: 12, z0: -8, z1: 15 },
+
+    build(b) {
+      const H = 3.6, T = 0.3, D = 1.3, H2 = Math.PI / 2;
+      const brick = b.mat('brick', 0x8a4a34);
+      const planks = b.mat('planks', 0x7a5232);
+      const dark = b.mat('planks', 0x4e3220);
+      const brass = b.mat('metal', 0xc9a25a, { metalness: 0.9, roughness: 0.3 });
+      const felt = b.mat('plain', 0x1d6a3a, { roughness: 1 });
+      const leather = b.mat('plain', 0x5a1a14, { roughness: 0.7 });
+      const black = b.mat('plain', 0x151517, { roughness: 0.4 });
+      const ceil = b.mat('planks', 0x2a1a10);
+      const glass = b.mat('plain', 0x9fb8c8, { transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.3 });
+      const bottles = [0x2f7a3a, 0x8a5a1a, 0xa8c8d8, 0x6a1a2a].map((c) => b.mat('plain', c, { emissive: c, emissiveIntensity: 0.4, roughness: 0.1, transparent: true, opacity: 0.85 }));
+      const balls = [0xf2f2ee, 0xf2c41a, 0x2a4ad2, 0xd22a2a, 0x7a2ad2, 0xf28a1a, 0x111111].map((c) => b.mat('plain', c, { roughness: 0.15 }));
+      const road = b.mat('asphalt', 0x4a4c50), con = b.mat('concrete', 0x8c8e90);
+      const dr = (x, z, yaw, locked = false) => b.door(x, z, yaw, { wallH: H, wallT: T, gap: D, locked });
+
+      b.ground();
+      b.box(0, 0.01, 0, 18, 0.02, 14, planks);
+      b.box(0, H + 0.1, 0, 18.6, 0.2, 14.6, ceil); b.box(0, H + 0.4, 0, 19, 0.4, 15, con);
+      for (const z of [-5, -2, 1, 4]) b.box(0, H - 0.08, z, 18, 0.16, 0.22, dark, { solid: false });
+      b.box(0, 0.01, 17, 60, 0.02, 9, road, { solid: false }); b.box(0, 0.06, 9.8, 60, 0.12, 5.2, con);
+
+      // the shell: brick, a door in the middle of the front between two windows, the cellar door at the back (locked)
+      b.wall(-9, -7, 9, -7, H, T, brick, [[16.5 / 18, D]]);
+      dr(7.5, -7, 0, true);
+      b.wall(-9, -7, -9, 7, H, T, brick); b.wall(9, -7, 9, 7, H, T, brick);
+      b.wall(-9, 7, 9, 7, H, T, brick, [[0.5, D], [0.22, 3], [0.78, 3]]);
+      for (const x of [-5.04, 5.04]) { b.box(x, 0.45, 7, 3, 0.9, T, brick); b.box(x, (H + 2.4) / 2, 7, 3, H - 2.4, T, brick); b.pane(x, 1.65, 7, 2.9, 1.5, 0.02, glass); }
+      dr(0, 7, 0);
+      b.sign(0, 2.95, 7.17, 4.6, 0.9, textSign({ text: 'VIGGOS BAR', fg: '#f5d58a', bg: '#2a170c', border: '#c9a25a' }), { glow: 0.45 });
+      b.sign(-5.04, 1.75, 6.75, 2.4, 0.7, textSign({ text: 'VIGGOS', fg: '#ffb04a', glow: '#ff6a00', italic: true }), { glow: 2.2 });     // neon in the windows
+      b.sign(5.04, 1.75, 6.75, 2.0, 0.6, textSign({ text: 'ÖPPET', fg: '#ff4a4a', glow: '#ff0000' }), { glow: 2.2 });
+      for (const x of [-8.83, 8.83]) b.box(x, 0.55, 0, 0.04, 1.1, 14, dark, { solid: false });   // wood panelling round the walls
+      b.box(0, 0.55, -6.83, 18, 1.1, 0.04, dark, { solid: false });
+
+      // the bar along the back: counter, brass foot rail, taps, the back bar of bottles, stools
+      b.box(-1, 0.55, -4.3, 10, 1.1, 0.7, dark); b.box(-1, 1.12, -4.3, 10.2, 0.06, 0.9, planks);
+      b.box(-1, 0.25, -3.9, 10, 0.04, 0.04, brass, { solid: false });
+      for (const x of [-4, -3.5, -3, -1.5, -1]) { b.cyl(x, 1.36, -4.45, 0.025, 0.42, brass); b.box(x, 1.6, -4.4, 0.05, 0.14, 0.05, black, { solid: false }); }
+      b.box(-1, 0.5, -6.55, 12, 1.0, 0.6, dark); b.box(-1, 1.02, -6.55, 12.1, 0.04, 0.65, planks);
+      for (const y of [1.55, 2.1, 2.65]) {
+        b.box(-1, y, -6.65, 11, 0.03, 0.35, dark, { solid: false });
+        for (let x = -6.3; x <= 4.3; x += 0.3) b.cyl(x + b.rnd(-0.06, 0.06), y + 0.15, -6.65, 0.035, 0.26 + b.rnd(-0.04, 0.06), bottles[(b.rnd() * 4) | 0], { solid: false, sides: 8 });
+      }
+      for (let x = -5.5; x <= 3.5; x += 1.1) { b.cyl(x, 0.38, -3.45, 0.05, 0.76, brass); b.cyl(x, 0.78, -3.45, 0.2, 0.06, leather); }
+      b.box(6.5, 2.6, -6.8, 1.8, 1.0, 0.08, black);
+      b.sign(6.5, 2.6, -6.75, 1.66, 0.88, textSign({ text: 'SVERIGE 2 - 1', sub: 'LIVE', fg: '#ffffff', bg: '#1a5a2a' }), { glow: 0.5 });
+
+      // booths down the west side
+      for (const z of [-1.4, 1.4, 4.2]) {
+        b.box(-8.3, 0.25, z - 0.8, 1.1, 0.5, 0.5, leather); b.box(-8.3, 0.25, z + 0.8, 1.1, 0.5, 0.5, leather);
+        b.box(-8.3, 0.85, z - 1.08, 1.1, 0.75, 0.1, leather); b.box(-8.3, 0.85, z + 1.08, 1.1, 0.75, 0.1, leather);
+        b.box(-8.35, 0.74, z, 1.0, 0.05, 0.85, dark); b.cyl(-8.35, 0.36, z, 0.05, 0.72, black);
+      }
+      // the pool table, its lamp, the cues on the wall; darts on the east wall
+      b.box(3.5, 0.41, 1.5, 1.5, 0.82, 2.7, dark);
+      b.box(3.5, 0.825, 1.5, 1.27, 0.01, 2.47, felt, { solid: false });
+      for (const s of [-1, 1]) { b.box(3.5 + s * 0.69, 0.87, 1.5, 0.12, 0.08, 2.7, dark, { solid: false }); b.box(3.5, 0.87, 1.5 + s * 1.29, 1.5, 0.08, 0.12, dark, { solid: false }); }
+      let k = 0;
+      for (let row = 0; row < 3; row++) for (let i = 0; i <= row; i++) b.ball(3.5 + (i - row / 2) * 0.06, 0.858, 0.9 - row * 0.052, 0.028, balls[1 + (k++ % 6)], 10);
+      b.ball(3.5, 0.858, 2.2, 0.028, balls[0], 10);
+      b.box(3.5, 2.55, 1.5, 0.5, 0.12, 1.6, black, { solid: false });
+      b.box(8.8, 1.5, 3.8, 0.06, 1.4, 0.7, dark);
+      for (let i = 0; i < 4; i++) b.box(8.74, 1.45, 3.55 + i * 0.16, 0.025, 1.45, 0.025, planks, { solid: false });
+      b.box(8.83, 1.73, -1.5, 0.04, 0.8, 0.8, black);
+      b.sign(8.8, 1.73, -1.5, 0.48, 0.48, dartboard, { ry: -H2 });
+
+      b.light(-3, 3.2, -4, 0xffb060, 22, 9); b.light(2, 3.2, -4, 0xffb060, 22, 9);
+      b.light(-7.4, 3.0, 1.4, 0xffa050, 14, 8); b.light(3.5, 2.56, 1.5, 0xfff0c8, 12, 6);       // (the bulb inside the shade: lamps cast no shadow, so the light still gets out)
+      b.light(-1.5, 3.3, 1.5, 0xffc080, 16, 10); b.light(0, 3.2, 5, 0xffc080, 12, 8); b.light(-4, 4.4, 11, 0xffc070, 10, 12);
+    },
+
+    populate(ctx) {
+      const { at, npc, stay } = crew(ctx);
+      stay(-1, -5.4, null, Math.PI);                                               // the bartender
+      for (const x of [-5.5, -3.3, -1.1, 2.2]) stay(x, -3.0, null, 0);            // at the bar
+      stay(2.4, 0.4, null, -Math.PI / 2); stay(4.6, 2.9, null, Math.PI / 2);      // round the pool table
+      stay(-7.6, -1.4, null, -Math.PI / 2); stay(-7.6, 4.2, null, -Math.PI / 2);  // in the booths
+      stay(7.6, -1.5, null, -Math.PI / 2);                                         // at the darts
+      stay(1.6, 8.4, 'thug', 0);                                                   // the doorman
+      npc(-2, 3, 'thug'); npc(5.5, -2.5);
+      at('barrel', 7.6, -5.6); at('chair', -4, 2.6, 0.4); at('chair', 0.5, 4.5, -0.6); at('table', -2.2, 2.5, 0);
+      at('car', 6, 15, -Math.PI / 2); at('lamp', -4, 11.6);
+    },
+  },
+
+  // --------------------------------------------------------------------------------------- leos
+  leos: {
+    id: 'leos', name: 'Leos Livs', icon: '🛒', blurb: 'a corner shop: aisles, fridges, the pick-and-mix wall, the till, the stock room',
+    sky: 'overcast', spawn: { x: -5, y: 1.0, z: 12 }, yaw: 0, bounds: { x0: -11, x1: 11, z0: -9, z1: 14 },
+
+    build(b) {
+      const H = 3.4, T = 0.25, D = 1.3, H2 = Math.PI / 2;
+      const white = b.mat('concrete', 0xf3f2ee, { roughness: 0.8 });
+      const lino = b.mat('plain', 0xb9c2b2, { roughness: 0.45 });
+      const green = b.mat('plain', 0x1f7a3e, { roughness: 0.5 });
+      const shelf = b.mat('metal', 0xd8dade, { metalness: 0.4, roughness: 0.5 });
+      const black = b.mat('plain', 0x1c1d20, { roughness: 0.4 });
+      const glass = b.mat('plain', 0xcfe4f0, { transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.3 });
+      const lit = b.mat('plain', 0xe8f4ff, { emissive: 0xcfe6ff, emissiveIntensity: 0.7 });
+      const tube = b.mat('plain', 0xffffff, { emissive: 0xffffff, emissiveIntensity: 1.6 });
+      const wood = b.mat('planks', 0xb08a5a);
+      const screen = b.mat('plain', 0x101418, { emissive: 0x3a6a9a, emissiveIntensity: 0.6 });
+      const prod = [0xd23a2a, 0x2a6ad2, 0xf2c21a, 0x2aa04a, 0xf28a1a, 0x8a2ad2, 0xeeeeee, 0x6a4a2a].map((c) => b.mat('plain', c, { roughness: 0.6 }));
+      const sweet = [0xff4a8a, 0x4ad2ff, 0xffe04a, 0x6aff4a, 0xff8a2a, 0xffffff].map((c) => b.mat('plain', c, { roughness: 0.25 }));
+      const fruit = [0xd22a1a, 0xf28a1a, 0xf2d21a, 0x6ab22a].map((c) => b.mat('plain', c, { roughness: 0.45 }));
+      const road = b.mat('asphalt', 0x55575a), con = b.mat('concrete', 0x9a9c9e);
+      const dr = (x, z, yaw, locked = false) => b.door(x, z, yaw, { wallH: H, wallT: T, gap: D, locked });
+
+      b.ground();
+      b.box(0, 0.01, -1.5, 16, 0.02, 15, lino);
+      b.box(0, H + 0.1, -1.5, 16.4, 0.2, 15.4, white); b.box(0, H + 0.4, -1.5, 16.8, 0.4, 15.8, con);
+      b.box(0, 0.01, 13, 50, 0.02, 8, road, { solid: false }); b.box(0, 0.06, 7.6, 50, 0.12, 2.8, con);
+      for (const x of [-4.5, 0, 4.5]) for (const z of [-3.5, 0.5, 4]) b.box(x, H - 0.03, z, 0.12, 0.04, 1.6, tube, { solid: false });
+
+      // walls: the shop (z -6..6), the stock room behind it (z -9..-6); a glass front with the door on the left
+      b.wall(-8, -9, 8, -9, H, T, white);
+      b.wall(-8, -9, -8, 6, H, T, white);
+      b.wall(8, -9, 8, 6, H, T, white, [[1.5 / 15, D]]);
+      dr(8, -7.5, H2, true);                                                   // the back door, locked
+      b.wall(-8, -6, 8, -6, H, T, white, [[13 / 16, D]]);
+      dr(5, -6, 0);
+      b.box(-6.84, H / 2, 6, 2.32, H, T, white);
+      dr(-5, 6, 0);
+      const n = 5, w = (8 - -4.35) / n;
+      b.box(1.825, 0.4, 6, 12.35, 0.8, T, white); b.box(1.825, H - 0.45, 6, 12.35, 0.9, T, white);
+      for (let i = 0; i <= n; i++) b.box(-4.35 + i * w, H / 2, 6, 0.1, H, T, black);
+      for (let i = 0; i < n; i++) b.pane(-4.35 + (i + 0.5) * w, 1.83, 6, w - 0.1, 2.06, 0.02, glass);
+      b.box(0, H + 0.65, 6.2, 16.2, 1.0, 0.25, green);
+      b.sign(0, H + 0.65, 6.34, 9, 0.9, textSign({ text: 'LEOS LIVS', fg: '#ffffff', bg: '#1f7a3e' }), { glow: 0.3 });
+      b.sign(-1.4, 1.95, 6.05, 1.5, 1.0, textSign({ text: 'ERBJUDANDE!', sub: 'KAFFE 29:-', fg: '#ffffff', bg: '#d2222a' }));
+      b.sign(3.6, 1.95, 6.05, 1.5, 1.0, textSign({ text: 'ÖPPET', sub: 'ALLA DAGAR 7-23', fg: '#1f7a3e', bg: '#ffffff', border: '#1f7a3e' }));
+
+      // the till by the door, the cigarette shelf behind it
+      b.box(-6, 0.5, 3, 0.8, 1.0, 2.6, wood); b.box(-6, 1.02, 3, 0.9, 0.04, 2.7, black);
+      b.box(-6, 1.15, 2.4, 0.4, 0.22, 0.32, black); b.box(-5.82, 1.3, 2.4, 0.02, 0.2, 0.3, screen, { solid: false });
+      b.box(-7.7, 1.6, 3, 0.35, 1.6, 2.4, black);
+      for (let y = 1.0; y < 2.3; y += 0.2) for (let z = 1.95; z < 4.1; z += 0.12) b.box(-7.5, y, z, 0.03, 0.12, 0.08, prod[(z * 7 + y * 3) % 2 < 1 ? 6 : 0], { solid: false });
+
+      // three runs of shelving, stocked both sides
+      const shelves = (x, z0, z1) => {
+        const len = z1 - z0, cz = (z0 + z1) / 2;
+        b.box(x, 0.08, cz, 1.0, 0.16, len, shelf); b.box(x, 1.0, cz, 0.06, 2.0, len, shelf);
+        for (const y of [0.5, 0.95, 1.4, 1.85]) {
+          b.box(x, y, cz, 1.0, 0.03, len, shelf);
+          for (const s of [-1, 1]) for (let z = z0 + 0.14; z < z1 - 0.1; z += 0.21) {
+            const h = b.rnd(0.12, 0.3);
+            b.box(x + s * b.rnd(0.2, 0.32), y + 0.015 + h / 2, z, b.rnd(0.1, 0.16), h, 0.17, prod[(b.rnd() * prod.length) | 0], { solid: false });
+          }
+        }
+      };
+      shelves(-3.2, -4.6, 2.2); shelves(0, -4.6, 2.2); shelves(3.2, -4.6, 2.2);
+
+      // fridges along the back wall: lit inside, glass doors that can be shot out, bottles
+      for (let i = 0; i < 8; i++) {
+        const x = -7.25 + i * 1.2;
+        b.box(x, 1.05, -5.82, 1.15, 2.1, 0.06, lit);
+        b.box(x - 0.58, 1.05, -5.5, 0.04, 2.1, 0.7, white); b.box(x, 2.12, -5.5, 1.2, 0.06, 0.7, white); b.box(x, 0.06, -5.5, 1.2, 0.12, 0.7, white);
+        for (const y of [0.15, 0.75, 1.35]) {
+          b.box(x, y, -5.5, 1.1, 0.02, 0.6, glass, { solid: false });
+          for (let k = 0; k < 4; k++) b.cyl(x - 0.39 + k * 0.26, y + 0.15, -5.42, 0.04, 0.28, prod[(i + k + Math.round(y * 3)) % prod.length], { solid: false, sides: 8 });
+        }
+        b.pane(x, 1.05, -5.13, 1.1, 1.9, 0.02, glass);
+      }
+      b.box(-7.8, 0.06, -5.5, 0.2, 0.12, 0.7, white);
+      // the pick-and-mix wall (west): bins of every colour
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 6; c++) {
+        const y = 0.55 + r * 0.42, z = -4.2 + c * 0.75;
+        b.box(-7.62, y, z, 0.45, 0.04, 0.6, glass);
+        for (let k = 0; k < 7; k++) b.ball(-7.62 + b.rnd(-0.15, 0.15), y + 0.06 + b.rnd(0, 0.06), z + b.rnd(-0.22, 0.22), 0.035, sweet[(r * 6 + c) % sweet.length], 6);
+      }
+      b.sign(-7.86, 2.45, -2.3, 3.2, 0.55, textSign({ text: 'LÖSGODIS', fg: '#ff4a8a', bg: '#fff3f8' }), { ry: H2 });
+      b.box(1.5, 0.45, 4.3, 2.0, 0.9, 0.9, white); b.box(1.5, 0.91, 4.3, 1.9, 0.02, 0.8, lit, { solid: false });   // the freezer chest
+      // outside: fruit under the window
+      for (let i = 0; i < 4; i++) {
+        const x = -0.5 + i * 1.5;
+        b.box(x, 0.35, 6.85, 1.2, 0.7, 0.6, wood);
+        for (let k = 0; k < 12; k++) b.ball(x + b.rnd(-0.5, 0.5), 0.74 + b.rnd(0, 0.06), 6.85 + b.rnd(-0.22, 0.22), 0.045, fruit[i], 8);
+      }
+
+      for (const [x, z] of [[-4, -1], [2, -1], [-1, 3.5]]) b.light(x, 3.1, z, 0xf4f8ff, 12, 9);
+      b.light(2, 3.1, -7.5, 0xfff0d8, 5, 6);
+    },
+
+    populate(ctx) {
+      const { at, npc, stay } = crew(ctx);
+      stay(-6.9, 3, null, -Math.PI / 2);                                           // behind the till
+      stay(-5, 1.4, null, Math.PI / 2);                                            // paying
+      stay(-1.6, -1, null); stay(1.6, 1.2, null); stay(4.8, -2.5, null); stay(-4.8, -3, null);   // shopping
+      stay(-3, -4.6, null, 0); stay(-6.8, -1.2, null, Math.PI / 2);               // at the fridges, at the sweets
+      stay(1.6, -3.5, 'thug');                                                     // filling his pockets
+      stay(2, 8.4, null);
+      at('crate', -4, -8, 0.2); at('crate', -3.4, -8.2, 0.5); at('crate', -3.7, -8.1, 0, 0.62); at('pallet', 0, -7.5, 0); at('crate', 0.1, -7.5, 0.1, 0.17);
+      at('car', -8, 13, Math.PI / 2);
+    },
+  },
+
+  // ------------------------------------------------------------------------------------ gustavs
+  gustavs: {
+    id: 'gustavs', name: 'Gustavs Goonställe', icon: '🎮', blurb: 'a den out the back: three screens, a gaming chair, energy drinks, pizza boxes, LED strips',
+    sky: 'night', spawn: { x: 0, y: 1.0, z: 9 }, yaw: 0, bounds: { x0: -8.5, x1: 8.5, z0: -5, z1: 11.5 },
+
+    build(b) {
+      const H = 2.7, T = 0.25, D = 1.2, H2 = Math.PI / 2;
+      const blockw = b.mat('concrete', 0x6e6e6a, { roughness: 0.95 });
+      const floor = b.mat('concrete', 0x4a4844);
+      const rug = b.mat('plain', 0x2a2440, { roughness: 1 });
+      const desk = b.mat('plain', 0x141416, { roughness: 0.35 });
+      const chairR = b.mat('plain', 0xb01a2a, { roughness: 0.6 }), chairB = b.mat('plain', 0x111113, { roughness: 0.6 });
+      const sofa = b.mat('plain', 0x3a3a44, { roughness: 1 });
+      const sheet = b.mat('plain', 0xd8d4cc, { roughness: 1 });
+      const curtain = b.mat('plain', 0x1a1530, { roughness: 1 });
+      const card = b.mat('plain', 0xb98a52, { roughness: 0.9 });
+      const cans = [b.mat('metal', 0x161616, { metalness: 0.7, roughness: 0.3 }), b.mat('metal', 0x2a5ad2, { metalness: 0.7, roughness: 0.3 }), b.mat('metal', 0x8ad21a, { metalness: 0.6, roughness: 0.35 }), b.mat('metal', 0xd8d8d8, { metalness: 0.8, roughness: 0.25 })];
+      const led = (c) => b.mat('plain', 0x111111, { emissive: c, emissiveIntensity: 2.2 });
+      const grass = b.mat('plain', 0x34502a, { roughness: 1 }), fence = b.mat('planks', 0x6a5236), con = b.mat('concrete', 0x8a8a86);
+      const roof = b.mat('plain', 0x2a2a2c, { roughness: 0.9 });
+      const dr = (x, z, yaw, locked = false) => b.door(x, z, yaw, { wallH: H, wallT: T, gap: D, locked });
+
+      b.ground();
+      b.box(0, 0.005, 3.5, 30, 0.01, 24, grass, { solid: false });
+      b.box(0, 0.015, 0, 12, 0.03, 10, floor); b.box(-0.6, 0.035, 0.6, 6, 0.01, 4.5, rug, { solid: false });
+      b.box(0, H + 0.1, 0, 12.4, 0.2, 10.4, blockw); b.box(0, H + 0.3, 0, 12.8, 0.2, 10.8, roof);
+      // the den: breeze-block walls, one door, the windows curtained over
+      b.wall(-6, -5, 6, -5, H, T, blockw); b.wall(-6, -5, -6, 5, H, T, blockw); b.wall(6, -5, 6, 5, H, T, blockw);
+      b.wall(-6, 5, 6, 5, H, T, blockw, [[0.5, D]]);
+      dr(0, 5, 0);
+      b.box(0, 2.35, 5.17, 3.8, 0.5, 0.06, fence);
+      b.sign(0, 2.35, 5.21, 3.6, 0.44, textSign({ text: 'GUSTAVS GOONSTÄLLE', fg: '#f2f2f2', bg: '#5a4028' }));
+      for (const [x, z, ry] of [[-5.86, -1, H2], [5.86, -2.6, -H2], [-3, 4.86, Math.PI]]) b.box(x, 1.6, z, ry === Math.PI ? 1.6 : 0.06, 1.2, ry === Math.PI ? 0.06 : 1.6, curtain, { solid: false });
+
+      // the battle station: the desk, three screens, the keyboard glowing, the tower, the chair
+      b.box(0, 0.74, -4.45, 3.4, 0.05, 0.85, desk);
+      for (const x of [-1.6, 1.6]) b.box(x, 0.36, -4.45, 0.06, 0.72, 0.8, desk);
+      const screens = [
+        textSign({ text: 'VICTORY', sub: 'GG WP', fg: '#7df9ff', bg: '#0a1030', glow: '#2be8ff' }),
+        textSign({ text: 'LIVE', sub: '1 337 TITTARE', fg: '#ff3b6b', bg: '#14081a', glow: '#ff3b6b' }),
+        textSign({ text: 'IMPACTBOX', sub: 'SPELAR NU', fg: '#ffffff', bg: '#101820' }),
+      ];
+      [[-1.1, 0.3], [0, 0], [1.1, -0.3]].forEach(([x, ry], i) => {
+        b.box(x, 1.22, -4.72 + Math.abs(x) * 0.12, 1.0, 0.62, 0.04, desk, { ry });
+        b.sign(x + Math.sin(ry) * 0.03, 1.22, -4.69 + Math.abs(x) * 0.12, 0.94, 0.56, screens[i], { ry, glow: 1.1 });
+        b.box(x, 0.86, -4.66 + Math.abs(x) * 0.12, 0.06, 0.24, 0.06, desk, { solid: false });
+      });
+      b.box(0, 0.78, -4.12, 0.62, 0.03, 0.2, desk, { solid: false }); b.box(0, 0.797, -4.12, 0.6, 0.005, 0.18, led(0x8a4dff), { solid: false });
+      b.box(0.55, 0.77, -4.12, 0.12, 0.02, 0.18, desk, { solid: false });
+      b.box(1.9, 0.3, -4.5, 0.25, 0.58, 0.5, desk); b.box(1.77, 0.3, -4.5, 0.01, 0.46, 0.4, led(0x2be8ff), { solid: false });
+      b.box(0, 0.5, -3.3, 0.62, 0.12, 0.6, chairB); b.box(0, 1.08, -3.02, 0.58, 1.05, 0.12, chairB);
+      for (const s of [-1, 1]) b.box(s * 0.17, 1.08, -2.95, 0.08, 1.0, 0.02, chairR, { solid: false });
+      b.cyl(0, 0.27, -3.3, 0.04, 0.46, chairB); b.box(0, 0.05, -3.3, 0.72, 0.05, 0.08, chairB); b.box(0, 0.05, -3.3, 0.08, 0.05, 0.72, chairB);
+      // LED strips round the top of the walls
+      b.box(0, H - 0.06, -4.84, 11.5, 0.03, 0.03, led(0x8a4dff), { solid: false });
+      b.box(-5.84, H - 0.06, 0, 0.03, 0.03, 9.5, led(0x2be8ff), { solid: false });
+      b.box(5.84, H - 0.06, 0, 0.03, 0.03, 9.5, led(0xff2bd6), { solid: false });
+      // the TV and the console, the couch facing it, a beanbag
+      b.box(5.8, 1.4, 1.5, 0.08, 0.78, 1.36, desk);
+      b.sign(5.75, 1.4, 1.5, 1.24, 0.68, textSign({ text: 'PAUSAT', fg: '#ffffff', bg: '#101826' }), { ry: -H2, glow: 0.8 });
+      b.box(5.55, 0.3, 1.5, 0.5, 0.6, 1.6, desk); b.box(5.55, 0.64, 1.5, 0.3, 0.08, 0.42, sheet, { solid: false });
+      b.box(2.6, 0.25, 1.5, 0.95, 0.5, 2.5, sofa); b.box(2.2, 0.68, 1.5, 0.22, 0.85, 2.5, sofa);
+      for (const s of [-1, 1]) b.box(2.6, 0.45, 1.5 + s * 1.2, 0.95, 0.4, 0.2, sofa);
+      b.ball(-1.6, 0.3, 2.6, 0.48, chairR, 14);
+      // the mattress in the corner, the mini fridge, the pizza boxes, the bin bag
+      b.box(-4.6, 0.12, 3.3, 1.5, 0.24, 2.1, sheet); b.box(-4.6, 0.29, 2.5, 0.65, 0.12, 0.38, sheet, { solid: false });
+      b.box(-4.5, 0.27, 3.75, 1.35, 0.07, 1.25, curtain, { solid: false });
+      b.box(-5.4, 0.45, -4.35, 0.6, 0.9, 0.6, sheet); b.box(-5.08, 0.6, -4.35, 0.02, 0.5, 0.5, led(0x6aff8a), { solid: false });
+      for (let i = 0; i < 7; i++) b.box(-3.1 + b.rnd(-0.04, 0.04), 0.03 + i * 0.05, -3.3 + b.rnd(-0.04, 0.04), 0.42, 0.045, 0.42, card, { ry: b.rnd(-0.3, 0.3) });
+      for (let i = 0; i < 3; i++) b.box(0.9 + i * 0.5, 0.03, 3.6 + b.rnd(-0.2, 0.2), 0.42, 0.045, 0.42, card, { ry: b.rnd(-0.6, 0.6) });
+      b.ball(5.2, 0.32, -4.3, 0.38, chairB, 10);
+      // energy drinks: on the desk, round the chair, by the couch and the mattress, standing and lying about
+      const can = (x, y, z, down) => b.cyl(x, down ? y + 0.033 : y + 0.07, z, 0.033, 0.14, cans[(b.rnd() * cans.length) | 0], { solid: false, sides: 10, ...(down ? { rz: H2, ry: b.rnd(0, 3) } : {}) });
+      for (let i = 0; i < 6; i++) can(b.rnd(-1.5, 1.5), 0.765, b.rnd(-4.7, -4.15), false);
+      for (let i = 0; i < 14; i++) can(b.rnd(-1.4, 1.4), 0.03, b.rnd(-3.9, -2.2), b.rnd() < 0.6);
+      for (let i = 0; i < 8; i++) can(b.rnd(3.2, 4.6), 0.03, b.rnd(0.2, 2.8), b.rnd() < 0.5);
+      for (let i = 0; i < 6; i++) can(b.rnd(-3.6, -3.0), 0.03, b.rnd(2.4, 4.2), b.rnd() < 0.5);
+      // posters
+      b.sign(-5.86, 1.5, -3.2, 1.3, 0.9, textSign({ text: 'GAMER ZONE', fg: '#ff2bd6', bg: '#120018', border: '#2be8ff', glow: '#ff2bd6' }), { ry: H2, glow: 0.6 });
+      b.sign(-2.6, 1.6, -4.86, 1.0, 0.7, textSign({ text: 'NO SLEEP', sub: 'BARA SPEL', fg: '#2be8ff', bg: '#0a1020' }), { glow: 0.4 });
+      b.sign(2.9, 1.6, -4.86, 0.8, 0.8, textSign({ text: 'GG', sub: 'EZ', fg: '#ffd23a', bg: '#1a1408' }), { glow: 0.4 });
+      // the garden: a fence round it, stepping stones to the door
+      b.box(0, 0.75, 12, 18, 1.5, 0.08, fence); b.box(-9, 0.75, 3.5, 0.08, 1.5, 17, fence); b.box(9, 0.75, 3.5, 0.08, 1.5, 17, fence);
+      for (let k = 0; k < 5; k++) b.box(b.rnd(-0.15, 0.15), 0.025, 6 + k * 1.1, 0.6, 0.04, 0.6, con, { solid: false });
+
+      b.light(0, 2.3, -3.6, 0x6a7aff, 11, 7); b.light(-3, 2.4, 1.2, 0x8a4dff, 15, 8); b.light(3.8, 2.4, 1.5, 0xff2bd6, 13, 7);
+      b.light(-3.6, 2.45, -2.4, 0xffd8a0, 7, 6);
+      b.light(0, 2.55, 5.6, 0xffd090, 5, 7);
+    },
+
+    populate(ctx) {
+      const { at, npc, stay } = crew(ctx);
+      stay(0, -3.55, null, 0);                                                     // Gustav, at his screens
+      stay(3.4, 0.9, 'thug', -Math.PI / 2); stay(3.4, 2.1, 'thug', -Math.PI / 2); // the goons, on the couch side
+      stay(-1.9, 0.4, 'thug'); stay(-4.2, 2.4, null);
+      npc(4, 8, 'thug');
+      at('ball', -5, 8); at('car', 5.5, 9, Math.PI / 2);
     },
   },
 };
