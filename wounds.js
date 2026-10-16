@@ -507,38 +507,114 @@ const charSectionMat = new THREE.MeshStandardMaterial({ vertexColors: true, colo
 const DERMIS = [0.66, 0.42, 0.36], YELLOW_FAT = [0.78, 0.6, 0.26], CAVITY = [0.1, 0.012, 0.018], BRAIN = [0.66, 0.5, 0.48], CORTEX = [0.42, 0.3, 0.3];
 const RINGS = [0, 0.15, 0.3, 0.45, 0.56, 0.64, 0.7, 0.76, 0.82, 0.87, 0.91, 0.95, 0.98, 1];
 
+const swatches = new WeakMap();
 /**
- * The face of a clean cut (a blade's; a laser's comes out burnt black): flat, filling the outline the cut left in the skin, with
- * what is in there in its place: skin at the edge, a band of fat, muscle (in bundles), and the bone with marrow in it (two in a
- * forearm or a shin; in the trunk the spine at the back, the body cavity in front of it and ribs round that; in a head the
- * skull round the brain). rim: points on that outline, c: its middle, n: square to it (all in the frame it goes in), r: the
- * half-widths to fall back on if the outline is too thin to go by. One face does for both sides of the cut (it is two-sided).
+ * The colour of a material at uv, linear: its texture read back once, small (or its plain colour if it has none, or the
+ * texture cannot be read). For the faces of cuts through what is not flesh: a helmet's rim, a boot.
  */
-export function makeSection(rim, c, n, kind, r, sealed = false) {
+export function colourAt(mat, u, v) {
+  if (Array.isArray(mat)) mat = mat[0];
+  const map = mat.map, c = mat.color || { r: 1, g: 1, b: 1 };
+  let px = map ? swatches.get(map) : null;
+  if (map && px === undefined) {
+    px = null;
+    try {
+      const W = 64, cv = document.createElement('canvas');
+      cv.width = cv.height = W;
+      const g = cv.getContext('2d', { willReadFrequently: true });
+      g.drawImage(map.image, 0, 0, W, W);
+      px = { data: g.getImageData(0, 0, W, W).data, W, flip: map.flipY };
+    } catch (e) { /* not drawable here: the plain colour */ }
+    swatches.set(map, px);
+  }
+  if (!px) return [c.r, c.g, c.b];
+  u -= Math.floor(u); v -= Math.floor(v);
+  if (px.flip) v = 1 - v;
+  const i = (Math.min(px.W - 1, (v * px.W) | 0) * px.W + Math.min(px.W - 1, (u * px.W) | 0)) * 4, lin = (x) => Math.pow(x / 255, 2.2);
+  return [lin(px.data[i]) * c.r, lin(px.data[i + 1]) * c.g, lin(px.data[i + 2]) * c.b];
+}
+
+/** The cut edge (pairs of points: one piece of it each) joined up into lines, in the face's own 2D frame (x, z); each line's .segs are the pieces in it. */
+function edgeLines(seg) {
+  const key = (x, z) => Math.round(x * 4000) + ',' + Math.round(z * 4000);   // (a quarter of a millimetre: the same point on a seam)
+  const ends = new Map();
+  seg.forEach((s, i) => { for (const k of [key(s[0], s[1]), key(s[2], s[3])]) { if (!ends.has(k)) ends.set(k, []); ends.get(k).push(i); } });
+  const used = new Uint8Array(seg.length), lines = [];
+  for (let i = 0; i < seg.length; i++) {
+    if (used[i]) continue;
+    used[i] = 1;
+    const line = [[seg[i][0], seg[i][1]], [seg[i][2], seg[i][3]]];
+    line.segs = [i];
+    for (const back of [false, true]) {             // grow it from one end, then from the other
+      for (;;) {
+        const p = back ? line[0] : line[line.length - 1], k = key(p[0], p[1]);
+        const j = (ends.get(k) || []).find((x) => !used[x]);
+        if (j === undefined) break;
+        used[j] = 1;
+        line.segs.push(j);
+        const s = seg[j], q = key(s[0], s[1]) === k ? [s[2], s[3]] : [s[0], s[1]];
+        if (back) line.unshift(q); else line.push(q);
+      }
+    }
+    if (line.length >= 4) lines.push(line);
+  }
+  return lines;
+}
+const areaOf = (L) => { let s = 0; for (let i = 0; i < L.length; i++) { const a = L[i], b = L[(i + 1) % L.length]; s += a[0] * b[1] - b[0] * a[1]; } return s / 2; };
+const encloses = (L, x, z) => {
+  let k = false;
+  for (let i = 0, j = L.length - 1; i < L.length; j = i++) {
+    const a = L[i], b = L[j];
+    if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) k = !k;
+  }
+  return k;
+};
+/** n points evenly along a closed line, going round anticlockwise. */
+function around(L, n) {
+  if (areaOf(L) < 0) L = L.slice().reverse();
+  const cum = [0];
+  for (let i = 0; i < L.length; i++) { const a = L[i], b = L[(i + 1) % L.length]; cum.push(cum[i] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+  const out = [], total = cum[L.length];
+  for (let k = 0, i = 0; k < n; k++) {
+    const s = total * k / n;
+    while (i < L.length - 1 && cum[i + 1] < s) i++;
+    const a = L[i], b = L[(i + 1) % L.length], t = (s - cum[i]) / ((cum[i + 1] - cum[i]) || 1);
+    out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+  }
+  return out;
+}
+
+/**
+ * The face of a clean cut (a blade's; a laser's comes out burnt black): flat, filling exactly the outline the cut left in the
+ * skin, with what is in there in its place: skin at the edge, a band of fat, muscle (in bundles), and the bone with marrow in
+ * it (two in a forearm or a shin; in the trunk the spine at the back, the body cavity in front of it and ribs round that; in a
+ * head the skull round the brain, and only flesh in a nose or an ear). rim: the cut edge, pairs of points (one piece of it
+ * each), tone: the colour of the surface at each piece, c: the middle of the part where it was cut, n: square to the cut (all
+ * in the frame it goes in), r: the half-widths to fall back on. Anything else the cut went through on its own (the rim of a
+ * helmet, the toe of a boot, a thumb) gets a face of its own, the colour of its surface, darker inward. One face does for
+ * both sides of the cut (it is two-sided).
+ */
+export function makeSection(rim, tone, c, n, kind, r, sealed = false) {
   const rnd = seeded((Math.random() * 9973) | 0);
   // a frame in the face: u as near the part's own x as the cut allows, v toward the back (the body faces -z)
   const u = new THREE.Vector3(1, 0, 0).addScaledVector(n, -n.x).normalize(), v = new THREE.Vector3().crossVectors(u, n);
-  // the outline, as a distance from the middle every 7.5°
-  const B = 48, rad = new Array(B).fill(0), d = new THREE.Vector3();
-  for (const p of rim) {
-    d.copy(p).sub(c);
-    const x = d.dot(u), z = d.dot(v), i = ((Math.round(Math.atan2(z, x) / (Math.PI * 2) * B) % B) + B) % B;
-    rad[i] = Math.max(rad[i], Math.hypot(x, z));
+  const d = new THREE.Vector3(), flat = (p) => { d.copy(p).sub(c); return [d.dot(u), d.dot(v)]; };
+  const seg = [];
+  for (let i = 0; i + 1 < rim.length; i += 2) seg.push([...flat(rim[i]), ...flat(rim[i + 1])]);
+  const lines = edgeLines(seg);
+  // the outline of the part itself: the biggest that goes round the middle of it (skin, or the clothes over it)
+  let main = null, o = [0, 0];
+  for (const L of lines) if (encloses(L, 0, 0) && (!main || Math.abs(areaOf(L)) > Math.abs(areaOf(main)))) main = L;
+  if (!main) for (const L of lines) if (!main || Math.abs(areaOf(L)) > Math.abs(areaOf(main))) main = L;
+  if (main && !encloses(main, 0, 0)) o = main.reduce((s, p) => [s[0] + p[0] / main.length, s[1] + p[1] / main.length], [0, 0]);
+  if (!main || Math.abs(areaOf(main)) < 1e-4) {     // (nothing to go by: an ellipse the size of the part)
+    main = Array.from({ length: 48 }, (_, i) => { const a = i / 48 * Math.PI * 2; return [Math.cos(a) * r[0], Math.sin(a) * r[1]]; });
+    o = [0, 0];
   }
-  const got = rad.filter((x) => x > 0).sort((a, b) => a - b);
-  if (got.length < B / 4) for (let i = 0; i < B; i++) { const a = i / B * Math.PI * 2; rad[i] = r[0] * r[1] / Math.hypot(r[1] * Math.cos(a), r[0] * Math.sin(a)); }
-  else {
-    const most = got[got.length >> 1] * 1.5;          // (the cut also crossing a bit of something further out: not the outline)
-    for (let i = 0; i < B; i++) rad[i] = Math.min(rad[i], most);
-    for (let i = 0; i < B; i++) {                      // gaps: between the nearest on either side
-      if (rad[i]) continue;
-      let a = 1, b = 1;
-      while (!rad[(i - a + B) % B]) a++;
-      while (!rad[(i + b) % B]) b++;
-      rad[i] = (rad[(i - a + B) % B] * b + rad[(i + b) % B] * a) / (a + b);
-    }
-  }
-  const mean = rad.reduce((s, x) => s + x, 0) / B;
+  const B = 64, Q = around(main, B), dist = Q.map((p) => Math.hypot(p[0] - o[0], p[1] - o[1]));
+  const median = dist.slice().sort((x, y) => x - y)[B >> 1];
+  // what is inside keeps to the body: in a head the skull does not run out into the nose or the ears
+  const inner = dist.map((x) => (kind === 'head' ? Math.min(x, median * 1.1) : x));
   const pos = [], col = [], idx = [];
   const at = (x, z, e = 0) => { pos.push(c.x + u.x * x + v.x * z + n.x * e, c.y + u.y * x + v.y * z + n.y * e, c.z + u.z * x + v.z * z + n.z * e); };
   // muscle comes in bundles, each a slightly different red, with pale sheets of fascia between them
@@ -551,11 +627,11 @@ export function makeSection(rim, c, n, kind, r, sealed = false) {
     const g = Math.sin(a * 2 + s2 + f * 7) * Math.cos(a * 3 - s1 - f * 5);
     return g > 0.25 ? mix3(GUT, MEAT, 0.3 + g * 0.4) : g < -0.3 ? mix3(MEAT_DARK, [0.25, 0.05, 0.08], -g) : mix3(CAVITY, MEAT_DARK, 0.5 + g);
   };
-  // what each ring of the face is, by how far out it is (f, 0..1 of the outline) and which way (x, z: -1..1)
-  const layer = (f, x, z, i, a) => {
+  // what each ring of the face is, by how far out it is (f, 0..1 of the outline) and which way (a; z: -1 front .. 1 back)
+  const layer = (f, z, i, a) => {
     if (f >= 1) return kind === 'head' ? mix3(DERMIS, MEAT, 0.3) : DERMIS;
     if (kind === 'head') {
-      if (f >= 0.87) return mix3(MEAT, DERMIS, 0.4);                         // scalp
+      if (f >= 0.87) return mix3(MEAT, DERMIS, 0.4);                         // scalp (and a nose, an ear)
       if (f >= 0.76) return mix3(BONE, [0.85, 0.8, 0.7], rnd() * 0.5);      // skull
       if (f >= 0.7) return MEAT;                                            // the lining
       if (f >= 0.56) return mix3(CORTEX, MEAT_DARK, rnd() * 0.3);           // grey matter, folded
@@ -565,17 +641,23 @@ export function makeSection(rim, c, n, kind, r, sealed = false) {
     if (f >= 0.87) return mix3(YELLOW_FAT, FAT, rnd() * 0.4);
     if (f >= 0.82) return mix3(YELLOW_FAT, MEAT, 0.6);
     if (kind === 'gut') {
-      if (f >= 0.7 && f < 0.82 && i % 6 === 0 && z < 0.4) return BONE;     // ribs, cut across
+      if (f >= 0.7 && f < 0.82 && i % 8 === 0 && z < 0.4) return BONE;     // ribs, cut across
       if (f < 0.64 && z < 0.35) return organ(f, a);                        // what is in the body
     }
     return meat(f, a);
   };
-  pos.push(c.x, c.y, c.z); col.push(...layer(0, 0, 0, 0, 0));
+  // rings from the middle out to the outline itself (the inner ones a scaled copy of it, kept to the body)
+  at(o[0], o[1]); col.push(...layer(0, 0, 0, 0));
   for (let k = 1; k < RINGS.length; k++) {
+    const F = RINGS[k];
     for (let i = 0; i < B; i++) {
-      const a = i / B * Math.PI * 2, R = rad[i] * 0.99 * RINGS[k];
-      at(Math.cos(a) * R, Math.sin(a) * R);
-      col.push(...layer(RINGS[k], Math.cos(a), Math.sin(a), i, a));
+      const dx = (Q[i][0] - o[0]) / (dist[i] || 1), dz = (Q[i][1] - o[1]) / (dist[i] || 1), a = Math.atan2(dz, dx);
+      if (F <= 0.87) at(o[0] + dx * inner[i] * F, o[1] + dz * inner[i] * F);
+      else {
+        const t = (F - 0.87) / 0.13, x0 = o[0] + dx * inner[i] * 0.87, z0 = o[1] + dz * inner[i] * 0.87;
+        at(x0 + (Q[i][0] - x0) * t, z0 + (Q[i][1] - z0) * t);
+      }
+      col.push(...layer(F, dz, i, a));
     }
   }
   for (let i = 0; i < B; i++) idx.push(0, 1 + i, 1 + (i + 1) % B);
@@ -586,26 +668,43 @@ export function makeSection(rim, c, n, kind, r, sealed = false) {
   // bones, a hair proud of the face on both sides of it: a ring of hard bone, spongy toward the marrow in the middle
   const bone = (x, z, br, spine = false) => {
     for (const e of [0.0012, -0.0012]) {
-      const o = pos.length / 3, S = 14;
-      at(x, z, e); col.push(...(spine ? mix3(MARROW, BONE, 0.45) : MARROW));
+      const b0 = pos.length / 3, S = 14;
+      at(o[0] + x, o[1] + z, e); col.push(...(spine ? mix3(MARROW, BONE, 0.45) : MARROW));
       for (const [f, cc] of [[0.5, spine ? mix3(MARROW, BONE, 0.55) : MARROW], [0.62, mix3(MARROW, BONE, 0.6)], [1, BONE]]) {
-        for (let i = 0; i < S; i++) { const a = i / S * Math.PI * 2, wob = 1 + (rnd() - 0.5) * 0.12; at(x + Math.cos(a) * br * f * wob, z + Math.sin(a) * br * f * wob, e); col.push(...cc); }
+        for (let i = 0; i < S; i++) { const a = i / S * Math.PI * 2, wob = 1 + (rnd() - 0.5) * 0.12; at(o[0] + x + Math.cos(a) * br * f * wob, o[1] + z + Math.sin(a) * br * f * wob, e); col.push(...cc); }
       }
-      for (let i = 0; i < S; i++) idx.push(o, o + 1 + i, o + 1 + (i + 1) % S);
+      for (let i = 0; i < S; i++) idx.push(b0, b0 + 1 + i, b0 + 1 + (i + 1) % S);
       for (let k = 0; k < 2; k++) for (let i = 0; i < S; i++) {
-        const a = o + 1 + k * S + i, b = o + 1 + k * S + (i + 1) % S;
+        const a = b0 + 1 + k * S + i, b = b0 + 1 + k * S + (i + 1) % S;
         idx.push(a, a + S, b + S, a, b + S, b);
       }
     }
   };
-  if (kind === 'limb') bone((rnd() - 0.5) * 0.1 * mean, (rnd() - 0.5) * 0.1 * mean, 0.21 * mean);
-  else if (kind === 'limb2') { bone(-0.3 * mean, -0.08 * mean, 0.21 * mean); bone(0.33 * mean, 0.14 * mean, 0.15 * mean); }
-  else if (kind === 'gut') bone(0, rad[B / 4] * 0.62, 0.2 * mean, true);
+  // how far the outline is behind the middle (straight back is +z)
+  let back = median;
+  for (let i = 0, best = -2; i < B; i++) { const dz = (Q[i][1] - o[1]) / (dist[i] || 1); if (dz > best) { best = dz; back = inner[i]; } }
+  if (kind === 'limb') bone((rnd() - 0.5) * 0.1 * median, (rnd() - 0.5) * 0.1 * median, 0.21 * median);
+  else if (kind === 'limb2') { bone(-0.3 * median, -0.08 * median, 0.21 * median); bone(0.33 * median, 0.14 * median, 0.15 * median); }
+  else if (kind === 'gut') bone(0, back * 0.62, 0.2 * median, true);
+  // whatever else the cut went through on its own, outside the outline: solid, the colour of its surface, darker inward
+  for (const L of lines) {
+    if (L === main || Math.abs(areaOf(L)) < 2e-5 || encloses(main, L[0][0], L[0][1])) continue;
+    const S = 24, P = around(L, S), m = P.reduce((s, p) => [s[0] + p[0] / S, s[1] + p[1] / S], [0, 0]), b0 = pos.length / 3;
+    const t = L.segs.reduce((s, j) => [s[0] + tone[j][0], s[1] + tone[j][1], s[2] + tone[j][2]], [0, 0, 0]).map((x) => x / L.segs.length);
+    at(m[0], m[1]); col.push(...t.map((x) => x * 0.45));
+    for (const f of [0.8, 1]) for (const p of P) { at(m[0] + (p[0] - m[0]) * f, m[1] + (p[1] - m[1]) * f); col.push(...t.map((x) => x * (f < 1 ? 0.7 : 1))); }
+    for (let i = 0; i < S; i++) {
+      idx.push(b0, b0 + 1 + i, b0 + 1 + (i + 1) % S);
+      const a = b0 + 1 + i, b = b0 + 1 + (i + 1) % S;
+      idx.push(a, a + S, b + S, a, b + S, b);
+    }
+  }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(pos.length / 3).fill(0).flatMap(() => [n.x, n.y, n.z]), 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  // wound so that the front of it faces along n (two-sided, the back then shows the other way, lit from that side)
+  // wound so that the front of it faces along n (two-sided, the back then shows the other way, lit from that side). Every part
+  // of it runs the same way round (anticlockwise in the face), so the first fan says which way that is
   const p0 = new THREE.Vector3().fromArray(pos, idx[0] * 3), p1 = new THREE.Vector3().fromArray(pos, idx[1] * 3), p2 = new THREE.Vector3().fromArray(pos, idx[2] * 3);
   if (p1.sub(p0).cross(p2.sub(p0)).dot(n) < 0) for (let i = 0; i < idx.length; i += 3) { const t = idx[i + 1]; idx[i + 1] = idx[i + 2]; idx[i + 2] = t; }
   geo.setIndex(idx);

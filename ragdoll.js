@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { getModel, bodyPieces, bodyWhole, isCap, looks, tintedMaterial } from './models.js';
-import { openWound, burn, makeStump, makeSection, boneShard } from './wounds.js';
+import { openWound, burn, makeStump, makeSection, colourAt, boneShard } from './wounds.js';
 import { Brain } from './brain.js';
 
 // An NPC has two lives:
@@ -157,7 +157,7 @@ function splitGeometry(geo, n, w) {
     g.setIndex(list);
     return g;
   };
-  if (!lo.length || !hi.length) return { hi: hi.length ? geo : make([], A), lo: lo.length ? geo : make([], A), rim: [], fresh: false };
+  if (!lo.length || !hi.length) return { hi: hi.length ? geo : make([], A), lo: lo.length ? geo : make([], A), rim: [], uv: [], fresh: false };
   // vertex data of their own (the old plus the new), so nothing shared with other people's bodies is ever let go with theirs
   const attrs = {};
   names.forEach((k, j) => {
@@ -167,9 +167,9 @@ function splitGeometry(geo, n, w) {
     arr.set(add[j], at.count * size);
     attrs[k] = new THREE.BufferAttribute(arr, size);
   });
-  const P = attrs.position, rim = [];
-  for (const i of rimIdx) rim.push(P.getX(i), P.getY(i), P.getZ(i));
-  return { hi: make(hi, attrs), lo: make(lo, attrs), rim, fresh: true };
+  const P = attrs.position, U = attrs.uv, rim = [], uv = [];
+  for (const i of rimIdx) { rim.push(P.getX(i), P.getY(i), P.getZ(i)); uv.push(U ? U.getX(i) : 0, U ? U.getY(i) : 0); }
+  return { hi: make(hi, attrs), lo: make(lo, attrs), rim, uv, fresh: true };
 }
 
 // Which parts of one body may collide with each other: everything except neighbours across a joint.
@@ -1030,11 +1030,15 @@ export class Ragdoll {
     const bones = seg.skeleton.bones.slice();
     bones[BONE_INDEX[seg.name]] = piece.group;
     piece.skeleton = new THREE.Skeleton(bones, REST_INV);
-    const w = nrm.x * d.pos[0] + nrm.y * (d.pos[1] + y) + nrm.z * d.pos[2], rim = [];
+    // the cut edge, a piece of it at a time, and what colour the surface is there (for the face of the cut)
+    const w = nrm.x * d.pos[0] + nrm.y * (d.pos[1] + y) + nrm.z * d.pos[2], rim = [], tone = [];
     for (const m of seg.meshes) {
-      const { hi, lo, rim: edge, fresh } = splitGeometry(m.geometry, nrm, w);
+      const { hi, lo, rim: edge, uv, fresh } = splitGeometry(m.geometry, nrm, w);
       if (fresh) this.made.push(hi, lo);
-      if (!m.userData.inside) for (let i = 0; i < edge.length; i += 3) rim.push(new THREE.Vector3(edge[i] - d.pos[0], edge[i + 1] - d.pos[1], edge[i + 2] - d.pos[2]));
+      if (!m.userData.inside) for (let i = 0, k = 0; i < edge.length; i += 6, k += 4) {
+        rim.push(new THREE.Vector3(edge[i] - d.pos[0], edge[i + 1] - d.pos[1], edge[i + 2] - d.pos[2]), new THREE.Vector3(edge[i + 3] - d.pos[0], edge[i + 4] - d.pos[1], edge[i + 5] - d.pos[2]));
+        tone.push(colourAt(m.material, (uv[k] + uv[k + 2]) / 2, (uv[k + 1] + uv[k + 3]) / 2));
+      }
       m.geometry = keepHi ? hi : lo;
       const cutG = keepHi ? lo : hi;
       if (!cutG.index.count) continue;
@@ -1051,7 +1055,7 @@ export class Ragdoll {
     for (const j of JOINTS) {
       if (j.a !== seg.name) continue;
       const jd = this.joints[j.name];
-      if (this.severed.has(j.b) || this.parts[j.b].gone || (jd.on || null) !== seg.piece || above(jd.a1) === keepHi) continue;
+      if (jd.cut || this.parts[j.b].gone || (jd.on || null) !== seg.piece || above(jd.a1) === keepHi) continue;
       if (world.getImpulseJoint(jd.joint.handle) === jd.joint) world.removeImpulseJoint(jd.joint, true);
       const data = j.axis ? RAPIER.JointData.revolute(jd.a1, jd.a2, { x: j.axis[0], y: j.axis[1], z: j.axis[2] }) : RAPIER.JointData.spherical(jd.a1, jd.a2);
       data.contactsEnabled = false;
@@ -1076,7 +1080,7 @@ export class Ragdoll {
         frame.add(s);
       }
     } else {
-      const face = makeSection(rim, c, nrm, kind, r.map((x) => x / 1.2), sealed);
+      const face = makeSection(rim, tone, c, nrm, kind, r.map((x) => x / 1.2), sealed);
       this.made.push(face.geometry);
       seg.frame.add(face);
       piece.group.add(face.clone());
@@ -1139,6 +1143,12 @@ export class Ragdoll {
     const part = this.parts[piece.name];
     if (dmg > 0 && !opts.blade && !opts.laser && !opts.blunt && !part.gone && part.wounds?.inside) openWound(part,   // (its part still there, insides built: its meshes are in the scene)
       lp, (opts.hole || 0.026) * 0.5, 0.06, null, new THREE.Vector3(dir.x, dir.y, dir.z).applyQuaternion(_q).normalize());
+    if (opts.blade || opts.laser) {
+      for (const j of JOINTS) {
+        const jd = this.joints[j.name];
+        if (jd.on === piece && !jd.cut && Math.abs(lp.y - jd.a1.y) < 0.08) { this.sever(j.b, dir, !!opts.laser); return; }
+      }
+    }
     if ((opts.blade || opts.laser || (dmg >= 90 && !opts.blunt)) && piece.range[1] - piece.range[0] >= 0.13) {
       const blade = opts.blade || opts.laser;
       this.slice(piece.id, THREE.MathUtils.clamp(lp.y, piece.range[0] + 0.065, piece.range[1] - 0.065), dir, !!opts.laser, this.cutNormal(piece.body, dir), !blade);
@@ -1149,7 +1159,8 @@ export class Ragdoll {
     const at = PARTS[name].pos;
     let best = null, bd = Infinity;
     for (const j of JOINTS) {
-      if ((j.a !== name && j.b !== name) || this.severed.has(j.b) || this.parts[j.b].gone) continue;
+      const jd = this.joints[j.name];
+      if ((j.a !== name && j.b !== name) || jd.cut || this.parts[j.b].gone || (j.a === name && jd.on)) continue;   // (gone, or on a piece cut off this)
       const d = Math.hypot(j.anchor[0] - at[0] - lp.x, j.anchor[1] - at[1] - lp.y, j.anchor[2] - at[2] - lp.z);
       if (d < bd) { bd = d; best = j.b; }
     }
@@ -1192,18 +1203,22 @@ export class Ragdoll {
 
   /** Cut a part (and anything hanging off it) free of its parent. sealed: burnt shut as it was cut (the laser sword): no spray, no bleeding. */
   sever(name, dir, sealed = false) {
-    if (this.severed.has(name) || !JOINT_OF[name]) return;   // (the pelvis is the root: it hangs off nothing)
-    const jd = this.joints[JOINT_OF[name].name];
-    if (!jd) return;
+    const jd = JOINT_OF[name] && this.joints[JOINT_OF[name].name];   // (the pelvis is the root: it hangs off nothing)
+    if (!jd || jd.cut || this.parts[name].gone) return;
+    // a limb already off the body (or hanging off a piece of one) can still be cut in two at a joint: it only drains, and
+    // costs its owner nothing more
+    const attached = !this.isFree(name);
+    jd.cut = true;
     this.split();
-    this.goLimp(3);
+    if (attached) this.goLimp(3);
     // removing a joint twice (e.g. its body was gibbed) would panic the wasm world, so check first
     if (this.ctx.world.getImpulseJoint(jd.joint.handle) === jd.joint) this.ctx.world.removeImpulseJoint(jd.joint, true);   // (the same joint: Rapier reuses the slot of one it dropped)
     this.severed.add(name);
     this.detach(jd.def);
 
     const { gore, sfx } = this.ctx;
-    const parent = this.parts[jd.def.a];
+    // what it hung off: its parent, or the piece of its parent the joint went with when the parent was cut through
+    const parent = jd.on && !jd.on.gone ? { body: jd.on.body, mesh: jd.on.group, gone: false, piece: jd.on } : this.parts[jd.def.a];
     const child = this.parts[name];
     const wp = this.localToWorld(parent, jd.a1);
     if (sealed) { gore.smoke.emit(wp.x, wp.y, wp.z, 0, 0.6, 0, 0.12, 1.4, -0.3, 0.3, 0.28, 0.27, 0, 1.5); sfx.sizzle(); }
@@ -1216,21 +1231,25 @@ export class Ragdoll {
     const outB = new THREE.Vector3(0, Math.sign(jd.a2.y) || 1, 0);
     if (!parent.gone) {
       this.addStump(parent, jd.a1, outA, jd.def, sealed);
-      if (!sealed) this.bleeders.push({ part: parent, local: jd.a1, out: outA, t: 10, rate: 42, pooled: false });
+      if (!sealed) this.bleeders.push({ part: parent.piece || parent, local: jd.a1, out: outA, t: 10, rate: 42, pooled: false, drain: !attached });
     }
     this.addStump(child, jd.a2, outB, jd.def, sealed);
-    if (sealed) { burn(parent, 0.5); burn(child, 0.5); }
+    if (sealed) { if (!this.parts[jd.def.a].gone) burn(this.parts[jd.def.a], 0.5); burn(child, 0.5); }
     else {
       this.bleeders.push({ part: child, local: jd.a2, out: outB, t: 6, rate: 24, pooled: false, drain: true });
-      this.sevBleed += name.startsWith('farm') || name.startsWith('shin') ? 1.6 : 2.6;   // the nearer the body, the faster it empties
-      this.bled = true;
+      if (attached) {
+        this.sevBleed += name.startsWith('farm') || name.startsWith('shin') ? 1.6 : 2.6;   // the nearer the body, the faster it empties
+        this.bled = true;
+      }
     }
 
     child.twitch = 3 + Math.random() * 2;
-    this.damage(12);
-    if (name === 'head') this.die('decap');
-    else if (name === 'torso') this.die('bisect');
-    else if (LEGS.has(name)) this.crippled = true;
+    if (attached) {
+      this.damage(12);
+      if (name === 'head') this.die('decap');
+      else if (name === 'torso') this.die('bisect');
+      else if (LEGS.has(name)) this.crippled = true;
+    }
 
     if (dir) child.body.applyImpulse({ x: dir.x * 8, y: 5, z: dir.z * 8 }, true);     // (it comes away; it is not fired off)
   }
@@ -1264,7 +1283,13 @@ export class Ragdoll {
     this.ctx.scene.remove(p.mesh);
     for (const m of p.skinned) this.ctx.scene.remove(m);
     p.gone = true;
-    for (const j of JOINTS) if (j.a === name || j.b === name) this.detach(j);
+    for (const j of JOINTS) {
+      if (j.a !== name && j.b !== name) continue;
+      const jd = this.joints[j.name];
+      if (j.a === name && jd.on) continue;           // (that one hangs off a piece cut off it, which is still there)
+      this.detach(j);
+      jd.cut = true;
+    }
     // everything that hung off this part is now loose
     for (const n in PARTS) for (let a = PARENT[n]; a; a = PARENT[a]) if (a === name) this.severed.add(n);
     this.severed.add(name);
@@ -1278,7 +1303,9 @@ export class Ragdoll {
    */
   detach(def) {
     if (!this.skinned) return;
+    const on = this.joints[def.name]?.on;
     for (const [self, other] of [[def.a, def.b], [def.b, def.a]]) {
+      if (self === def.a && on) { this.detachPiece(on, other); continue; }
       const p = this.parts[self];
       if (p.gone) continue;
       if (!p.cutFrom) p.cutFrom = new Set();
@@ -1288,7 +1315,8 @@ export class Ragdoll {
         p.skeleton = new THREE.Skeleton(this.skeleton.bones, REST_INV);
         for (const m of p.skinned) m.bind(p.skeleton, IDENT);
         // now that an end of it is open, it needs the flesh and bone that close its cuts
-        for (const piece of bodyPieces(self, this.model)) if (isCap(piece.material.name)) p.skinned.push(this.skinMesh(piece, p.skeleton));
+        // (not for an end that has been cut away from it: that cap would hang in the air where the end was)
+        for (const piece of bodyPieces(self, this.model)) if (isCap(piece.material.name) && this.hasEnd(self, piece.geometry)) p.skinned.push(this.skinMesh(piece, p.skeleton));
       }
       const a = PARTS[other].pos, b = PARTS[self].pos;
       const standIn = new THREE.Object3D();
@@ -1296,6 +1324,25 @@ export class Ragdoll {
       p.mesh.add(standIn);
       p.skeleton.bones[BONE_INDEX[other]] = standIn;
     }
+  }
+
+  /** The same for the skin of a piece cut off a part, when what hung off it comes away (its torn end is addStump's). */
+  detachPiece(piece, other) {
+    if (piece.gone || (piece.cutFrom ??= new Set()).has(other)) return;
+    piece.cutFrom.add(other);
+    const a = PARTS[other].pos, b = PARTS[piece.name].pos, standIn = new THREE.Object3D();
+    standIn.position.set(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    piece.group.add(standIn);
+    piece.skeleton.bones[BONE_INDEX[other]] = standIn;
+  }
+
+  /** Whether a part still has the stretch of it where this (rest pose) geometry is: not if it was cut off it (slice). */
+  hasEnd(name, geo) {
+    const p = this.parts[name];
+    if (!p.range) return true;
+    if (!geo.boundingBox) geo.computeBoundingBox();
+    const y = (geo.boundingBox.min.y + geo.boundingBox.max.y) / 2 - PARTS[name].pos[1];
+    return y >= p.range[0] - 0.03 && y <= p.range[1] + 0.03;
   }
 
   /** A round broke the bone: a jagged end of it stands out where the round came out, and it bleeds. */

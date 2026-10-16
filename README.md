@@ -380,10 +380,17 @@ Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of
 - **The cut follows the blade** (`cutNormal`): a blade moves in its own plane, so the cut holds the way it was going and is
   as square across the part as that allows, give or take the angle of the edge (up to 30°, never more than 50° off square).
   A diagonal cut through the chest can take the head and one arm and leave the other. The skin is cut exactly on that plane
-  (`splitGeometry` cuts the triangles across it in two), and the face of the cut is fitted to the outline it left
-  (`makeSection` in `wounds.js`): skin at the edge, a band of yellow fat, muscle in bundles with pale sheets between them, and
-  the bone with marrow in it (two in a forearm or a shin; the spine, the ribs and the body cavity in a trunk; skull and brain
-  in a head). A laser's is the same, burnt black. Only a heavy round tearing a piece in two leaves a torn end.
+  (`splitGeometry` cuts the triangles across it in two), and the face of the cut fills exactly the outline that left
+  (`makeSection` in `wounds.js`: the cut edge is joined up into lines, and the biggest that goes round the middle of the part
+  is the outline): skin at the edge, a band of yellow fat, muscle in bundles with pale sheets between them, and the bone with
+  marrow in it (two in a forearm or a shin; the spine, the ribs and the body cavity in a trunk; skull and brain in a head, the
+  skull kept out of the nose and ears). Anything else the cut went through on its own (the rim of a helmet, a headset, the toe
+  of a boot) gets a face of its own in the colour of its surface, read from its texture (`colourAt`), not flesh. A laser's
+  cut is the same, burnt black. Only a heavy round tearing a piece in two leaves a torn end.
+- **Limbs hanging off a piece** (a shin under half a thigh, the head and arms on the top half of a chest) can be cut off
+  at the joint too: a blade at the knee of the piece, or a hit near the knee on the shin. The torn end goes on the piece
+  (not on the half still on the body, where it used to hang in the air), and the skin at the piece's end stops following
+  the limb that came away. Cutting a piece again moves every joint on the far side of the cut with it.
 - **The heart** (`beat`, `lost` in `ragdoll.js`): cut ends and torn arteries spurt in time with it. It beats faster the more
   blood is gone (70 a minute up to about 155) and when they are frightened, and pushes weaker as there is less left to push.
   It stops when they die: a dead body's cuts, and anything cut off, only drain, fastest when the cut faces down.
