@@ -250,6 +250,7 @@ export class Ragdoll {
     this.fallT = 9;
     this.twitch = 0;
     this.buckle = 0;
+    this.ko = 0;               // knocked out: seconds left lying there with nothing working
 
     const skin = this.kind === 'zombie' ? 0x8fbf6a : SKIN[Math.floor(Math.random() * SKIN.length)];
     const colors = {
@@ -754,6 +755,8 @@ export class Ragdoll {
       }
     }
     this.damage(dmg * mult);
+    // a blow to the head with something heavy: knocked out (a bat, a crowbar, a sledgehammer; not the beanbag, which dazes)
+    if (opts.blunt && !opts.daze && name === 'head' && dmg >= 8) this.knockout(rnd(2, 4) + dmg * 0.12);
     // a hostage-taker hurt but still on his feet has a gun at someone's head
     const h = this.hostage;
     if (h && dmg > 0 && !this.dead && this.mode === 'anim' && !opts.daze && !h.dead && h.mode === 'anim' && Math.random() < 0.5) {
@@ -1087,7 +1090,9 @@ export class Ragdoll {
     // hurt: a hand pressed to a body wound (if there is a working arm to do it with), a bad leg favoured
     const armOk = (side) => !this.limp.has('farm' + side) && !this.isFree('farm' + side);
     const cSide = armOk('L') ? 'L' : armOk('R') ? 'R' : null;
-    const wantClutch = this.gutShot && !z && cSide && this.gesture === 'none' ? 1 : 0;
+    // (and a broken arm: the good hand holds it)
+    const brokenArm = this.limp.has('uarmL') || this.limp.has('farmL') || this.limp.has('uarmR') || this.limp.has('farmR');
+    const wantClutch = (this.gutShot || brokenArm) && !z && cSide && this.gesture === 'none' ? 1 : 0;
     this.clutch += (wantClutch - this.clutch) * Math.min(1, dt * 4);
     const cl = cSide ? this.clutch : 0, sq = this.squat;
     const lameL = this.lame.L, lameR = this.lame.R;
@@ -1175,8 +1180,9 @@ export class Ragdoll {
     // clutching a wound: forearm across the belly, hunched over it
     let shLy = 0, shRy = 0;
     if (cl > 0.01) {
-      if (cSide === 'L') { shLx = mix(shLx, 0.3, cl); shLy = 0.8 * cl; shLz = mix(shLz, 0, cl); elL = mix(elL, 1.6, cl); }
-      else { shRx = mix(shRx, 0.3, cl); shRy = -0.8 * cl; shRz = mix(shRz, 0, cl); elR = mix(elR, 1.6, cl); }
+      const hi = brokenArm ? 0.3 : 0;                             // a broken arm is held higher, across the chest
+      if (cSide === 'L') { shLx = mix(shLx, 0.3 + hi, cl); shLy = (0.8 + hi) * cl; shLz = mix(shLz, 0, cl); elL = mix(elL, 1.6 + hi, cl); }
+      else { shRx = mix(shRx, 0.3 + hi, cl); shRy = -(0.8 + hi) * cl; shRz = mix(shRz, 0, cl); elR = mix(elR, 1.6 + hi, cl); }
       spX -= 0.18 * cl;
       nkX -= 0.1 * cl;
     }
@@ -1455,11 +1461,12 @@ export class Ragdoll {
     let brace = false, hurt = false, wake = true, settled = false, crawl = null, tone = 0.04;
     if (!limpOnly) {
       this.fallT += dt;
-      brace = !this.dead && this.fallT < 0.3;      // a moment of reflex; by the time the ground arrives the body is loose again
-      hurt = !this.dead && !brace && (this.crippled || this.health <= 20 || this.bleedRate > 1);
+      const out = this.dead || this.ko > 0;        // dead, or out cold: nothing braces, writhes or crawls
+      brace = !out && this.fallT < 0.3;            // a moment of reflex; by the time the ground arrives the body is loose again
+      hurt = !out && !brace && (this.crippled || this.health <= 20 || this.bleedRate > 1);
       crawl = this.crawl(dt, brace);
       // the dead keep a trace of tone for a few seconds, then only joint friction is left
-      const want = this.dead ? (this.deadT > 3 ? 0 : 0.05) : brace ? 0.6 : crawl ? 0.6 : hurt ? 0.3 : 0.18;   // loose: a body that is down is mostly dead weight
+      const want = this.dead ? (this.deadT > 3 ? 0 : 0.05) : this.ko > 0 ? 0.04 : brace ? 0.6 : crawl ? 0.6 : hurt ? 0.3 : 0.18;   // loose: a body that is down is mostly dead weight
       this.tone += (want - this.tone) * Math.min(1, dt * (this.dead ? 1.5 : 6));
       tone = this.tone;
       wake = hurt || brace;     // the living keep moving; the dead are allowed to settle and sleep
@@ -1576,7 +1583,7 @@ export class Ragdoll {
   crawl(dt, brace) {
     this.crawling = false;
     const tor = this.parts.torso, pel = this.parts.pelvis;
-    if (this.dead || brace || this.fallT < 1.4 || tor.gone || pel.gone || this.severed.has('torso')) return null;
+    if (this.dead || this.ko > 0 || brace || this.fallT < 1.4 || tor.gone || pel.gone || this.severed.has('torso')) return null;
     const zombie = this.kind === 'zombie';
     if (!(this.crippled || (!zombie && this.health <= 20))) return null;
     if (this.ctx.weapons?.grab?.rag === this) return null;
@@ -1738,6 +1745,20 @@ export class Ragdoll {
     if (dmg > 3 && !this.dead) this.stun = Math.max(this.stun, 1 + Math.min(3, dmg / 15));
     if (head && p.hp <= 0) this.die('impact');
     else this.damage(dmg * (head ? 1.5 : 1), 'impact');
+    if (head && dmg > 6) this.knockout(rnd(2, 4) + dmg * 0.1);    // the head hit the ground hard: out cold for a while
+  }
+
+  /**
+   * Out cold: down and limp for `seconds` (no bracing, writhing or crawling), then back up, dazed, holding their head for a
+   * few seconds (the flashbang's doubled-over daze in brain.js). Zombies do not get knocked out.
+   */
+  knockout(seconds) {
+    if (this.dead || this.removed || this.kind === 'zombie') return;
+    this.goLimp(seconds + 0.3);
+    this.ko = Math.max(this.ko, seconds);
+    this.fallT = Math.max(this.fallT, 0.3);           // (no brace: it is already over)
+    this.tone = 0.04;
+    this.brain.flashed = Math.max(this.brain.flashed || 0, seconds + 3);
   }
 
   tryGetUp() {
@@ -1847,6 +1868,7 @@ export class Ragdoll {
       if (CLIPS.die && this.mode === 'anim' && this.stumbleT <= 0) this.collapseT = 1e-3; else this.goLimp(2);
     }
 
+    if (this.ko > 0) this.ko -= dt;
     if (this.dead) {
       this.deadT += dt;
       // come to rest: put to sleep. Left alone a body can rock by a hair for good (an arm pinned under it jitters, or a scrap

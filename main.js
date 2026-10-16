@@ -17,6 +17,7 @@ import { initTouch, isTouch } from './touch.js';
 import { Tools } from './tools.js';
 import { makeTrap, TRAP_TYPES } from './traps.js';
 import { Coop } from './coop.js';
+import { Devices } from './devices.js';
 import { Water } from './water.js';
 import { Driving } from './drive.js';
 
@@ -98,6 +99,7 @@ ctx.player.yaw = ctx.player.camYaw = ctx.map.yaw;
 setSpace(ctx.map.id);
 ctx.weapons = new Weapons(ctx);
 ctx.tools = new Tools(ctx);
+ctx.devices = new Devices(ctx);                                   // gadgets: black holes, sticky C4, mines (devices.js)
 ctx.traps = [];
 ctx.post = post;
 
@@ -457,6 +459,7 @@ ctx.spawnPoint = spawnPoint;
 function clearAll() {
   ctx.weapons.releaseGrab();
   ctx.weapons.clearBolts();
+  ctx.devices.clear();
   for (const r of ctx.ragdolls) r.destroy();
   for (const p of ctx.props) p.remove();
   ctx.tools.clear();
@@ -1044,6 +1047,7 @@ function tick(now) {
   for (const r of ctx.ragdolls) r.update(sdt);
   for (const p of ctx.props) p.update(sdt);
   for (const t of ctx.traps) if (!t.removed) t.update(sdt);     // (moves their kinematic parts for the step below; a deleted one has no bodies left)
+  ctx.devices.update(sdt);
   ctx.water.update(sdt);                                          // (floats things for the step below)
   ctx.driving.update(sdt, input, active);                         // (drives the car you are in)
   ctx.net.pre(sdt);

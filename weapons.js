@@ -55,6 +55,9 @@ export const WEAPONS = [
   { name: 'Sledgehammer', slot: 6, type: 'melee', rate: 1.20, dmg: 24, impulse: 320, range: 1.7, blunt: true },
   { name: 'Grenade',  slot: 7, type: 'grenade', auto: false, rate: 0.7 },
   { name: 'Flashbang', slot: 7, type: 'grenade', prop: 'flashbang', auto: false, rate: 0.9 },
+  { name: 'Black Hole', slot: 7, type: 'grenade', prop: 'singularity', auto: false, rate: 1.2 },   // devices.js
+  { name: 'Sticky C4', slot: 7, type: 'device', device: 'c4', auto: false, rate: 0.5 },
+  { name: 'Mine',     slot: 7, type: 'device', device: 'mine', auto: false, rate: 0.6 },
   { name: 'Grab Gun', slot: 7, type: 'grab' },
   { name: 'Drone',    slot: 7, type: 'drone', auto: false, rate: 1.0 },
   { name: 'Pepper Spray', slot: 7, type: 'spray', range: 3.2, mag: 100, reload: 2.0 },
@@ -137,6 +140,9 @@ const VIEW = [
   { model: 'SledgeHammer', hip: [0.3, -0.32, -0.5], melee: true, tilt: 0.6, grip: -0.2 },
   { model: 'Grenade', hip: [0.28, -0.3, -0.5], held: true },
   { model: 'Grenade', hip: [0.28, -0.3, -0.5], held: true },      // shortcut: the flashbang is held as a grenade; give it its own model when one is built
+  { model: 'Grenade', hip: [0.28, -0.3, -0.5], held: true, tint: 0x4a1a7a },   // the black hole: a grenade in violet (shortcut, as the flashbang)
+  { model: 'Grenade', hip: [0.28, -0.3, -0.5], held: true, tint: 0xcdbb8a },   // sticky C4: in putty
+  { model: 'Grenade', hip: [0.28, -0.3, -0.5], held: true, tint: 0x3d4630 },   // a mine: in olive
   { model: 'GrabGun', hip: [0.21, -0.22, -0.45], muzzle: [0, 0.005, -0.37],
     handR: [0, -0.088, 0.1, -0.25], handL: [0, -0.045, -0.075, 0] },
   { model: 'Grenade', hip: [0.28, -0.3, -0.5], held: true },      // shortcut: the drone is a grenade in the hand, give it its own model when someone builds one
@@ -1122,6 +1128,21 @@ export class Weapons {
     ctx.toast('DRONE: MOUSE STEERS - SHIFT FAST - CLICK DETONATES');
   }
 
+  /** Sticky C4 (left: throw one, right: set them all off) and mines (left: put one down). devices.js does the rest. */
+  updateDevice(input, w) {
+    const ctx = this.ctx;
+    if (!input.leftDown && !input.rightDown) return;
+    if (ctx.net.role === 'guest') { ctx.toast("GADGETS ARE THE HOST'S ONLY IN CO-OP"); return; }
+    this.aim();
+    if (w.device === 'c4' && input.rightDown) ctx.devices.detonate();
+    else if (input.leftDown && this.cool <= 0) {
+      this.cool = w.rate;
+      this.swing = 0.2;
+      if (w.device === 'c4') ctx.devices.throwC4(_o, _d, ctx.player.vel.clone());
+      else ctx.devices.placeMine(_o, _d);
+    }
+  }
+
   throwGrenade(type = 'grenade') {
     const ctx = this.ctx;
     this.aim();
@@ -1420,6 +1441,8 @@ export class Weapons {
       this.updateGrab(dt, input);
     } else if (w.type === 'wand') {
       this.updateWand(dt, input);
+    } else if (w.type === 'device') {
+      this.updateDevice(input, w);
     } else if (w.type === 'tool') {
       this.aim();
       if (input.leftDown) this.ctx.tools.use(w.tool, _o, _d);

@@ -9,6 +9,10 @@ import RAPIER from '@dimforge/rapier3d-compat';
 //   grinder   a hopper on two toothed rollers: what goes in comes out of the chute
 //   wrecker   a wrecking ball swinging from a gantry
 //   tesla     a Tesla coil that throws a bolt at whoever is nearest
+//   lasers    a laser grid: beams sweeping up and down between two posts cut through whatever crosses them
+//   guillotine  a blade dropped every few seconds onto whoever is under it
+//   maiden    an iron maiden: the spiked doors slam on whoever is inside
+//   chair     an electric chair: whoever is put in it is strapped in and jolted until dead
 // Each owns a fixed body for its frame and, where something moves, a kinematic body that update() drives
 // before the physics step. What they do to people is worked out from where body parts are, not from contact
 // events, so they only ever call into the world between steps (never from inside one).
@@ -602,7 +606,281 @@ class Tesla extends Trap {
   }
 }
 
-const TYPES = { saw: Saw, spikes: Spikes, launcher: Launcher, crusher: Crusher, grinder: Grinder, wrecker: Wrecker, tesla: Tesla };
+// ------------------------------------------------------------------ laser grid
+// Two posts 3.2 m apart with five beams between them, sweeping slowly up and down. Anything that crosses a beam is cut
+// through where it crossed it (the laser sword's cut: sealed); you are burnt.
+const LASER_W = 1.6;
+class LaserGrid extends Trap {
+  constructor(ctx, pos, yaw) {
+    super(ctx, 'lasers', pos, yaw);
+    for (const x of [-LASER_W - 0.08, LASER_W + 0.08]) {
+      this.box(0.16, 2.1, 0.16, x, 1.05, 0, dark);
+      this.box(0.03, 1.9, 0.08, x - Math.sign(x) * 0.095, 1.05, 0, steel, null);       // the emitter strip
+    }
+    this.beamMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(6, 0.25, 0.2), toneMapped: false, transparent: true });
+    this.beams = [];
+    for (let i = 0; i < 5; i++) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(LASER_W * 2, 0.01, 0.01), this.beamMat);
+      this.group.add(m);
+      this.beams.push(m);
+    }
+  }
+
+  get v() { return this.t; }
+  set v(t) { this.t = t; }
+
+  height(i) { return 0.2 + i * 0.4 + 0.2 * Math.sin(this.t * 0.9 + i * 1.7); }
+
+  logic() {
+    for (const [r, name, p, t] of this.parts()) {
+      this.local(t, _v);
+      if (Math.abs(_v.x) > LASER_W || Math.abs(_v.z) > 0.11) continue;
+      const half = name === 'head' ? 0.12 : name === 'torso' ? 0.22 : name === 'pelvis' ? 0.1 : 0.17;
+      for (let i = 0; i < 5; i++) {
+        const h = this.height(i);
+        if (Math.abs(_v.y - h) > half || !this.ready(p, 0.4)) continue;
+        if (r.mode !== 'ragdoll') r.goLimp(2);
+        r.hit(name, 30, new THREE.Vector3(t.x, this.pos.y + h, t.z), new THREE.Vector3(0, 0, Math.sign(_v.z) || 1).applyQuaternion(this.rot), 0, { laser: true });
+        this.ctx.sfx.sizzle();
+        break;
+      }
+    }
+    for (const pl of players(this.ctx)) {
+      if (pl.dead) continue;
+      this.local(pl.pos, _v);
+      if (Math.abs(_v.x) > LASER_W || Math.abs(_v.z) > 0.35) continue;
+      for (let i = 0; i < 5; i++) {
+        const h = this.height(i);
+        if (_v.y - 0.95 < h && _v.y + 0.8 > h && this.ready(pl, 0.6)) { pl.hurt(28, null); this.ctx.sfx.sizzle(); break; }
+      }
+    }
+  }
+
+  pose() {
+    this.beams.forEach((b, i) => { b.position.y = this.height(i); });
+    this.beamMat.opacity = 0.75 + 0.25 * Math.sin(this.t * 60);
+  }
+
+  remove() { super.remove(); this.beamMat.dispose(); }
+}
+
+// ------------------------------------------------------------------ guillotine
+// A frame with a weighted, angled blade that is hauled up, held, and let go every few seconds. What is under it when it
+// comes down is cut through there: a neck in the lunette, or anything else in the way. (Put someone on the bench with the
+// Grab Gun or the wand, or walk them into it.)
+const G_TOP = 2.35, G_LOW = 0.62, G_CYCLE = 5.5;
+class Guillotine extends Trap {
+  constructor(ctx, pos, yaw) {
+    super(ctx, 'guillotine', pos, yaw);
+    const wood = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.8 });
+    for (const x of [-0.42, 0.42]) this.box(0.14, 2.7, 0.14, x, 1.35, 0, wood);
+    this.box(1.0, 0.16, 0.2, 0, 2.75, 0, wood);
+    this.box(0.7, 0.12, 0.16, 0, 0.5, 0, wood);                               // the lower half of the lunette
+    this.box(0.5, 0.45, 1.5, 0, 0.225, 0.85, wood);                           // the bench, on the side the victim lies
+    this.box(1.1, 0.06, 0.6, 0, 0.03, 0, wood);
+    this.bladeY = G_TOP;
+    this.blade = new THREE.Group();
+    const steelBlade = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.32, 0.03), steel);
+    steelBlade.rotation.z = 0.35;                                             // angled, as the real thing is
+    const weight = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.18, 0.08), dark);
+    weight.position.y = 0.28;
+    this.blade.add(steelBlade, weight);
+    for (const m of this.blade.children) m.castShadow = true;
+    this.group.add(this.blade);
+    this.prevY = G_TOP;
+  }
+
+  get v() { return this.bladeY; }
+  set v(y) { this.bladeY = y; }
+
+  height(c) {
+    if (c < 3) return G_TOP;                                                  // held up
+    if (c < 3.18) { const k = (c - 3) / 0.18; return G_TOP - (G_TOP - G_LOW) * k * k; }   // let go
+    if (c < 4) return G_LOW;
+    return G_LOW + (G_TOP - G_LOW) * (c - 4) / (G_CYCLE - 4);                 // hauled back up
+  }
+
+  logic() {
+    this.prevY = this.bladeY;
+    this.bladeY = this.height(this.t % G_CYCLE);
+    if (this.bladeY >= this.prevY - 1e-3) return;
+    // coming down: whatever its edge passed through this frame is cut there
+    const lo = this.bladeY - 0.17, hi = this.prevY - 0.17;
+    for (const [r, name, p, t] of this.parts()) {
+      if (p.gone) continue;
+      this.local(t, _v);
+      if (Math.abs(_v.x) > 0.36 || Math.abs(_v.z) > 0.16 || _v.y > hi + 0.1 || _v.y < lo - 0.1 || !this.ready(p, 1)) continue;
+      if (r.mode !== 'ragdoll') r.goLimp(3);
+      r.hit(name, 200, new THREE.Vector3(t.x, t.y + 0.05, t.z), new THREE.Vector3(0, -1, 0), 40, { blade: true, chop: true });
+      this.ctx.sfx.chop();
+    }
+    for (const pl of players(this.ctx)) {
+      this.local(pl.pos, _v);
+      if (!pl.dead && Math.abs(_v.x) < 0.4 && Math.abs(_v.z) < 0.3 && _v.y - 0.9 < hi && _v.y + 0.8 > lo && this.ready(pl, 1)) pl.hurt(120, null);
+    }
+    if (this.bladeY <= G_LOW + 1e-3) { this.ctx.sfx.thud(1.4); this.ctx.sfx.crack(); }
+  }
+
+  pose() { this.blade.position.y = this.bladeY; }
+}
+
+// ------------------------------------------------------------------ iron maiden
+// An upright spiked cabinet, open at the front. Whoever ends up inside (thrown, put there, or walking in) has the doors
+// slammed on them: every spike goes in, and it holds them for a few seconds before it opens again and lets them fall out.
+class IronMaiden extends Trap {
+  constructor(ctx, pos, yaw) {
+    super(ctx, 'maiden', pos, yaw);
+    const iron = new THREE.MeshStandardMaterial({ color: 0x3b3430, roughness: 0.7, metalness: 0.6 });
+    this.box(1.1, 0.1, 0.9, 0, 0.05, 0, iron);
+    this.box(1.1, 2.2, 0.08, 0, 1.15, -0.41, iron);                            // the back
+    for (const x of [-0.53, 0.53]) this.box(0.06, 2.2, 0.9, x, 1.15, 0, iron); // the sides
+    this.box(1.1, 0.1, 0.9, 0, 2.3, 0, iron);
+    const cone = new THREE.ConeGeometry(0.018, 0.2, 5).rotateX(-Math.PI / 2).translate(0, 0, 0.1);
+    const spikes = (n, place) => {
+      const m = new THREE.InstancedMesh(cone, steel, n), mt = new THREE.Matrix4(), q = new THREE.Quaternion();
+      for (let i = 0; i < n; i++) m.setMatrixAt(i, place(i, mt, q));
+      m.castShadow = true;
+      return m;
+    };
+    // on the back, pointing forward
+    this.group.add(spikes(20, (i, mt) => mt.makeTranslation(((i % 4) - 1.5) * 0.2, 0.45 + Math.floor(i / 4) * 0.35, -0.37)));
+    // the doors, hinged at the front corners, spikes on their inside
+    this.doors = [-1, 1].map((s) => {
+      const hinge = new THREE.Group();
+      hinge.position.set(s * 0.53, 0, 0.43);
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.53, 2.2, 0.06), iron);
+      door.position.set(-s * 0.265, 1.15, 0);
+      door.castShadow = true;
+      hinge.add(door);
+      hinge.add(spikes(10, (i, mt, q) => mt.compose(_v.set(-s * (0.12 + (i % 2) * 0.26), 0.5 + Math.floor(i / 2) * 0.4, -0.03), q.setFromAxisAngle(UP, Math.PI), new THREE.Vector3(1, 1, 1))));
+      this.group.add(hinge);
+      return { hinge, s };
+    });
+    this.shut = 0;           // 0 open .. 1 shut
+    this.state = 'open';
+    this.timer = 0;
+    this.held = [];
+  }
+
+  get v() { return this.shut; }
+  set v(x) { this.shut = x; }
+
+  inside(t) { this.local(t, _v); return Math.abs(_v.x) < 0.48 && _v.z > -0.38 && _v.z < 0.4 && _v.y > 0.1 && _v.y < 2.1; }
+
+  logic(dt) {
+    if (this.state === 'open') {
+      if (this.timer > 0) { this.timer -= dt; return; }
+      const r = this.ctx.ragdolls.find((x) => !x.removed && !x.parts.pelvis.gone && this.inside(x.parts.pelvis.body.translation()));
+      const pl = players(this.ctx).find((x) => !x.dead && this.inside(x.pos));
+      if (r || pl) { this.state = 'closing'; this.ctx.sfx.thud(1); }
+    } else if (this.state === 'closing') {
+      this.shut = Math.min(1, this.shut + dt / 0.3);
+      if (this.shut >= 1) {
+        // shut: every spike goes in
+        this.state = 'shut'; this.timer = 3;
+        this.ctx.sfx.chop(); this.ctx.sfx.crack(); this.ctx.sfx.thud(1.6);
+        this.held = [];
+        for (const [r, name, p, t] of this.parts()) {
+          if (!this.inside(t)) continue;
+          if (r.mode !== 'ragdoll') r.goLimp(5);
+          const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(this.rot);
+          r.hit(name, 45, new THREE.Vector3(t.x, t.y, t.z).addScaledVector(fwd, 0.1), fwd.clone().negate(), 0, { stab: true });
+          r.hit(name, 35, new THREE.Vector3(t.x, t.y, t.z).addScaledVector(fwd, -0.1), fwd, 0, { stab: true });
+          this.held.push([r, p, new THREE.Vector3(t.x, t.y, t.z)]);
+        }
+        for (const pl of players(this.ctx)) if (!pl.dead && this.inside(pl.pos)) pl.hurt(80, null);
+        this.ctx.gore.gush(this.pos.clone().add(_v.set(0, 1, 0)), UP, 30, 3);
+      }
+    } else if (this.state === 'shut') {
+      // held where they were, bleeding out through the gaps
+      for (const [r, p, at] of this.held) {
+        if (r.removed || p.gone) continue;
+        const t = p.body.translation();
+        p.body.setLinvel({ x: (at.x - t.x) * 8, y: (at.y - t.y) * 8, z: (at.z - t.z) * 8 }, true);
+      }
+      if (Math.random() < dt * 6) this.ctx.gore.drip(this.pos.clone().add(_v.set((Math.random() - 0.5) * 0.9, 0.12, 0.46).applyQuaternion(this.rot)), _w.set(0, -0.2, 0));
+      if ((this.timer -= dt) <= 0) { this.state = 'opening'; this.held = []; }
+    } else {
+      this.shut = Math.max(0, this.shut - dt / 0.7);
+      if (this.shut <= 0) { this.state = 'open'; this.timer = 2; }
+    }
+  }
+
+  pose() { for (const d of this.doors) d.hinge.rotation.y = d.s * (1 - this.shut) * 1.75; }
+}
+
+// ------------------------------------------------------------------ electric chair
+// A wooden chair with straps and a metal cap. Put someone in it (the Grab Gun, the wand, a launch pad): they are
+// strapped in and the current goes through them, a jolt at a time, until they are dead and smoking, then let go.
+class ElectricChair extends Trap {
+  constructor(ctx, pos, yaw) {
+    super(ctx, 'chair', pos, yaw);
+    const wood = new THREE.MeshStandardMaterial({ color: 0x4a2e18, roughness: 0.75 });
+    const strap = new THREE.MeshStandardMaterial({ color: 0x1c1712, roughness: 0.9 });
+    this.box(0.62, 0.08, 0.56, 0, 0.5, 0, wood);
+    for (const x of [-0.27, 0.27]) for (const z of [-0.24, 0.24]) this.box(0.07, 0.5, 0.07, x, 0.25, z, wood);
+    this.box(0.62, 1.0, 0.07, 0, 1.0, -0.27, wood);                          // the back
+    for (const x of [-0.31, 0.31]) this.box(0.07, 0.07, 0.5, x, 0.78, 0, wood);   // the arms
+    for (const x of [-0.31, 0.31]) this.box(0.09, 0.03, 0.12, x, 0.83, 0.05, strap, null);
+    this.box(0.5, 0.05, 0.03, 0, 1.0, -0.22, strap, null);
+    this.box(0.04, 0.4, 0.04, 0, 1.6, -0.26, steel, null);                    // the cap, on its arm
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.14, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), steel);
+    cap.position.set(0, 1.62, -0.1);
+    cap.castShadow = true;
+    this.group.add(cap);
+    this.box(0.3, 0.5, 0.2, 0.75, 0.25, -0.2, dark);                          // the switch box
+    this.capAt = new THREE.Vector3(0, 1.55, -0.1).applyQuaternion(this.rot).add(this.pos);
+    this.seat = new THREE.Vector3(0, 0.75, 0).applyQuaternion(this.rot).add(this.pos);
+    this.victim = null;
+    this.jolts = 0;
+    this.joltT = 0;
+    this.after = 0;
+    this.rest = 0;
+  }
+
+  get v() { return this.jolts; }
+  set v(n) { if (n !== this.jolts) { this.jolts = n; this.spark(); } }
+
+  spark() {
+    const g = this.ctx.gore;
+    g.sparks(this.capAt, UP, 10);
+    g.smoke.emit(this.capAt.x, this.capAt.y + 0.05, this.capAt.z, rnd(-0.2, 0.2), rnd(0.4, 0.9), rnd(-0.2, 0.2), rnd(0.06, 0.12), rnd(0.8, 1.6), -0.3, 0.3, 0.3, 0.3, 0, 1.5);
+  }
+
+  logic(dt) {
+    if (!this.victim) {
+      if ((this.rest -= dt) > 0) return;
+      // someone dropped on it (lying loose, not walking past): strapped in
+      this.victim = this.ctx.ragdolls.find((r) => !r.removed && r.mode === 'ragdoll' && !r.parts.pelvis.gone && !r.parts.torso.gone
+        && this.seat.distanceTo(r.parts.pelvis.body.translation()) < 0.65) || null;
+      if (this.victim) { this.joltT = 0.6; this.after = 0; this.ctx.sfx.thud(0.8); }
+      return;
+    }
+    const r = this.victim;
+    if (r.removed || r.parts.pelvis.gone || r.parts.torso.gone) { this.victim = null; this.rest = 2; return; }
+    r.goLimp(1);
+    // held in the seat, sitting up against the back, the head under the cap
+    const hold = (p, at, k = 10) => { if (p.gone) return; const t = p.body.translation(); p.body.setLinvel({ x: (at.x - t.x) * k, y: (at.y - t.y) * k, z: (at.z - t.z) * k }, true); };
+    hold(r.parts.pelvis, this.seat);
+    hold(r.parts.torso, _v.set(0, 1.1, -0.12).applyQuaternion(this.rot).add(this.pos), 6);
+    // a jolt every so often: every muscle locks, it burns, it smokes, and it kills in the end
+    if ((this.joltT -= dt) <= 0) {
+      this.joltT = rnd(0.3, 0.55);
+      this.jolts++;
+      this.spark();
+      this.ctx.sfx.zap();
+      const names = Object.keys(r.parts).filter((n) => !r.parts[n].gone);
+      const n = names[(Math.random() * names.length) | 0];
+      if (!r.dead) r.hit('torso', 0, this.capAt.clone(), new THREE.Vector3(0, -1, 0), 0, { tase: 0.5, daze: 2 });   // (no wound: the current does the harm)
+      r.scorch(n, 0.12, r.dead ? 0 : 7, this.capAt);
+      if (!r.parts.head.gone) r.scorch('head', 0.1, 0, this.capAt);
+      for (const k of names) { const p = r.parts[k]; p.body.applyTorqueImpulse({ x: rnd(-1, 1) * p.inertia * 25, y: rnd(-1, 1) * p.inertia * 10, z: rnd(-1, 1) * p.inertia * 25 }, true); }
+    }
+    if (r.dead && (this.after += dt) > 2.5) { this.victim = null; this.rest = 3; }       // let go
+  }
+}
+
+const TYPES = { saw: Saw, spikes: Spikes, launcher: Launcher, crusher: Crusher, grinder: Grinder, wrecker: Wrecker, tesla: Tesla, lasers: LaserGrid, guillotine: Guillotine, maiden: IronMaiden, chair: ElectricChair };
 export const TRAP_TYPES = {
   saw: { label: 'Saw Blade', icon: '🪚', small: 'cuts what touches it' },
   spikes: { label: 'Spike Trap', icon: '📌', small: 'step on it' },
@@ -611,5 +889,9 @@ export const TRAP_TYPES = {
   grinder: { label: 'Meat Grinder', icon: '🥩', small: 'throw someone in' },
   wrecker: { label: 'Wrecking Ball', icon: '⛓️', small: 'swings forever' },
   tesla: { label: 'Tesla Coil', icon: '⚡', small: 'zaps the nearest' },
+  lasers: { label: 'Laser Grid', icon: '🟥', small: 'cuts what crosses it' },
+  guillotine: { label: 'Guillotine', icon: '🪓', small: 'drops every few seconds' },
+  maiden: { label: 'Iron Maiden', icon: '⚰️', small: 'shuts on whoever is inside' },
+  chair: { label: 'Electric Chair', icon: '🪑', small: 'put someone in it' },
 };
 export function makeTrap(ctx, type, pos, yaw) { return new TYPES[type](ctx, pos, yaw); }

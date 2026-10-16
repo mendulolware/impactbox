@@ -23,6 +23,7 @@ const TYPES = {
   mag:       { label: 'Magazine',         icon: '', shape: 'box', half: [0.014, 0.06, 0.03], color: 0x1b1b1d, density: 2500, hp: Infinity, rest: 0.25 },
   rocket:    { label: 'Rocket',           icon: '🚀', shape: 'ball', r: 0.06, color: 0x4a5a3a, density: 400, hp: Infinity, rest: 0 },
   flashbang: { label: 'Flashbang',        icon: '', shape: 'cyl', r: 0.03, h: 0.065, color: 0x30363a, density: 1400, hp: Infinity, rest: 0.3, fuse: 1.5 },
+  singularity: { label: 'Black Hole', icon: '🌀', shape: 'ball', r: 0.07, color: 0x2a0a40, density: 3000, hp: Infinity, rest: 0.25, fuse: 1.6 },   // (devices.js opens it)
   grenade:   { label: 'Grenade',          icon: '💣', shape: 'ball', r: 0.07, color: 0x2e4a2e, density: 5200, hp: 8, rest: 0.3, fuse: 2.4, explosive: true, blast: [6.5, 1] },   // (a round into one sets it off)
 };
 
@@ -194,6 +195,7 @@ export class Prop {
         this.exploded = true;
         const t = this.body.translation();
         if (this.type === 'flashbang') this.ctx.flashbang({ x: t.x, y: t.y, z: t.z });
+        else if (this.type === 'singularity') this.ctx.devices.blackHole({ x: t.x, y: t.y, z: t.z });
         else this.ctx.explode({ x: t.x, y: t.y, z: t.z }, 6.5, 1);
         this.remove();
         return; // the body is gone: touching it again would panic the wasm world

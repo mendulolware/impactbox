@@ -397,6 +397,7 @@ export const sfx = {
   lmg()       { play('ar15', { gain: 0.85, send: 0.12, rate: 0.9 }) || sfx.ar15(); },
   autoshotgun() { play('shotgun', { gain: 0.9, send: 0.18, rate: 1.12 }) || sfx.shotgun(); },
   railgun()   { tone({ f0: 400, f1: 3200, dur: 0.1, gain: 0.22, type: 'sawtooth' }); noise({ dur: 0.3, f0: 7000, f1: 300, gain: 0.9 }); tone({ f0: 85, f1: 28, dur: 0.5, gain: 0.7 }); },
+  hole()      { tone({ f0: 70, f1: 18, dur: 4.2, gain: 0.5 }); noise({ dur: 1.5, f0: 300, f1: 40, gain: 0.5 }); tone({ f0: 900, f1: 60, dur: 0.6, gain: 0.15, type: 'sawtooth' }); },
   harpoon()   { sfx.twang(); tone({ f0: 160, f1: 60, dur: 0.12, gain: 0.35 }); },
   twang()     { tone({ f0: 520, f1: 140, dur: 0.16, gain: 0.3, type: 'triangle' }); noise({ dur: 0.06, f0: 3000, f1: 800, gain: 0.25 }); },
   /** A spent case hitting the ground a moment after the shot. */
