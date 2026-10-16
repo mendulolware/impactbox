@@ -121,7 +121,7 @@ export class Coop {
     const el = this.listEl;
     el.replaceChildren();
     if (this.role || this.busy) return;                    // (in a game, or getting into one: the status line says how it goes)
-    const games = this.lobbies.list;
+    const games = this.lobbies.list.filter((g) => Object.hasOwn(MAPS, g.map)).slice(0, 12);   // (a map this build has: anything else is another version, or junk)
     if (!games.length) {
       const p = document.createElement('p');
       p.textContent = 'No open games right now. Host one and it shows up here for everyone.';
