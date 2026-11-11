@@ -536,6 +536,113 @@ const CHUNK_MIX = {
 };
 
 // ---------------------------------------------------------------- gore system
+// ------------------------------------------------------------ guts
+const GUT_N = 16, GUT_L = 0.055, GUT_MAX = 8;     // points in a rope, metres between them, ropes at once
+/**
+ * Intestine spilling out of a body opened up (ragdoll.js: a trunk cut through, a belly shot open): a rope of soft beads
+ * hanging out of the wound, sliding out of it over a second, swinging with the body, piling up on whatever is under it.
+ * Verlet points held a fixed distance apart; drawn as one instanced mesh of beads (a point and a half-way bead per link).
+ */
+class Guts {
+  constructor(gore) {
+    this.gore = gore;
+    this.ropes = [];
+    this.beads = (GUT_N * 2 - 1);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2, metalness: 0 });
+    this.mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.5, 9, 7), mat, GUT_MAX * this.beads);
+    this.mesh.frustumCulled = false;
+    this.mesh.castShadow = true;
+    this.mesh.count = 0;
+    for (let i = 0; i < GUT_MAX * this.beads; i++) {
+      const k = Math.random();       // pink-grey to dark red, a bead at a time (a gut is not one colour)
+      this.mesh.setColorAt(i, _c.setRGB(0.42 + 0.2 * k, 0.13 + 0.12 * k, 0.12 + 0.08 * k));
+    }
+    gore.ctx.scene.add(this.mesh);
+  }
+
+  /** Out of `ref` (a part or a piece of `owner`, anything with a body), at `local` (its own frame), coming out along `out`. */
+  add(owner, ref, local, out) {
+    if (this.ropes.length >= GUT_MAX) this.ropes.shift();
+    const p = new Float32Array(GUT_N * 3), q = new Float32Array(GUT_N * 3), floor = new Float32Array(GUT_N).fill(-1e9);
+    const a = owner.localToWorld(ref, local);
+    for (let i = 0; i < GUT_N; i++) { p[i * 3] = q[i * 3] = a.x; p[i * 3 + 1] = q[i * 3 + 1] = a.y; p[i * 3 + 2] = q[i * 3 + 2] = a.z; }
+    this.ropes.push({ owner, ref, local: new THREE.Vector3(local.x, local.y, local.z), out: new THREE.Vector3(out.x, out.y, out.z).normalize(), p, q, floor, t: 0, still: 0, size: 0.75 + Math.random() * 0.5, drip: 5 + Math.random() * 3 });
+  }
+
+  update(dt) {
+    if (!this.ropes.length) { this.mesh.count = 0; return; }
+    const h = Math.min(dt, 1 / 30), g = 9.8 * h * h, gore = this.gore;
+    let bead = 0;
+    for (let r = this.ropes.length - 1; r >= 0; r--) {
+      const R = this.ropes[r];
+      if (R.owner.removed || R.ref.gone || (R.t += dt) > 150) { this.ropes.splice(r, 1); continue; }
+      const body = R.ref.body;
+      const a = R.owner.localToWorld(R.ref, R.local), o = R.owner.localToWorld(R.ref, R.out, true);
+      const P = R.p, Q = R.q, out = Math.min(GUT_N, 2 + Math.floor(R.t / 0.07));   // links out of the wound so far
+      // nothing moving and the body it hangs from asleep: leave it lying there
+      if (R.still > 1.5 && body.isSleeping()) { bead = this.draw(R, bead, out); continue; }
+      P[0] = a.x; P[1] = a.y; P[2] = a.z;
+      let moved = 0;
+      for (let i = 1; i < GUT_N; i++) {
+        const i3 = i * 3;
+        if (i >= out) { P[i3] = Q[i3] = a.x; P[i3 + 1] = Q[i3 + 1] = a.y; P[i3 + 2] = Q[i3 + 2] = a.z; continue; }
+        const vx = (P[i3] - Q[i3]) * 0.985, vy = (P[i3 + 1] - Q[i3 + 1]) * 0.985, vz = (P[i3 + 2] - Q[i3 + 2]) * 0.985;
+        Q[i3] = P[i3]; Q[i3 + 1] = P[i3 + 1]; Q[i3 + 2] = P[i3 + 2];
+        P[i3] += vx; P[i3 + 1] += vy - g; P[i3 + 2] += vz;
+        moved = Math.max(moved, Math.abs(vx) + Math.abs(vy) + Math.abs(vz));
+      }
+      // the first link leaves the wound the way the wound faces
+      if (out > 1 && R.t < 1.2) { P[3] = a.x + o.x * GUT_L; P[4] = a.y + o.y * GUT_L; P[5] = a.z + o.z * GUT_L; }
+      for (let it = 0; it < 6; it++) {
+        for (let i = 0; i < out - 1; i++) {
+          const i3 = i * 3, j3 = i3 + 3;
+          const dx = P[j3] - P[i3], dy = P[j3 + 1] - P[i3 + 1], dz = P[j3 + 2] - P[i3 + 2], d = Math.hypot(dx, dy, dz) || 1e-6;
+          const k = (d - GUT_L * R.size) / d * (i === 0 ? 1 : 0.5);
+          if (i > 0) { P[i3] += dx * k; P[i3 + 1] += dy * k; P[i3 + 2] += dz * k; }
+          P[j3] -= dx * k; P[j3 + 1] -= dy * k; P[j3 + 2] -= dz * k;
+        }
+      }
+      // the ground under each bead (looked up a few at a time), and lying on it drags
+      const rad = 0.02 * R.size;
+      for (let i = 1; i < out; i++) {
+        const i3 = i * 3;
+        if ((i + Math.floor(R.t * 60)) % 6 === 0) {
+          const hit = gore.castFixed(P[i3], P[i3 + 1] + 0.3, P[i3 + 2], 0, -1, 0, 1.5);
+          R.floor[i] = hit ? P[i3 + 1] + 0.3 - hit.timeOfImpact : -1e9;
+        }
+        if (P[i3 + 1] < R.floor[i] + rad) {
+          P[i3 + 1] = R.floor[i] + rad;
+          Q[i3] = P[i3] - (P[i3] - Q[i3]) * 0.4; Q[i3 + 2] = P[i3 + 2] - (P[i3 + 2] - Q[i3 + 2]) * 0.4; Q[i3 + 1] = P[i3 + 1];
+        }
+      }
+      R.still = moved < 0.0004 ? R.still + dt : 0;
+      // fresh, it bleeds
+      if (R.t < R.drip && Math.random() < dt * 4) {
+        const i3 = (1 + Math.floor(Math.random() * (out - 1))) * 3;
+        gore.drops.emit(P[i3], P[i3 + 1], P[i3 + 2], 0, -0.2, 0, 0.008 + Math.random() * 0.006, 1.5, 9.8, 0.12, 0.004, 0.004, BLOOD);
+      }
+      bead = this.draw(R, bead, out);
+    }
+    this.mesh.count = bead;
+    this.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Beads for one rope from instance `i` on: on each point out of the wound, and half way along each link. */
+  draw(R, i, out) {
+    const P = R.p, s = 0.044 * R.size;
+    for (let k = 0; k < out * 2 - 1; k++) {
+      const a = (k >> 1) * 3, b = a + (k & 1 ? 3 : 0);
+      _p.set((P[a] + P[b]) / 2, (P[a + 1] + P[b + 1]) / 2, (P[a + 2] + P[b + 2]) / 2);
+      const w = s * (0.85 + 0.3 * ((k * 7919) % 13) / 13);     // (not all the same width)
+      _m.compose(_p, _qr.identity(), _s.set(w, w * 0.92, w));
+      this.mesh.setMatrixAt(i++, _m);
+    }
+    return i;
+  }
+
+  clear() { this.ropes.length = 0; this.mesh.count = 0; }
+}
+
 export class Gore {
   constructor(ctx) {
     this.ctx = ctx;
@@ -609,6 +716,7 @@ export class Gore {
     this.flashT = 0;
 
     this._collideDrop = this._collideDrop.bind(this);
+    this.guts = new Guts(this);
   }
 
   // ------------------------------------------------------------ emitters
@@ -992,6 +1100,7 @@ export class Gore {
     this.drippers.length = 0;
     this.pools.length = 0;
     this.lensEl?.replaceChildren();
+    this.guts.clear();
     while (this.chunkList.length) this._removeChunk(0);
   }
 
@@ -1039,6 +1148,7 @@ export class Gore {
 
   update(dt) {
     this.drops.update(dt, this._collideDrop);
+    this.guts.update(dt);
     this.mists.update(dt);
     this.clouds.update(dt);
     this.fire.update(dt);

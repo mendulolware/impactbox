@@ -407,12 +407,25 @@ Stats live in `WEAPONS` and first-person placement in `VIEW`, both at the top of
   as square across the part as that allows, give or take the angle of the edge (up to 30°, never more than 50° off square).
   A diagonal cut through the chest can take the head and one arm and leave the other. The skin is cut exactly on that plane
   (`splitGeometry` cuts the triangles across it in two), and the face of the cut fills exactly the outline that left
-  (`makeSection` in `wounds.js`: the cut edge is joined up into lines, and the biggest that goes round the middle of the part
-  is the outline): skin at the edge, a band of yellow fat, muscle in bundles with pale sheets between them, and the bone with
+  (`makeSection` in `wounds.js`: the cut edge is joined up into lines; those that belong to the part itself, which can be
+  two halves from two meshes, a vest's front and the body's back, give the outline, the furthest of them in each of 64
+  directions; the very edge takes the colour of the surface there, cloth, a vest or skin, read from its texture with
+  `colourAt`): skin at the edge, a band of yellow fat, muscle in bundles with pale sheets between them, and the bone with
   marrow in it (two in a forearm or a shin; the spine, the ribs and the body cavity in a trunk; skull and brain in a head, the
   skull kept out of the nose and ears). Anything else the cut went through on its own (the rim of a helmet, a headset, the toe
   of a boot) gets a face of its own in the colour of its surface, read from its texture (`colourAt`), not flesh. A laser's
   cut is the same, burnt black. Only a heavy round tearing a piece in two leaves a torn end.
+- **Guts** (`Guts` in `gore.js`): a trunk cut through, cut in two at the waist, or shot open (`gutted`) lets the intestine
+  out: ropes of 16 soft links (verlet points a fixed distance apart, drawn as one instanced mesh of beads) that slide out
+  of the wound over a second, swing with the body, drape over its edge and pile up on the ground under them, dripping.
+  Up to eight at once; a rope whose body has gone to sleep stops being worked out. Not from a laser's cut (it seals).
+- **Armour turns blades:** the soldier's vest and helmet stop a blade (or a stab) the way they stop pistol rounds, as a
+  blow and sparks, losing 60% of what the hit would have done from their 120; cut to ribbons, they stop nothing. A laser
+  goes straight through.
+- **Pallor** (`pallor()` in `ragdoll.js`, `paleShader` in `wounds.js`): skin loses its colour as blood is lost (all of it by
+  45 health bled away), and slowly after death. The shader finds what is skin-coloured in a texture (red over green over
+  blue, neither grey nor garish) and drains only that toward a cold waxy grey, so clothes and hair keep theirs. Each body
+  gets its own copies of its materials the first time (shared ones would turn everyone grey).
 - **Limbs hanging off a piece** (a shin under half a thigh, the head and arms on the top half of a chest) can be cut off
   at the joint too: a blade at the knee of the piece, or a hit near the knee on the shin. The torn end goes on the piece
   (not on the half still on the body, where it used to hang in the air), and the skin at the piece's end stops following

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { getModel, bodyPieces, bodyWhole, isCap, looks, tintedMaterial } from './models.js';
-import { openWound, burn, makeStump, makeSection, colourAt, boneShard } from './wounds.js';
+import { openWound, burn, makeStump, makeSection, colourAt, boneShard, paleShader } from './wounds.js';
 import { Brain } from './brain.js';
 
 // An NPC has two lives:
@@ -626,6 +626,14 @@ export class Ragdoll {
       dmg *= 0.2;
       opts = { ...opts, blunt: true };
     }
+    if (dmg > 0 && this.armour > 0 && (name === 'torso' || name === 'head') && (opts.blade || opts.stab) && !opts.laser) {
+      // and a blade: it scores the plates or the helmet and goes no further (until they are cut to ribbons)
+      this.armour -= dmg * 0.6;
+      gore.sparks(point, new THREE.Vector3(-dir.x, -dir.y, -dir.z), 7);
+      sfx.impact('metal');
+      dmg *= 0.15;
+      opts = { ...opts, blade: false, stab: false, blunt: true, melee: true };
+    }
     if (dmg > 0 || opts.explosion) this.split();
 
     // Light hits stagger a standing NPC; legs, heads, blades, blasts, repeated hits and low
@@ -764,6 +772,7 @@ export class Ragdoll {
           // shot to pieces: the front of the body opens and what was inside comes out
           this.gutted = true;
           openWound(p, lp, 0.07, maxR, null, ld, 0.09);
+          for (let k = Math.random() < 0.5 ? 1 : 2; k > 0; k--) gore.guts.add(this, p, lp.clone(), _t.copy(ld).negate().add(_v.set(rnd(-0.3, 0.3), -0.3, rnd(-0.3, 0.3))));
           this.bleed(p, lp, 10, 1.2);
           gore.chunks(point, 5, 1.6, { x: -dir.x * 1.2, y: 0.4, z: -dir.z * 1.2 }, 'torso');
           gore.gush(point, _t.set(-dir.x, 0.2, -dir.z), 36, 4);
@@ -860,6 +869,34 @@ export class Ragdoll {
     if (this.heat > 0.5) this.burnT = Math.max(this.burnT, 7);
     this.brain.notice('hurt', from);
     this.damage(dmg, 'burned');
+  }
+
+  /**
+   * The colour going out of them: as blood is lost (all of it gone by about 45 health bled away), and slowly after death.
+   * Every skin material on this body gets the pale shader (wounds.js), on a copy of its own the first time (a shared
+   * one would turn everyone grey); a sweep every half second catches meshes made since (a wound, a cut).
+   */
+  pallor(dt) {
+    const want = this.kind === 'zombie' ? 0 : Math.min(1, Math.max(this.lost / 45, this.dead ? Math.min(0.8, this.deadT / 30) : 0));
+    if (want < 0.04 && !this.paleU) return;
+    this.paleU ??= { value: 0 };
+    this.paleU.value = want;
+    if ((this.paleCheck = (this.paleCheck || 0) - dt) > 0) return;
+    this.paleCheck = 0.5;
+    const own = (this.ownMats ??= new WeakSet());
+    const fix = (m) => {
+      if (m.userData.inside || Array.isArray(m.material)) return;
+      if (!m.material.userData.own && !own.has(m.material)) {
+        const c = m.material.clone();
+        c.name = m.material.name;
+        own.add(c);
+        m.material = c;
+      }
+      if (m.material.userData.pale !== this.paleU) { paleShader(m.material, this.paleU); m.material.userData.pale = this.paleU; }
+    };
+    for (const m of this.whole || []) fix(m);
+    for (const n in this.parts) for (const m of this.parts[n].skinned || []) fix(m);
+    for (const p of this.pieces) if (!p.gone) for (const m of p.meshes) fix(m);
   }
 
   /** Sick at what they saw: it comes up out of the mouth and down onto the ground (gore.vomit). */
@@ -1115,6 +1152,12 @@ export class Ragdoll {
       piece.group.add(face.clone());
     }
     const wp = this.localToWorld({ body: b0 }, c);
+    if (seg.name === 'torso' && !sealed) {
+      // a trunk cut through: the gut comes out of the lower half (and out of the upper too, cut low)
+      const lower = keepHi ? piece : (seg.piece || this.parts.torso), upper = keepHi ? (seg.piece || this.parts.torso) : piece;
+      for (let k = 0; k < 2; k++) gore.guts.add(this, lower, c.clone().add(_v.set(rnd(-0.04, 0.04), 0, rnd(-0.05, 0.02))), nrm);
+      if (y < -0.02) gore.guts.add(this, upper, c.clone(), nrm.clone().negate());
+    }
     if (sealed) { gore.smoke.emit(wp.x, wp.y, wp.z, 0, 0.6, 0, 0.1, 1.2, -0.3, 0.3, 0.28, 0.27, 0, 1.5); sfx.sizzle(); }
     else {
       gore.gush(wp, dir || UP, 30, 5);
@@ -1273,6 +1316,10 @@ export class Ragdoll {
       }
     }
 
+    if (name === 'torso' && !sealed) {        // in two at the waist: the gut hangs out of both halves
+      if (!parent.gone) { gore.guts.add(this, parent.piece || parent, jd.a1, outA); gore.guts.add(this, parent.piece || parent, jd.a1, outA); }
+      gore.guts.add(this, child, jd.a2, outB);
+    }
     child.twitch = 3 + Math.random() * 2;
     if (attached) {
       this.damage(12);
@@ -2222,6 +2269,7 @@ export class Ragdoll {
     const loss = zombie ? 0 : this.sevBleed + Math.min(1.6, seep);
     this.bleedRate = loss;
     if (loss > 0 && !this.dead) { this.damage(loss * dt, 'bled'); this.lost += loss * dt; }
+    this.pallor(dt);
     for (const p of this.pieces) if (!p.gone && p.twitch > 0) this.jerk(p, dt);
     for (const nm of this.severed) { const p = this.parts[nm]; if (!p.gone && p.twitch > 0) this.jerk(p, dt); }
     if (this.impactMute > 0) this.impactMute -= dt;

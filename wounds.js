@@ -128,7 +128,33 @@ function woundMaterial(base, uniforms, { posScale = 1, holeScale = 1, look = 'sk
   };
   m.customProgramCacheKey = () => 'wound:' + look + inside;
   m.name = base.name;
+  m.userData.own = true;          // (one body's alone: pallor.js may change it without touching anyone else)
   return m;
+}
+
+/**
+ * Skin that has lost its blood: whatever in this material is skin-coloured (red over green over blue, neither grey nor
+ * garish: a texture's face and hands, not its jeans or its hi-vis) is drained toward a cold, waxy grey by u.value (0..1).
+ * Goes on top of whatever the material already does to its shader (a wound's holes, say).
+ */
+export function paleShader(mat, u) {
+  const prev = mat.onBeforeCompile, key = mat.customProgramCacheKey;
+  mat.onBeforeCompile = function (shader, renderer) {
+    if (prev) prev.call(this, shader, renderer);
+    shader.uniforms.uPale = u;
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uPale;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+      {
+        vec3 c = diffuseColor.rgb;
+        float hi = max(c.r, max(c.g, c.b)), lo = min(c.r, min(c.g, c.b)), sat = (hi - lo) / max(hi, 1e-4);
+        float skin = step(c.b, c.g) * step(c.g, c.r) * smoothstep(0.12, 0.28, sat) * (1.0 - smoothstep(0.72, 0.88, sat)) * smoothstep(0.004, 0.03, hi);
+        float l = dot(c, vec3(0.3, 0.55, 0.15));
+        diffuseColor.rgb = mix(c, vec3(l * 0.96, l * 0.98, l * 1.05) * 1.05, skin * uPale * 0.78);
+      }`);
+  };
+  mat.customProgramCacheKey = function () { return (key ? key.call(this) : '') + '|pale'; };
+  mat.needsUpdate = true;
 }
 
 // ---- shared innards -------------------------------------------------------------------------
@@ -602,16 +628,41 @@ export function makeSection(rim, tone, c, n, kind, r, sealed = false) {
   const seg = [];
   for (let i = 0; i + 1 < rim.length; i += 2) seg.push([...flat(rim[i]), ...flat(rim[i + 1])]);
   const lines = edgeLines(seg);
-  // the outline of the part itself: the biggest that goes round the middle of it (skin, or the clothes over it)
-  let main = null, o = [0, 0];
-  for (const L of lines) if (encloses(L, 0, 0) && (!main || Math.abs(areaOf(L)) > Math.abs(areaOf(main)))) main = L;
-  if (!main) for (const L of lines) if (!main || Math.abs(areaOf(L)) > Math.abs(areaOf(main))) main = L;
-  if (main && !encloses(main, 0, 0)) o = main.reduce((s, p) => [s[0] + p[0] / main.length, s[1] + p[1] / main.length], [0, 0]);
-  if (!main || Math.abs(areaOf(main)) < 1e-4) {     // (nothing to go by: an ellipse the size of the part)
-    main = Array.from({ length: 48 }, (_, i) => { const a = i / 48 * Math.PI * 2; return [Math.cos(a) * r[0], Math.sin(a) * r[1]]; });
-    o = [0, 0];
+  // which of those are the part itself: any that goes round its middle, or a big one whose box reaches the middle (half a
+  // trunk, when the front and the back of it are different meshes: a vest and the body behind it). The rest (a thumb, the
+  // rim of a helmet, a hood) are things the cut went through on their own
+  let biggest = 0;
+  for (const L of lines) biggest = Math.max(biggest, Math.abs(areaOf(L)));
+  const own = (L) => {
+    if (encloses(L, 0, 0)) return true;
+    if (Math.abs(areaOf(L)) < 0.2 * biggest) return false;
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const p of L) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); }
+    const m = 0.25 * Math.hypot(x1 - x0, z1 - z0);
+    return x0 - m < 0 && x1 + m > 0 && z0 - m < 0 && z1 + m > 0;
+  };
+  const body = lines.filter(own);
+  // the outline: the furthest point of those in each of 64 directions from the middle, and what colour the surface is there
+  const B = 64, dist = new Array(B).fill(0), edge = new Array(B).fill(null), o = [0, 0];
+  const bin = (x, z) => ((Math.round(Math.atan2(z, x) / (Math.PI * 2) * B) % B) + B) % B;
+  for (const L of body) for (const j of L.segs) for (const e of [0, 2]) {
+    const x = seg[j][e], z = seg[j][e + 1], i = bin(x, z), dd = Math.hypot(x, z);
+    if (dd > dist[i]) { dist[i] = dd; edge[i] = tone[j]; }
   }
-  const B = 64, Q = around(main, B), dist = Q.map((p) => Math.hypot(p[0] - o[0], p[1] - o[1]));
+  if (dist.filter((x) => x > 0).length < B / 4) {    // (nothing to go by: an ellipse the size of the part)
+    for (let i = 0; i < B; i++) { const t = i / B * Math.PI * 2; dist[i] = r[0] * r[1] / Math.hypot(r[1] * Math.cos(t), r[0] * Math.sin(t)); edge[i] = null; }
+  } else {
+    for (let i = 0; i < B; i++) {                       // gaps: between the nearest on either side
+      if (dist[i]) continue;
+      let p = 1, q = 1;
+      while (!dist[(i - p + B) % B]) p++;
+      while (!dist[(i + q) % B]) q++;
+      dist[i] = (dist[(i - p + B) % B] * q + dist[(i + q) % B] * p) / (p + q);
+      edge[i] = edge[(i - p + B) % B];
+    }
+  }
+  const Q = dist.map((dd, i) => [Math.cos(i / B * Math.PI * 2) * dd, Math.sin(i / B * Math.PI * 2) * dd]);
+  const inside = (p) => Math.hypot(p[0], p[1]) < dist[bin(p[0], p[1])];
   const median = dist.slice().sort((x, y) => x - y)[B >> 1];
   // what is inside keeps to the body: in a head the skull does not run out into the nose or the ears
   const inner = dist.map((x) => (kind === 'head' ? Math.min(x, median * 1.1) : x));
@@ -629,7 +680,7 @@ export function makeSection(rim, tone, c, n, kind, r, sealed = false) {
   };
   // what each ring of the face is, by how far out it is (f, 0..1 of the outline) and which way (a; z: -1 front .. 1 back)
   const layer = (f, z, i, a) => {
-    if (f >= 1) return kind === 'head' ? mix3(DERMIS, MEAT, 0.3) : DERMIS;
+    if (f >= 1) return edge[i] ? mix3(edge[i], DERMIS, 0.12) : kind === 'head' ? mix3(DERMIS, MEAT, 0.3) : DERMIS;   // the edge: what is there (cloth, a vest, skin)
     if (kind === 'head') {
       if (f >= 0.87) return mix3(MEAT, DERMIS, 0.4);                         // scalp (and a nose, an ear)
       if (f >= 0.76) return mix3(BONE, [0.85, 0.8, 0.7], rnd() * 0.5);      // skull
@@ -688,7 +739,7 @@ export function makeSection(rim, tone, c, n, kind, r, sealed = false) {
   else if (kind === 'gut') bone(0, back * 0.62, 0.2 * median, true);
   // whatever else the cut went through on its own, outside the outline: solid, the colour of its surface, darker inward
   for (const L of lines) {
-    if (L === main || Math.abs(areaOf(L)) < 2e-5 || encloses(main, L[0][0], L[0][1])) continue;
+    if (body.includes(L) || Math.abs(areaOf(L)) < 2e-5 || inside(L[0])) continue;
     const S = 24, P = around(L, S), m = P.reduce((s, p) => [s[0] + p[0] / S, s[1] + p[1] / S], [0, 0]), b0 = pos.length / 3;
     const t = L.segs.reduce((s, j) => [s[0] + tone[j][0], s[1] + tone[j][1], s[2] + tone[j][2]], [0, 0, 0]).map((x) => x / L.segs.length);
     at(m[0], m[1]); col.push(...t.map((x) => x * 0.45));
